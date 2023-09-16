@@ -1,0 +1,70 @@
+use rand_distr::{Distribution, Normal};
+use std::mem::size_of;
+use wasm_bindgen::prelude::wasm_bindgen;
+
+/// The pseudo-random number generator we use.
+pub type Random = rand_pcg::Pcg64Mcg;
+
+// Expose some key traits for simplicity.
+pub use rand::prelude::SliceRandom;
+pub use rand::Rng;
+
+/// Constructs a new Random from a given string seed.
+pub fn new_random(seed: &str) -> Random {
+  rand_seeder::Seeder::from(seed).make_rng()
+}
+
+/// The alias for Random we expose to JS.
+#[derive(Clone, Copy, Debug, Eq, PartialEq)]
+#[repr(C)]
+#[wasm_bindgen]
+pub struct JsRandom([u32; size_of::<Random>() / size_of::<u32>()]);
+
+impl JsRandom {
+  /// Externalizes a Random by cloning its bits.
+  pub fn from_rng(rng: &Random) -> Self {
+    unsafe {
+      let p: *const Random = rng;
+      *(p as *const Self)
+    }
+  }
+
+  /// Treats an externalized random as a random.
+  pub fn rng(&mut self) -> &mut Random {
+    unsafe {
+      let p: *mut Self = self;
+      &mut *(p as *mut Random)
+    }
+  }
+}
+
+#[wasm_bindgen]
+impl JsRandom {
+  /// Makes a new RNG from a given string seed.
+  #[wasm_bindgen(constructor)]
+  pub fn new(seed: &str) -> Self {
+    Self::from_rng(&mut new_random(seed))
+  }
+
+  /// Generates the next floating-point number in the half-open interval [0,
+  /// 1).
+  pub fn next(&mut self) -> f64 {
+    self.rng().gen()
+  }
+
+  /// Returns true with the given probability.
+  pub fn choice(&mut self, p: f64) -> bool {
+    self.rng().gen_bool(p)
+  }
+
+  /// Generates a floating-point number in the half-open interval [a, b).
+  pub fn range(&mut self, a: f64, b: f64) -> f64 {
+    self.next() * (b - a) + a
+  }
+
+  /// Generates a normally distributed floating-point number with the given
+  /// mean and standard deviation.
+  pub fn normal(&mut self, mean: f64, std_dev: f64) -> f64 {
+    Normal::new(mean, std_dev).unwrap().sample(self.rng())
+  }
+}
