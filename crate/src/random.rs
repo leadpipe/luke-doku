@@ -1,4 +1,5 @@
 use rand_distr::{Distribution, Normal};
+use static_assertions::const_assert;
 use std::mem::size_of;
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -16,16 +17,18 @@ pub fn new_random(seed: &str) -> Random {
 
 /// The alias for Random we expose to JS.
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
-#[repr(C)]
+#[repr(C, align(16))]
 #[wasm_bindgen]
-pub struct JsRandom([u32; size_of::<Random>() / size_of::<u32>()]);
+pub struct JsRandom {guts: u128}
+const_assert!(size_of::<Random>() == size_of::<JsRandom>());
 
 impl JsRandom {
   /// Externalizes a Random by cloning its bits.
   pub fn from_rng(rng: &Random) -> Self {
     unsafe {
       let p: *const Random = rng;
-      *(p as *const Self)
+      let guts = *(p as *const u128);
+      Self{guts}
     }
   }
 
