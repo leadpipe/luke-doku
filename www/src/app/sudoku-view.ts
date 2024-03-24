@@ -1,13 +1,13 @@
 import './events';
-import './num-input';
+import './clock-input';
 
-import {css, html, LitElement, PropertyValues} from 'lit';
-import {customElement, property, query, state} from 'lit/decorators.js';
+import {css, html, LitElement, PropertyValues, svg} from 'lit';
+import {customElement, property, state} from 'lit/decorators.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
-import {SymMatch, WasmSymMatch} from './sym-match';
-import {GridCanvasContainer, Point, Theme} from './types';
-import {NumInput} from './num-input';
+import {PausePattern, WasmSymMatch} from './pause-pattern';
+import {GridContainer, Point, Theme} from './types';
+import {ClockInput} from './clock-input';
 import {Loc} from '../game/loc';
 import {Game} from '../game/game';
 
@@ -42,42 +42,83 @@ const BACKGROUND_CLASSES = new Set([
  */
 const MAX_NONCONFORMING_LOCS = 8;
 
-/** The font for puzzles' clue numerals. */
-const CLUE_FONT = 'Merriweather Sans';
-/** The font weight for clues. */
-const CLUE_FONT_WEIGHT = 700;
-/** The font for puzzles' input numerals. */
-const SOLUTION_FONT = 'Prompt';
-/** The font weight for input numerals. */
-const SOLUTION_FONT_WEIGHT = 400;
-
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
  * symmetry of its clues.
  */
 @customElement('sudoku-view')
-export class SudokuView extends LitElement implements GridCanvasContainer {
+export class SudokuView extends LitElement implements GridContainer {
   static override styles = [
     css`
       :host {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        background-color: var(--gf);
+
+        --block-border: #111;
+        --hover-loc: #aecbfa;
+        --text-fill: #222;
+
         --angle: 0turn;
         --circle-center: 0px 0px;
+
         --gf: #fff;
         --gd: #ddd;
         --gc: #ccc;
         --ga: #aaa;
         --g9: #999;
         --g8: #888;
-
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        background-color: var(--gf);
       }
 
-      canvas {
+      :host([theme='dark']) {
+        --block-border: #eee;
+        --hover-loc: #337;
+        --text-fill: #ccc;
+        --gf: #000;
+        --gd: #222;
+        --gc: #333;
+        --ga: #555;
+        --g9: #666;
+        --g8: #777;
+      }
+
+      .cell-border {
+        stroke: #808080;
+        stroke-width: 1;
+      }
+
+      .block-border {
+        stroke: var(--block-border);
+      }
+
+      .hover-loc {
+        fill: var(--hover-loc);
+      }
+
+      svg {
         overflow: hidden;
         touch-action: none;
+      }
+
+      svg * {
+        pointer-events: none;
+      }
+
+      text {
+        dominant-baseline: central;
+        text-anchor: middle;
+        user-select: none;
+        -webkit-user-select: none;
+        fill: var(--text-fill);
+      }
+      text.clue {
+        font-weight: 700;
+        font-family: 'Merriweather Sans';
+      }
+      text.solution {
+        font-weight: 400;
+        font-family: 'Prompt';
       }
 
       .gradient-180 {
@@ -263,11 +304,12 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
   ];
 
   override render() {
-    const {sideSize} = this;
+    const {sideSize, cellSize} = this;
     const cssSize = sideSize / devicePixelRatio;
     return html`
-      <canvas
-        ${ref(this.canvasChanged)}
+      <svg
+        ${ref(this.svgChanged)}
+        viewBox="0 0 ${sideSize} ${sideSize}"
         width=${sideSize}
         height=${sideSize}
         style="width: ${cssSize}px; height: ${cssSize}px;"
@@ -277,11 +319,96 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
         @pointercancel=${this.handlePointerCancel}
         @pointerdown=${this.handlePointerDown}
         @pointerup=${this.handlePointerUp}
-      ></canvas>
-      ${this.interactive
-        ? html`<num-input .gridContainer=${this}></num-input>`
-        : html``}
+      >
+        <style>
+          .block-border {
+            stroke-width: ${this.blockBorderWidth};
+          }
+          text {
+            font-size: ${cellSize * 0.65}px;
+          }
+        </style>
+        ${this.renderGrid()} ${this.renderGameState()}
+        ${this.clockInput?.render()}
+      </svg>
     `;
+  }
+
+  private renderGrid() {
+    const {blockBorderWidth, blockSize, cellSize} = this;
+    const size = 3 * blockSize + blockBorderWidth;
+
+    const cellBorders = [];
+    for (let i = 0; i < 3; ++i) {
+      for (let j = 1; j < 3; ++j) {
+        const cellEdge =
+          blockBorderWidth + blockSize * i + cellSize * j + j + 0.5;
+        cellBorders.push(`
+          M 0,${cellEdge}
+          h ${size}
+          M ${cellEdge},0
+          v ${size}
+        `);
+      }
+    }
+
+    const blockBorders = [];
+    for (let i = 0; i <= 3; ++i) {
+      const blkEdge = blockSize * i + blockBorderWidth / 2;
+      blockBorders.push(`
+        M 0,${blkEdge}
+        h ${size}
+        M ${blkEdge},0
+        v ${size}
+      `);
+    }
+
+    return svg`
+      <path class="cell-border"
+            d=${cellBorders.join(' ')} />
+      <path class="block-border"
+            d=${blockBorders.join(' ')} />
+    `;
+  }
+
+  private renderGameState() {
+    const {game} = this;
+    if (!game) return;
+    if (this.isPaused) {
+      return this.renderPausePattern();
+    }
+    const {hoverLoc, cellCenter, cellSize} = this;
+    const halfCell = cellSize / 2;
+    const answer = [];
+    if (hoverLoc) {
+      const [x, y] = cellCenter(hoverLoc);
+      answer.push(svg`
+        <path class="hover-loc"
+              d="M ${x - halfCell},${y - halfCell}
+                 l ${cellSize},0
+                 l 0,${cellSize}
+                 l ${-cellSize},0
+                 z" />`);
+    }
+    for (const loc of Loc.ALL) {
+      const clue = game.marks.getClue(loc);
+      if (clue) {
+        const [x, y] = cellCenter(loc);
+        answer.push(svg`
+          <text x=${x} y=${y} class="clue">${clue}</text>`);
+      }
+      const num = game.marks.getNum(loc);
+      if (num) {
+        const [x, y] = cellCenter(loc);
+        answer.push(svg`
+          <text x=${x} y=${y} class="solution">${num}</text>`);
+      }
+    }
+    return answer;
+  }
+
+  private renderPausePattern() {
+    return this.pausePatterns[this.overlayIndex!].render();
   }
 
   /** Light or dark mode. */
@@ -294,10 +421,10 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
   @property({type: Boolean}) interactive = false;
 
   /** The puzzle we're displaying. Setting this will update `overlays`. */
-  @property() puzzle: wasm.Grid | null = null;
+  @property({attribute: false}) puzzle: wasm.Grid | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
-  private symMatches: SymMatch[] = [];
+  @state() private pausePatterns: PausePattern[] = [];
 
   /** The game state. */
   private game: Game | null = null;
@@ -306,14 +433,13 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
   @property({type: Number}) overlayIndex: number | null = null;
 
   /** The symmetry overlays that correspond to the current puzzle. */
-  get overlays(): readonly SymMatch[] {
-    return this.symMatches;
+  get overlays(): readonly PausePattern[] {
+    return this.pausePatterns;
   }
 
   private readonly resizeObserver = new ResizeObserver(() => {
-    if (!this.canvas) return;
+    if (!this.svg) return;
     this.calcMetrics();
-    this.draw();
   });
 
   override connectedCallback(): void {
@@ -330,25 +456,26 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
     return this.overlayIndex !== null;
   }
 
-  canvas!: HTMLCanvasElement;
-  ctx!: CanvasRenderingContext2D;
-  private canvasChanged(canvas?: Element) {
-    if (canvas instanceof HTMLCanvasElement) {
-      this.canvas = canvas;
-      this.ctx = canvas.getContext('2d')!;
+  private svg!: SVGElement;
+  private svgChanged(svg?: Element) {
+    if (svg instanceof SVGElement) {
+      this.svg = svg;
       this.calcMetrics();
-      this.draw();
     }
   }
 
+  get element() {
+    return this.svg;
+  }
+
   /** The possible input location the pointer last hovered over. */
-  private hoverLoc?: Loc;
+  @state() private hoverLoc?: Loc;
 
   /** The location the user is editing. */
   private inputLoc?: Loc;
 
-  /** The numeral-input component. */
-  @query('num-input', true) private numInput?: NumInput;
+  /** The clock-input tracker. */
+  private clockInput?: ClockInput;
 
   /** The numeral we'll use as input for single taps. */
   private defaultNum = 1;
@@ -360,7 +487,7 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
   }
 
   private convertPointToLoc(point: {x: number; y: number}): Loc | undefined {
-    const rect = this.canvas.getBoundingClientRect();
+    const rect = this.svg.getBoundingClientRect();
     const col = this.convertCoordinateToCellNumber(point.x - rect.x);
     const row = this.convertCoordinateToCellNumber(point.y - rect.y);
     if (col === undefined || row === undefined) return undefined;
@@ -373,9 +500,9 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
   }
 
   private handlePointerHovering(event: PointerEvent) {
-    const {numInput, inputLoc} = this;
-    if (numInput && inputLoc) {
-      numInput.pointerMoved(event);
+    const {clockInput, inputLoc} = this;
+    if (clockInput && inputLoc) {
+      clockInput.pointerMoved(event);
       return;
     }
     const loc = this.convertPointToLoc(event);
@@ -384,41 +511,41 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
     } else {
       this.hoverLoc = undefined;
     }
-    this.draw();
   }
 
   private handlePointerCancel(event: PointerEvent) {
-    const {numInput, inputLoc} = this;
-    if (numInput && inputLoc) {
-      this.canvas?.releasePointerCapture(event.pointerId);
-      numInput.cancelInput();
+    const {clockInput, inputLoc} = this;
+    if (clockInput && inputLoc) {
+      this.svg?.releasePointerCapture(event.pointerId);
+      clockInput.cancelInput();
       this.inputLoc = undefined;
       this.hoverLoc = inputLoc;
     }
   }
 
   private handlePointerDown(event: PointerEvent) {
+    if (!this.interactive) return;
+    if (!this.clockInput) this.clockInput = new ClockInput(this);
     const loc = this.convertPointToLoc(event);
-    const {numInput, inputLoc, defaultNum} = this;
-    if (numInput && !inputLoc && loc && this.isPossibleInputLoc(loc)) {
+    const {clockInput, inputLoc, defaultNum} = this;
+    if (clockInput && !inputLoc && loc && this.isPossibleInputLoc(loc)) {
       this.inputLoc = loc;
       this.hoverLoc = undefined;
-      this.canvas.setPointerCapture(event.pointerId);
-      numInput.startSingleInput(event, loc, defaultNum);
-      this.draw();
+      this.svg.setPointerCapture(event.pointerId);
+      clockInput.startInput(event, loc, defaultNum);
     }
   }
 
   private handlePointerUp(event: PointerEvent) {
-    this.canvas?.releasePointerCapture(event.pointerId);
-    const {numInput, inputLoc, game} = this;
-    if (numInput && inputLoc && game) {
-      const result = numInput.completeInput();
+    this.svg?.releasePointerCapture(event.pointerId);
+    const {clockInput, inputLoc, game} = this;
+    if (clockInput && inputLoc && game) {
+      const result = clockInput.completeInput();
       switch (result) {
         case 'cancel':
           break;
         case 'multiple':
-          numInput.startMultipleInput(inputLoc, game.marks.getNums(inputLoc));
+          // clockInput.startMultipleInput(inputLoc, game.marks.getNums(inputLoc));
           break;
         case 'clear':
           game.marks.clearCell(inputLoc);
@@ -431,80 +558,79 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
       if (result !== 'multiple') {
         this.inputLoc = undefined;
         this.hoverLoc = inputLoc;
-        this.draw();
       }
     }
   }
 
-  override updated(changedProperties: PropertyValues) {
-    let redraw = false;
+  private resetPointerInput() {
+    this.hoverLoc = undefined;
+  }
+
+  override updated(changedProperties: PropertyValues<this>) {
+    let reset = false;
     if (changedProperties.has('puzzle')) {
       this.game = null;
-      this.symMatches = [];
+      this.pausePatterns = [];
       this.updateGameAndSymmetries();
       this.defaultNum = 1;
-      redraw = true;
+      reset = true;
     }
     if (
-      changedProperties.has('overlayIndex') ||
-      changedProperties.has('theme')
+      (changedProperties.has('overlayIndex') ||
+        changedProperties.has('theme')) &&
+      this.svg
     ) {
-      if (this.canvas) {
-        this.updateBackground();
-        redraw = true;
-      }
+      this.updateBackground();
     }
-    if (redraw && this.ctx) {
-      this.draw();
+    if (reset) {
+      this.resetPointerInput();
     }
   }
 
   private updateGameAndSymmetries() {
-    const {puzzle, ctx} = this;
-    if (puzzle && ctx && !this.symMatches.length) {
+    const {puzzle} = this;
+    if (puzzle && !this.pausePatterns.length) {
       this.game = new Game(puzzle);
       const matches: [wasm.Sym, WasmSymMatch][] = wasm.bestSymmetryMatches(
         puzzle,
-        MAX_NONCONFORMING_LOCS
+        MAX_NONCONFORMING_LOCS,
       );
-      this.symMatches = matches.map(([sym, match]) => {
+      this.pausePatterns = matches.map(([sym, match]) => {
         const random = new wasm.JsRandom(puzzle.toFlatString());
-        const symMatch = new SymMatch(sym, match, puzzle, this, random);
-        random.free();
-        return symMatch;
+        try {
+          return new PausePattern(sym, match, puzzle, this, random);
+        } finally {
+          random.free();
+        }
       });
-      this.dispatchEvent(
-        new CustomEvent('symmetries-updated', {detail: this.symMatches})
-      );
       if (
         this.overlayIndex !== null &&
-        this.overlayIndex >= this.symMatches.length
+        this.overlayIndex >= this.pausePatterns.length
       ) {
         this.overlayIndex = 0;
       }
+      this.dispatchEvent(
+        new CustomEvent('symmetries-updated', {detail: this.pausePatterns}),
+      );
       this.updateBackground();
     }
   }
 
   private updateBackground() {
-    const {canvas, overlayIndex} = this;
-    const match = overlayIndex !== null ? this.symMatches[overlayIndex] : null;
-    const cls = match === null ? `no-gradient` : BACKGROUNDS[match.sym];
-    const {classList} = canvas;
+    const {svg, overlayIndex} = this;
+    const pattern =
+      overlayIndex !== null ? this.pausePatterns[overlayIndex] : null;
+    const cls = pattern === null ? `no-gradient` : BACKGROUNDS[pattern.sym];
+    const {classList} = svg;
     classList.forEach(c => {
       if (BACKGROUND_CLASSES.has(c)) {
         classList.remove(c);
       }
     });
     classList.add(cls);
-    if (match) {
-      this.style.setProperty('--angle', `${match.angle}deg`);
-      this.style.setProperty('--circle-center', match.circleCenter);
-    }
-    const dark = this.theme === 'dark';
-    for (const c of '89abcdf') {
-      const t = dark ? (15 - parseInt(c, 16)).toString(16) : c;
-      this.style.setProperty(`--g${c}`, `#${t}${t}${t}`);
+    if (pattern) {
+      this.style.setProperty('--angle', `${pattern.angle}deg`);
+      this.style.setProperty('--circle-center', pattern.circleCenter);
     }
   }
 
@@ -535,26 +661,16 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
     return [centers[loc.col], centers[loc.row]];
   };
 
-  /** The CSS font string for clues. */
-  private clueFont = CLUE_FONT;
-  /** The CSS font string for solution numerals. */
-  private solutionFont = SOLUTION_FONT;
-  /** How far below the center we must position clues within a cell. */
-  private clueTextOffset = 0;
-  /**
-   * How far below the center we must position solution numerals within a cell.
-   */
-  private solutionTextOffset = 0;
-
   private calcMetrics() {
     const rect = this.getBoundingClientRect();
     let size = Math.min(rect.width, rect.height);
+    this.style.setProperty('--size', `${size}px`);
     size -= 2 * this.padding;
     let sideSize = devicePixelRatio * size;
     const blockBorderWidth = (this.blockBorderWidth =
       sideSize < 150 ? 1 : sideSize < 200 ? 2 : 3);
     const cellSize = (this._cellSize = Math.floor(
-      (sideSize - 4 * blockBorderWidth - 6 * 1) / 9
+      (sideSize - 4 * blockBorderWidth - 6 * 1) / 9,
     ));
     const blockSize = (this.blockSize =
       3 * cellSize + 2 * 1 + 1 * blockBorderWidth);
@@ -569,108 +685,8 @@ export class SudokuView extends LitElement implements GridCanvasContainer {
       }
     }
     this.centers = centers;
-
-    if (this.ctx) {
-      this.setUpFonts();
-    }
-  }
-
-  private setUpFonts() {
-    const factor = this.blockBorderWidth > 1 ? 0.75 : 0.85;
-    const size = Math.round(this.cellSize * factor);
-    this.clueFont = `${CLUE_FONT_WEIGHT} ${size}px ${CLUE_FONT}`;
-    this.solutionFont = `${SOLUTION_FONT_WEIGHT} ${size}px ${SOLUTION_FONT}`;
-    this.clueTextOffset = this.calcTextOffset(this.clueFont);
-    this.solutionTextOffset = this.calcTextOffset(this.solutionFont);
-  }
-
-  private calcTextOffset(font: string): number {
-    const {ctx} = this;
-    ctx.font = font;
-    ctx.textBaseline = 'middle';
-    const metrics = ctx.measureText('123456789');
-    // Distance from baseline to center of numerals.
-    return Math.round(
-      (metrics.actualBoundingBoxAscent - metrics.actualBoundingBoxDescent) / 2
-    );
-  }
-
-  private draw() {
-    const {ctx, theme} = this;
-    ctx.setTransform({});
-    const {width, height} = ctx.canvas;
-    ctx.clearRect(0, 0, width, height);
-
-    this.drawGrid();
-    const {game, cellCenter} = this;
-    if (!game) return;
-    if (this.isPaused) {
-      this.drawSymOverlay();
-    } else {
-      if (this.hoverLoc) {
-        const [x, y] = cellCenter(this.hoverLoc);
-        const {cellSize} = this;
-        ctx.fillStyle = theme === 'light' ? '#aecbfa' : '#337';
-        ctx.fillRect(x - cellSize / 2, y - cellSize / 2, cellSize, cellSize);
-      }
-      ctx.fillStyle = theme === 'light' ? '#222' : '#ccc';
-      ctx.textAlign = 'center';
-      ctx.textBaseline = 'middle';
-      const {clueTextOffset, solutionTextOffset} = this;
-      ctx.font = this.clueFont;
-      for (const loc of Loc.ALL) {
-        const clue = game.marks.getClue(loc);
-        if (clue) {
-          const [x, y] = cellCenter(loc);
-          ctx.fillText(String(clue), x, y + clueTextOffset);
-        }
-      }
-      ctx.font = this.solutionFont;
-      for (const loc of Loc.ALL) {
-        const num = game.marks.getNum(loc);
-        if (num) {
-          const [x, y] = cellCenter(loc);
-          ctx.fillText(String(num), x, y + solutionTextOffset);
-        }
-      }
-    }
-  }
-
-  private drawSymOverlay() {
-    this.symMatches[this.overlayIndex!].draw();
-  }
-
-  private drawGrid() {
-    const {ctx, theme, blockBorderWidth, blockSize, _cellSize: cellSize} = this;
-    const size = 3 * blockSize + blockBorderWidth;
-    ctx.strokeStyle = '#808080';
-    ctx.lineWidth = 1;
-    ctx.beginPath();
-    for (let i = 0; i < 3; ++i) {
-      for (let j = 1; j < 3; ++j) {
-        const cellEdge =
-          blockBorderWidth + blockSize * i + cellSize * j + j + 0.5;
-        ctx.moveTo(0, cellEdge);
-        ctx.lineTo(size, cellEdge);
-        ctx.moveTo(cellEdge, 0);
-        ctx.lineTo(cellEdge, size);
-      }
-    }
-    ctx.stroke();
-    ctx.strokeStyle = theme === 'light' ? '#111' : '#eee';
-    ctx.lineWidth = blockBorderWidth;
-    ctx.beginPath();
-    for (let i = 0; i <= 3; ++i) {
-      const blkEdge = blockSize * i + blockBorderWidth / 2;
-      ctx.moveTo(0, blkEdge);
-      ctx.lineTo(size, blkEdge);
-      ctx.moveTo(blkEdge, 0);
-      ctx.lineTo(blkEdge, size);
-    }
-    ctx.stroke();
   }
 }
-
 declare global {
   interface HTMLElementTagNameMap {
     'sudoku-view': SudokuView;

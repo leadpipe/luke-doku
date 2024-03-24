@@ -1,14 +1,22 @@
+import {svg, SVGTemplateResult} from 'lit';
 import * as wasm from 'luke-doku-rust';
 import {Loc} from '../game/loc';
-import {GridCanvasContainer} from './types';
+import {GridContainer} from './types';
 
+/**
+ * The wasm code matches the possible symmetries of the Sudoku board against the
+ * clues of a given puzzle to produce one or more of these objects.
+ */
 export declare interface WasmSymMatch {
   full_orbits: number[][];
   num_nonconforming_locs: number;
   partial_orbits: number[][];
 }
 
-export class SymMatch {
+/**
+ * Renders the pause overlay for a given board symmetry of a given puzzle.
+ */
+export class PausePattern {
   private orbits: OrbitShape[];
   readonly angle: number;
   readonly circleCenter: string;
@@ -17,16 +25,14 @@ export class SymMatch {
     readonly sym: wasm.Sym,
     private readonly match: WasmSymMatch,
     readonly puzzle: wasm.Grid,
-    readonly gridContainer: GridCanvasContainer,
+    readonly gridContainer: GridContainer,
     random: wasm.JsRandom,
   ) {
     const orbits = [];
     this.angle = random.range(0, 360);
-    const side = gridContainer.canvas.width / window.devicePixelRatio;
-    this.circleCenter = `${random.normal(side / 2, side / 6)}px ${random.normal(
-      side / 2,
-      side / 6,
-    )}px`;
+    const cx = random.normal(0.5, 0.15);
+    const cy = random.normal(0.5, 0.15);
+    this.circleCenter = `calc(var(--size) * ${cx}) calc(var(--size) * ${cy})`;
     const chooseColor =
       sym === wasm.Sym.None
         ? newMotleyChooser(random)
@@ -52,11 +58,13 @@ export class SymMatch {
     return this.match.num_nonconforming_locs > 0;
   }
 
-  draw() {
+  render() {
     const {gridContainer, puzzle} = this;
+    const answer = [];
     for (const orbit of this.orbits) {
-      orbit.draw(gridContainer, puzzle);
+      answer.push(orbit.render(gridContainer, puzzle));
     }
+    return answer;
   }
 }
 
@@ -271,10 +279,10 @@ class OrbitShape {
     this.color = color.toColor();
   }
 
-  draw(gridContainer: GridCanvasContainer, puzzle: wasm.Grid) {
-    const {ctx, cellCenter, cellSize, theme} = gridContainer;
-    ctx.fillStyle = this.color;
+  render(gridContainer: GridContainer, puzzle: wasm.Grid): SVGTemplateResult[] {
+    const {cellCenter, cellSize, theme} = gridContainer;
     const dark = theme === 'dark';
+    const answer: SVGTemplateResult[] = [];
     for (const locIndex of this.orbit) {
       const hasClue = puzzle.get(locIndex) !== 0;
       const loc = Loc.of(locIndex);
@@ -282,43 +290,49 @@ class OrbitShape {
       const scale = cellSize / 2;
       // Sets the origin at the center of the cell, and scales the axes so the
       // cell borders are at ±1.
-      ctx.setTransform({a: scale, d: scale, e: dx, f: dy});
-      this.drawShape(ctx, loc.row, loc.col, hasClue, dark);
+      answer.push(svg`
+        <g transform="translate(${dx} ${dy}) scale(${scale})">
+          ${this.renderShape(loc.row, loc.col, hasClue, dark)}
+        </g>`);
     }
+    return answer;
   }
 
-  protected drawShape(
-    ctx: CanvasRenderingContext2D,
+  protected renderShape(
     row: number,
     col: number,
     hasClue: boolean,
     _dark: boolean,
-  ) {
+  ): SVGTemplateResult[] {
+    const renderedParts = [];
     for (const op of this.symTransform(row, col)) {
-      op.apply(ctx);
-      this.drawBaseShape(ctx, hasClue);
-      op.reverse(ctx);
+      renderedParts.push(this.renderBaseShape(hasClue, op));
     }
+    return renderedParts;
   }
 
-  protected drawBaseShape(ctx: CanvasRenderingContext2D, _hasClue: boolean) {
+  private renderBaseShape(
+    hasClue: boolean,
+    transform: string,
+  ): SVGTemplateResult {
     const {points} = this;
-    ctx.beginPath();
-    ctx.moveTo(points[0].x, points[0].y);
+    const pathParts = [`M ${points[0].x},${points[0].y}`];
     for (let i = 0; i < points.length; ++i) {
       const p0 = points[i];
       const p1 = points[(i + 1) % points.length];
-      ctx.bezierCurveTo(
-        p0.x + p0.dx,
-        p0.y + p0.dy,
-        p1.x - p1.dx,
-        p1.y - p1.dy,
-        p1.x,
-        p1.y,
+      pathParts.push(
+        `C ${p0.x + p0.dx},${p0.y + p0.dy},${p1.x - p1.dx},${p1.y - p1.dy},${
+          p1.x
+        },${p1.y}`,
       );
     }
-    ctx.closePath();
-    ctx.fill();
+    return svg`<path fill=${this.getColor(hasClue)}
+                     transform=${transform}
+                     d=${pathParts.join(' ')} />`;
+  }
+
+  protected getColor(_hasClue: boolean): string {
+    return this.color;
   }
 }
 
@@ -351,38 +365,39 @@ class PartialOrbitShape extends OrbitShape {
     this.missingColor = color.toColor(0.6);
   }
 
-  protected override drawShape(
-    ctx: CanvasRenderingContext2D,
+  protected override renderShape(
     row: number,
     col: number,
     hasClue: boolean,
     dark: boolean,
-  ) {
+  ): SVGTemplateResult[] {
     let drawX;
+    let renderedParts: SVGTemplateResult[];
     if (this.inverted) {
       drawX = hasClue;
+      renderedParts = [];
     } else {
-      super.drawShape(ctx, row, col, hasClue, dark);
+      renderedParts = super.renderShape(row, col, hasClue, dark);
       drawX = !hasClue;
     }
     if (drawX) {
-      ctx.strokeStyle = dark ? '#5f5f5f4c' : '#a0a0a04c';
-      ctx.lineWidth = 0.2;
-      ctx.beginPath();
-      ctx.moveTo(-0.75, -0.75);
-      ctx.lineTo(+0.75, +0.75);
-      ctx.moveTo(-0.75, +0.75);
-      ctx.lineTo(+0.75, -0.75);
-      ctx.stroke();
+      renderedParts.push(
+        svg`<path fill="none"
+                  stroke=${dark ? '#5f5f5f4c' : '#a0a0a04c'}
+                  stroke-width="0.2"
+                  d="
+                    M -0.75,-0.75
+                    L +0.75,+0.75
+                    M -0.75,+0.75
+                    L +0.75,-0.75"
+                  />`,
+      );
     }
+    return renderedParts;
   }
 
-  protected override drawBaseShape(
-    ctx: CanvasRenderingContext2D,
-    hasClue: boolean,
-  ): void {
-    ctx.fillStyle = hasClue ? this.color : this.missingColor;
-    super.drawBaseShape(ctx, hasClue);
+  protected override getColor(hasClue: boolean): string {
+    return hasClue ? this.color : this.missingColor;
   }
 }
 
@@ -409,42 +424,15 @@ function bezierPoint(
   return {x, y, dx, dy};
 }
 
-type Transform = (ctx: CanvasRenderingContext2D) => void;
-function ident(_ctx: CanvasRenderingContext2D) {}
-function rot90(ctx: CanvasRenderingContext2D) {
-  ctx.transform(0, -1, 1, 0, 0, 0);
-}
-function rot180(ctx: CanvasRenderingContext2D) {
-  ctx.transform(-1, 0, 0, -1, 0, 0);
-}
-function rot270(ctx: CanvasRenderingContext2D) {
-  ctx.transform(0, 1, -1, 0, 0, 0);
-}
-function mirX(ctx: CanvasRenderingContext2D) {
-  ctx.transform(1, 0, 0, -1, 0, 0);
-}
-function mirY(ctx: CanvasRenderingContext2D) {
-  ctx.transform(-1, 0, 0, 1, 0, 0);
-}
-function diagMain(ctx: CanvasRenderingContext2D) {
-  ctx.transform(0, 1, 1, 0, 0, 0);
-}
-function diagAnti(ctx: CanvasRenderingContext2D) {
-  ctx.transform(0, -1, -1, 0, 0, 0);
-}
-
-type TransformOp = {
-  apply: Transform;
-  reverse: Transform;
-};
-const IDENT = {apply: ident, reverse: ident};
-const ROT90 = {apply: rot90, reverse: rot270};
-const ROT180 = {apply: rot180, reverse: rot180};
-const ROT270 = {apply: rot270, reverse: rot90};
-const MIR_X = {apply: mirX, reverse: mirX};
-const MIR_Y = {apply: mirY, reverse: mirY};
-const DIAG_MAIN = {apply: diagMain, reverse: diagMain};
-const DIAG_ANTI = {apply: diagAnti, reverse: diagAnti};
+type TransformOp = string;
+const IDENT = '';
+const ROT90 = 'rotate(-90)';
+const ROT180 = 'rotate(180)';
+const ROT270 = 'rotate(-270)';
+const MIR_X = 'scale(1, -1)';
+const MIR_Y = 'scale(-1, 1)';
+const DIAG_MAIN = 'matrix(0, 1, 1, 0, 0, 0)';
+const DIAG_ANTI = 'matrix(0, -1, -1, 0, 0, 0)';
 
 /**
  * A generator of transforms for shapes.  There's one for each symmetry.

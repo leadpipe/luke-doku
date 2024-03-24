@@ -1,9 +1,9 @@
 import * as wasm from 'luke-doku-rust';
-import {SymMatch} from './sym-match';
+import {PausePattern} from './pause-pattern';
 
 declare global {
   interface HTMLElementEventMap {
     'puzzle-selected': CustomEvent<wasm.Grid>;
-    'symmetries-updated': CustomEvent<SymMatch[]>;
+    'symmetries-updated': CustomEvent<PausePattern[]>;
   }
 }

@@ -7,9 +7,6 @@ import * as wasm from 'luke-doku-rust';
 @customElement('gen-puzzle')
 export class GenPuzzle extends LitElement {
   static override styles = css`
-    :host {
-    }
-
     th {
       text-align: right;
       padding-right: 8px;
@@ -85,7 +82,7 @@ export class GenPuzzle extends LitElement {
   }
 
   @property() dateString = wasm.LogicalDate.fromDate(new Date()).toString();
-  @property() counter = 1;
+  @property({type: Number}) counter = 1;
 
   @state() private dailySolution?: wasm.DailySolution;
   @state() private puzzleDesc?: wasm.PuzzleDesc;

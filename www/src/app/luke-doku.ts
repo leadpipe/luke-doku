@@ -7,7 +7,7 @@ import {customElement, query, state} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
 import {SudokuView} from './sudoku-view';
 import {Theme} from './types';
-import {SymMatch} from './sym-match';
+import {PausePattern} from './pause-pattern';
 
 const CLUES_OVERLAY = {name: 'clues', value: ''};
 
@@ -127,7 +127,7 @@ export class LukeDoku extends LitElement {
 
   @query('sudoku-view') sudokuView!: SudokuView;
 
-  private updateOverlays(event: CustomEvent<SymMatch[]>) {
+  private updateOverlays(event: CustomEvent<PausePattern[]>) {
     this.overlays = [
       CLUES_OVERLAY,
       ...event.detail.map((symMatch, i) => {
