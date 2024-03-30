@@ -58,7 +58,9 @@ export class SudokuView extends LitElement implements GridContainer {
 
         --block-border: #111;
         --hover-loc: #aecbfa;
-        --text-fill: #222;
+        --hover-loc-text: #2222;
+        --clue-fill: #222;
+        --solution-fill: #222;
 
         --angle: 0turn;
         --circle-center: 0px 0px;
@@ -74,7 +76,9 @@ export class SudokuView extends LitElement implements GridContainer {
       :host([theme='dark']) {
         --block-border: #eee;
         --hover-loc: #337;
-        --text-fill: #ccc;
+        --hover-loc-text: #aaac;
+        --clue-fill: #eee;
+        --solution-fill: #ccc;
         --gf: #000;
         --gd: #222;
         --gc: #333;
@@ -110,15 +114,21 @@ export class SudokuView extends LitElement implements GridContainer {
         text-anchor: middle;
         user-select: none;
         -webkit-user-select: none;
-        fill: var(--text-fill);
+      }
+      text.hover-loc {
+        font-weight: 400;
+        font-family: 'Prompt';
+        fill: var(--hover-loc-text);
       }
       text.clue {
         font-weight: 700;
         font-family: 'Merriweather Sans';
+        fill: var(--clue-fill);
       }
       text.solution {
         font-weight: 400;
         font-family: 'Prompt';
+        fill: var(--solution-fill);
       }
 
       .gradient-180 {
@@ -383,12 +393,16 @@ export class SudokuView extends LitElement implements GridContainer {
     if (hoverLoc) {
       const [x, y] = cellCenter(hoverLoc);
       answer.push(svg`
-        <path class="hover-loc"
-              d="M ${x - halfCell},${y - halfCell}
-                 l ${cellSize},0
-                 l 0,${cellSize}
-                 l ${-cellSize},0
-                 z" />`);
+        <rect class="hover-loc"
+              x=${x - halfCell}
+              y=${y - halfCell}
+              width=${cellSize}
+              height=${cellSize}
+              />`);
+      if (!game.marks.getNum(hoverLoc)) {
+        answer.push(svg`
+          <text x=${x} y=${y} class="hover-loc">${this.defaultNum}</text>`);
+      }
     }
     for (const loc of Loc.ALL) {
       const clue = game.marks.getClue(loc);
@@ -437,6 +451,9 @@ export class SudokuView extends LitElement implements GridContainer {
     return this.pausePatterns;
   }
 
+  private readonly keyHandler = (event: KeyboardEvent) =>
+    this.handleKeyDown(event);
+
   private readonly resizeObserver = new ResizeObserver(() => {
     if (!this.svg) return;
     this.calcMetrics();
@@ -445,11 +462,13 @@ export class SudokuView extends LitElement implements GridContainer {
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
+    window.addEventListener('keydown', this.keyHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.resizeObserver.unobserve(this);
+    window.removeEventListener('keydown', this.keyHandler);
   }
 
   get isPaused(): boolean {
@@ -532,7 +551,8 @@ export class SudokuView extends LitElement implements GridContainer {
       this.inputLoc = loc;
       this.hoverLoc = undefined;
       this.svg.setPointerCapture(event.pointerId);
-      clockInput.startInput(event, loc, defaultNum);
+      const num = this.game?.marks.getNum(loc) ?? defaultNum;
+      clockInput.startInput(event, loc, num);
     }
   }
 
@@ -551,8 +571,10 @@ export class SudokuView extends LitElement implements GridContainer {
           game.marks.clearCell(inputLoc);
           break;
         default:
-          game.marks.setNum(inputLoc, result);
-          this.defaultNum = result;
+          if (game.marks.getNum(inputLoc) !== result) {
+            game.marks.setNum(inputLoc, result);
+            this.defaultNum = result;
+          }
           break;
       }
       if (result !== 'multiple') {
@@ -564,6 +586,38 @@ export class SudokuView extends LitElement implements GridContainer {
 
   private resetPointerInput() {
     this.hoverLoc = undefined;
+  }
+
+  private handleKeyDown(event: KeyboardEvent) {
+    const {hoverLoc, game} = this;
+    if (!game) return;
+    let update = false;
+    switch (event.key) {
+      case 'Backspace':
+      case 'Delete':
+        // If we're hovering over a set cell, clear it.
+        if (hoverLoc && game.marks.getNum(hoverLoc)) {
+          game.marks.clearCell(hoverLoc);
+          update = true;
+        }
+        break;
+
+      default:
+        // If it's a numeral, change the default input to it, and if we're
+        // hovering over a cell also set the cell to it.
+        if (event.key.length === 1 && event.key >= '1' && event.key <= '9') {
+          const num = Number(event.key);
+          this.defaultNum = num;
+          if (hoverLoc && !game.marks.getClue(hoverLoc)) {
+            game.marks.setNum(hoverLoc, num);
+          }
+          update = true;
+        }
+        break;
+    }
+    if (update) {
+      this.requestUpdate();
+    }
   }
 
   override updated(changedProperties: PropertyValues<this>) {

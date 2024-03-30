@@ -105,7 +105,6 @@ export class ClockInput implements ReactiveController {
       this.result = this.defaultSingleResult;
       this.clockSection = -1;
     }
-    console.log(`result: ${this.result}`);
     host.requestUpdate();
   }
 }
