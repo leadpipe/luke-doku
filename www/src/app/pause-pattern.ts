@@ -96,7 +96,7 @@ function minmax(x: number, min: number, max: number): number {
   return x < min ? min : x > max ? max : x;
 }
 
-class ColorRange {
+export class ColorRange {
   constructor(readonly name: string, readonly lo: OkLCH, readonly hi: OkLCH) {}
 
   /**
@@ -152,6 +152,29 @@ class ColorRange {
       random.normal(center.hue, stddevFor(this.hi.hue - this.lo.hue)),
     );
   }
+
+  /**
+   * Makes a new OkLCH color by interpolating this range using the given slider
+   * values, which range from 0 to 1.
+   *
+   * @param lightnessSlider How far between lo and hi values of lightness to
+   * use: [0, 1].
+   * @param chromaSlider How far between lo and hi values of chroma to use: [0,
+   * 1].
+   * @param hueSlider How far between lo and hi values of hue to use: [0, 1].
+   */
+  interpolate(
+    lightnessSlider: number,
+    chromaSlider: number,
+    hueSlider: number,
+  ): OkLCH {
+    return new OkLCH(
+      this.lo.lightness +
+        lightnessSlider * (this.hi.lightness - this.lo.lightness),
+      this.lo.chroma + chromaSlider * (this.hi.chroma - this.lo.chroma),
+      this.lo.hue + hueSlider * (this.hi.hue - this.lo.hue),
+    );
+  }
 }
 
 /**
@@ -169,13 +192,13 @@ function stddevFor(width: number): number {
  * Choosing hues uniformly from the full spectrum yields a lot of bad colors.
  * So instead we quantize on pleasing ranges.
  */
-const COLOR_RANGES: ColorRange[] = [
-  new ColorRange('red', new OkLCH(40, 10, -15), new OkLCH(65, 28, 30)),
-  new ColorRange('orange', new OkLCH(43, 10, 32), new OkLCH(77, 20, 60)),
-  new ColorRange('yellow', new OkLCH(55, 19, 80), new OkLCH(93, 23, 105)),
-  new ColorRange('green', new OkLCH(40, 6, 130), new OkLCH(84, 36, 145)),
-  new ColorRange('blue', new OkLCH(45, 5, 225), new OkLCH(50, 30, 275)),
-  new ColorRange('purple', new OkLCH(40, 10, 290), new OkLCH(60, 32, 310)),
+export const COLOR_RANGES: ColorRange[] = [
+  new ColorRange('red', new OkLCH(50, 27, -5), new OkLCH(67, 37, 16)),
+  new ColorRange('orange', new OkLCH(53, 23, 44), new OkLCH(71, 37, 60)),
+  new ColorRange('yellow', new OkLCH(70, 26, 84), new OkLCH(93, 37, 98)),
+  new ColorRange('green', new OkLCH(50, 23, 134), new OkLCH(72, 37, 142)),
+  new ColorRange('blue', new OkLCH(52, 13, 225), new OkLCH(62, 37, 260)),
+  new ColorRange('purple', new OkLCH(42, 27, 295), new OkLCH(62, 37, 310)),
 ];
 
 function randomColorIndex(random: wasm.JsRandom): number {
@@ -189,9 +212,6 @@ function randomColorRange(random: wasm.JsRandom): ColorRange {
 function newMotleyChooser(random: wasm.JsRandom): () => OkLCH {
   const lightnessSlider = random.next();
   const chromaSlider = random.next();
-  console.log(
-    `lightnessSlider = ${lightnessSlider}, chromaSlider = ${chromaSlider}`,
-  );
   return () =>
     randomColorRange(random).randomHue(random, lightnessSlider, chromaSlider);
 }
@@ -207,11 +227,6 @@ function newTwoColorChooser(random: wasm.JsRandom): () => OkLCH {
   const secondaryRange = COLOR_RANGES[secondaryIndex];
   const secondaryCenter = secondaryRange.randomCenter(random);
   const primaryChance = Math.min(random.normal(0.75, 0.04), 0.98);
-  console.log(
-    `primary ${primaryRange.name}, secondary ${secondaryRange.name}`,
-    primaryCenter,
-    secondaryCenter,
-  );
   return () => {
     const isPrimary = random.choice(primaryChance);
     const range = isPrimary ? primaryRange : secondaryRange;

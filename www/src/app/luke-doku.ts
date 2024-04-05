@@ -1,3 +1,4 @@
+import './color-cube';
 import './events';
 import './gen-puzzle';
 import './sudoku-view';
@@ -17,10 +18,10 @@ export class LukeDoku extends LitElement {
   static override styles = css`
     :host {
       margin-top: 8px;
-      display: flex;
-      flex-direction: row;
-      justify-content: space-around;
-      align-items: top;
+      display: grid;
+      grid-template-columns: 1fr 2fr 1fr;
+      gap: 20px;
+      justify-items: center;
     }
 
     gen-puzzle,
@@ -40,6 +41,10 @@ export class LukeDoku extends LitElement {
       align-items: baseline;
       flex-wrap: wrap;
       gap: 4px 16px;
+    }
+
+    color-cube {
+      grid-column: 1 / 4;
     }
 
     a {
@@ -87,6 +92,7 @@ export class LukeDoku extends LitElement {
           })}
         </div>
       </div>
+      <!-- <color-cube></color-cube> -->
     `;
   }
 
