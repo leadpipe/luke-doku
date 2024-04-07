@@ -10,7 +10,7 @@ import {GridContainer, Point} from './types';
 /** The possible results of a clock input interaction. */
 export type ClockInputResult = number | 'clear' | 'multiple' | 'cancel';
 
-const {PI, sin, cos, hypot, acos, round} = Math;
+const {PI, sin, cos, hypot, acos, round, sqrt} = Math;
 /** How much of a grid cell the clock-face radius is. */
 const RADIUS_RATIO = 0.85;
 /** Pi/12: 1/24th of a circle. */
@@ -95,6 +95,39 @@ export class ClockInput implements ReactiveController {
     answer.push(svg`
       <text class="solution" x=${x} y=${y}>${previewText}</text>
     `);
+    const previewRadius = radius * 0.5;
+    let px = x;
+    let py = y - radius - previewRadius;
+    if (py < previewRadius) {
+      // The preview circle is off the top of the grid.  Move it to the right,
+      // tangent to the clock face circle.  (We'll also display it to the left.)
+      py = previewRadius;
+      const h = radius + previewRadius; // hypotenuse of the triangle
+      const b = y - previewRadius; // vertical leg
+      const a = sqrt(h * h - b * b); // horizontal leg
+      px = x + a;
+    }
+    answer.push(svg`
+      <circle
+          class="clock"
+          cx=${px}
+          cy=${py}
+          r=${previewRadius}
+        ></circle>
+      <text class="solution" x=${px} y=${py}>${previewText}</text>
+    `);
+    if (px !== x) {
+      px = x - (px - x);  // The left side
+      answer.push(svg`
+        <circle
+            class="clock"
+            cx=${px}
+            cy=${py}
+            r=${previewRadius}
+          ></circle>
+        <text class="solution" x=${px} y=${py}>${previewText}</text>
+      `);
+    }
     return answer;
   }
 
