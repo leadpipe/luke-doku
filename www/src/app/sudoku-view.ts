@@ -61,6 +61,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --hover-loc-text: #2222;
         --clue-fill: #222;
         --solution-fill: #222;
+        --clock-fill: #f0f0f0e0;
 
         --angle: 0turn;
         --circle-center: 0px 0px;
@@ -79,6 +80,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --hover-loc-text: #aaac;
         --clue-fill: #eee;
         --solution-fill: #ccc;
+        --clock-fill: #202020e0;
         --gf: #000;
         --gd: #222;
         --gc: #333;
@@ -125,10 +127,18 @@ export class SudokuView extends LitElement implements GridContainer {
         font-family: 'Merriweather Sans';
         fill: var(--clue-fill);
       }
-      text.solution {
+      text.solution,
+      text.clock-text {
         font-weight: 400;
         font-family: 'Prompt';
         fill: var(--solution-fill);
+      }
+
+      .clock {
+        fill: var(--clock-fill);
+      }
+      .clock-selection {
+        fill: var(--hover-loc);
       }
 
       .gradient-180 {
@@ -337,6 +347,9 @@ export class SudokuView extends LitElement implements GridContainer {
           text {
             font-size: ${cellSize * 0.65}px;
           }
+          text.clock-text {
+            font-size: ${cellSize * 0.3}px;
+          }
         </style>
         ${this.renderGrid()} ${this.renderGameState()}
         ${this.clockInput?.render()}
@@ -399,7 +412,7 @@ export class SudokuView extends LitElement implements GridContainer {
               width=${cellSize}
               height=${cellSize}
               />`);
-      if (!game.marks.getNum(hoverLoc)) {
+      if (!game.marks.getNum(hoverLoc) && !this.inputLoc) {
         answer.push(svg`
           <text x=${x} y=${y} class="hover-loc">${this.defaultNum}</text>`);
       }
@@ -551,8 +564,8 @@ export class SudokuView extends LitElement implements GridContainer {
       this.inputLoc = loc;
       this.hoverLoc = undefined;
       this.svg.setPointerCapture(event.pointerId);
-      const num = this.game?.marks.getNum(loc) ?? defaultNum;
-      clockInput.startInput(event, loc, num);
+      const num = this.game?.marks.getNum(loc);
+      clockInput.startInput(event, loc, num, defaultNum);
     }
   }
 
@@ -577,10 +590,8 @@ export class SudokuView extends LitElement implements GridContainer {
           }
           break;
       }
-      if (result !== 'multiple') {
-        this.inputLoc = undefined;
-        this.hoverLoc = inputLoc;
-      }
+      this.inputLoc = undefined;
+      this.hoverLoc = inputLoc;
     }
   }
 
