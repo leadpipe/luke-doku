@@ -6,15 +6,15 @@ export type Point = [number, number];
 
 /** Gives information about the Sudoku grid's display. */
 export interface GridContainer {
-  /** The element that encompasses the grid. */
-  readonly element: Element;
-
-  /** The size of each side of each cell in the grid, in CSS pixels. */
+  /** The size of each side of each cell in the grid, in device pixels. */
   readonly cellSize: number;
+
+  /** The size of each side of the grid, in device pixels. */
+  readonly sideSize: number;
 
   /**
    * Calculates the center point of the cell at the given row and column, which
-   * are both between 0 and 8 inclusive.  In CSS pixels.
+   * are both between 0 and 8 inclusive.  In device pixels.
    */
   cellCenter(loc: Loc): Point;
 

@@ -2,7 +2,7 @@ import './events';
 import './clock-input';
 
 import {css, html, LitElement, PropertyValues, svg} from 'lit';
-import {customElement, property, state} from 'lit/decorators.js';
+import {customElement, property, query, state} from 'lit/decorators.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
 import {PausePattern, WasmSymMatch} from './pause-pattern';
@@ -10,31 +10,6 @@ import {GridContainer, Point, Theme} from './types';
 import {ClockInput} from './clock-input';
 import {Loc} from '../game/loc';
 import {Game} from '../game/game';
-
-/**
- * Maps from symmetry to CSS class name for the background to show with that
- * symmetry.
- */
-const BACKGROUNDS: {[key in wasm.Sym]: string} = {
-  [wasm.Sym.Rotation180]: 'gradient-180',
-  [wasm.Sym.Rotation90]: 'gradient-90',
-  [wasm.Sym.Mirror_X]: 'gradient-x',
-  [wasm.Sym.Mirror_Y]: 'gradient-y',
-  [wasm.Sym.Diagonal_Main]: 'gradient-main',
-  [wasm.Sym.Diagonal_Anti]: 'gradient-anti',
-  [wasm.Sym.Blockwise_Main]: 'gradient-blockwise-main',
-  [wasm.Sym.Blockwise_Anti]: 'gradient-blockwise-anti',
-  [wasm.Sym.DoubleMirror]: 'gradient-double-mirror',
-  [wasm.Sym.DoubleDiagonal]: 'gradient-double-diagonal',
-  [wasm.Sym.FullyReflective]: 'gradient-fully-reflective',
-  [wasm.Sym.None]: 'gradient-circle',
-};
-
-/** Gathers the CSS class names we use as backgrounds. */
-const BACKGROUND_CLASSES = new Set([
-  'no-gradient',
-  ...Object.values(BACKGROUNDS),
-]);
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -63,9 +38,6 @@ export class SudokuView extends LitElement implements GridContainer {
         --solution-fill: #222;
         --clock-fill: #f0f0f0e0;
 
-        --angle: 0turn;
-        --circle-center: 0px 0px;
-
         --gf: #fff;
         --gd: #ddd;
         --gc: #ccc;
@@ -81,6 +53,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --clue-fill: #eee;
         --solution-fill: #ccc;
         --clock-fill: #202020e0;
+
         --gf: #000;
         --gd: #222;
         --gc: #333;
@@ -140,198 +113,24 @@ export class SudokuView extends LitElement implements GridContainer {
       .clock-selection {
         fill: var(--hover-loc);
       }
-
-      .gradient-180 {
-        background: conic-gradient(
-          from var(--angle) at 50%,
-          var(--gc),
-          var(--gf) 50%,
-          var(--gc) 50%,
-          var(--gf)
-        );
-      }
-
-      .gradient-90 {
-        background: conic-gradient(
-          from var(--angle) at 50%,
-          var(--gc),
-          var(--gf) 25%,
-          var(--gc) 25%,
-          var(--gf) 50%,
-          var(--gc) 50%,
-          var(--gf) 75%,
-          var(--gc) 75%,
-          var(--gf)
-        );
-      }
-
-      .gradient-x {
-        background: linear-gradient(
-          0deg,
-          var(--gf),
-          var(--gd) 35%,
-          var(--ga) 45%,
-          var(--g9) 50%,
-          var(--ga) 55%,
-          var(--gd) 65%,
-          var(--gf)
-        );
-      }
-
-      .gradient-y {
-        background: linear-gradient(
-          90deg,
-          var(--gf),
-          var(--gd) 35%,
-          var(--ga) 45%,
-          var(--g9) 50%,
-          var(--ga) 55%,
-          var(--gd) 65%,
-          var(--gf)
-        );
-      }
-
-      .gradient-main {
-        background: linear-gradient(
-          45deg,
-          var(--gf),
-          var(--gd) 35%,
-          var(--ga) 45%,
-          var(--g9) 50%,
-          var(--ga) 55%,
-          var(--gd) 65%,
-          var(--gf)
-        );
-      }
-
-      .gradient-anti {
-        background: linear-gradient(
-          -45deg,
-          var(--gf),
-          var(--gd) 35%,
-          var(--ga) 45%,
-          var(--g9) 50%,
-          var(--ga) 55%,
-          var(--gd) 65%,
-          var(--gf)
-        );
-      }
-
-      .gradient-blockwise-main {
-        background: linear-gradient(
-          45deg,
-          var(--gc) 0,
-          var(--gf) 16.67%,
-          var(--gc) 16.67%,
-          var(--gf) 33.33%,
-          var(--gc) 33.33%,
-          var(--gf) 50%,
-          var(--gc) 50%,
-          var(--gf) 66.67%,
-          var(--gc) 66.67%,
-          var(--gf) 83.33%,
-          var(--gc) 83.33%,
-          var(--gf) 100%
-        );
-      }
-
-      .gradient-blockwise-anti {
-        background: linear-gradient(
-          135deg,
-          var(--gc) 0,
-          var(--gf) 16.67%,
-          var(--gc) 16.67%,
-          var(--gf) 33.33%,
-          var(--gc) 33.33%,
-          var(--gf) 50%,
-          var(--gc) 50%,
-          var(--gf) 66.67%,
-          var(--gc) 66.67%,
-          var(--gf) 83.33%,
-          var(--gc) 83.33%,
-          var(--gf) 100%
-        );
-      }
-
-      .gradient-double-mirror {
-        background: conic-gradient(
-          from 0deg at 50%,
-          var(--gf),
-          var(--gd) 15%,
-          var(--ga) 25%,
-          var(--gd) 35%,
-          var(--gf) 50%,
-          var(--gd) 65%,
-          var(--ga) 75%,
-          var(--gd) 85%,
-          var(--gf)
-        );
-      }
-
-      .gradient-double-diagonal {
-        background: conic-gradient(
-          from 45deg at 50%,
-          var(--gf),
-          var(--gd) 15%,
-          var(--ga) 25%,
-          var(--gd) 35%,
-          var(--gf) 50%,
-          var(--gd) 65%,
-          var(--ga) 75%,
-          var(--gd) 85%,
-          var(--gf)
-        );
-      }
-
-      .gradient-fully-reflective {
-        background: conic-gradient(
-          from 45deg at 50%,
-          var(--gf),
-          var(--gd) 7.5%,
-          var(--ga) 12.5%,
-          var(--gd) 17.5%,
-          var(--gf) 25%,
-          var(--gd) 32.5%,
-          var(--ga) 37.5%,
-          var(--gd) 42.5%,
-          var(--gf) 50%,
-          var(--gd) 57.5%,
-          var(--ga) 62.5%,
-          var(--gd) 67.5%,
-          var(--gf) 75%,
-          var(--gd) 82.5%,
-          var(--ga) 87.5%,
-          var(--gd) 92.5%,
-          var(--gf)
-        );
-      }
-
-      .gradient-circle {
-        background: radial-gradient(
-          circle at var(--circle-center),
-          var(--g8),
-          var(--ga) 15%,
-          var(--gd) 40%,
-          var(--gf) 90%
-        );
-      }
-
-      .no-gradient {
-        /* An actual lack of gradient makes Chrome mess up when switching back to a gradient. */
-        background: linear-gradient(0deg, var(--gf), var(--gf));
-      }
     `,
   ];
 
   override render() {
-    const {sideSize, cellSize} = this;
-    const cssSize = sideSize / devicePixelRatio;
+    const {sideSize, cellSize, padding, game} = this;
+    const cssSize = sideSize / devicePixelRatio + 2 * padding;
+    const svgPadding = padding * devicePixelRatio;
+    const compSize = sideSize + 2 * svgPadding;
+    const pausePattern = this.isPaused
+      ? this.pausePatterns[this.overlayIndex!]
+      : undefined;
+
     return html`
       <svg
         ${ref(this.svgChanged)}
-        viewBox="0 0 ${sideSize} ${sideSize}"
-        width=${sideSize}
-        height=${sideSize}
+        viewBox="${-svgPadding} ${-svgPadding} ${compSize} ${compSize}"
+        width=${compSize}
+        height=${compSize}
         style="width: ${cssSize}px; height: ${cssSize}px;"
         @pointerenter=${this.handlePointerHovering}
         @pointermove=${this.handlePointerHovering}
@@ -351,7 +150,10 @@ export class SudokuView extends LitElement implements GridContainer {
             font-size: ${cellSize * 0.3}px;
           }
         </style>
-        ${this.renderGrid()} ${this.renderGameState()}
+        ${pausePattern?.renderBackground() /*   --------------- */}
+        ${this.renderGrid()}
+        ${pausePattern?.renderPattern() /*      --------------- */}
+        ${game && this.renderGameState(game) /* --------------- */}
         ${this.clockInput?.render()}
       </svg>
     `;
@@ -394,12 +196,8 @@ export class SudokuView extends LitElement implements GridContainer {
     `;
   }
 
-  private renderGameState() {
-    const {game} = this;
-    if (!game) return;
-    if (this.isPaused) {
-      return this.renderPausePattern();
-    }
+  private renderGameState(game: Game) {
+    if (this.isPaused) return;
     const {hoverLoc, cellCenter, cellSize} = this;
     const halfCell = cellSize / 2;
     const answer = [];
@@ -432,10 +230,6 @@ export class SudokuView extends LitElement implements GridContainer {
       }
     }
     return answer;
-  }
-
-  private renderPausePattern() {
-    return this.pausePatterns[this.overlayIndex!].render();
   }
 
   /** Light or dark mode. */
@@ -494,10 +288,6 @@ export class SudokuView extends LitElement implements GridContainer {
       this.svg = svg;
       this.calcMetrics();
     }
-  }
-
-  get element() {
-    return this.svg;
   }
 
   /** The possible input location the pointer last hovered over. */
@@ -632,22 +422,11 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   override updated(changedProperties: PropertyValues<this>) {
-    let reset = false;
     if (changedProperties.has('puzzle')) {
       this.game = null;
       this.pausePatterns = [];
       this.updateGameAndSymmetries();
       this.defaultNum = 1;
-      reset = true;
-    }
-    if (
-      (changedProperties.has('overlayIndex') ||
-        changedProperties.has('theme')) &&
-      this.svg
-    ) {
-      this.updateBackground();
-    }
-    if (reset) {
       this.resetPointerInput();
     }
   }
@@ -677,25 +456,6 @@ export class SudokuView extends LitElement implements GridContainer {
       this.dispatchEvent(
         new CustomEvent('symmetries-updated', {detail: this.pausePatterns}),
       );
-      this.updateBackground();
-    }
-  }
-
-  private updateBackground() {
-    const {svg, overlayIndex} = this;
-    const pattern =
-      overlayIndex !== null ? this.pausePatterns[overlayIndex] : null;
-    const cls = pattern === null ? `no-gradient` : BACKGROUNDS[pattern.sym];
-    const {classList} = svg;
-    classList.forEach(c => {
-      if (BACKGROUND_CLASSES.has(c)) {
-        classList.remove(c);
-      }
-    });
-    classList.add(cls);
-    if (pattern) {
-      this.style.setProperty('--angle', `${pattern.angle}deg`);
-      this.style.setProperty('--circle-center', pattern.circleCenter);
     }
   }
 
@@ -707,7 +467,7 @@ export class SudokuView extends LitElement implements GridContainer {
    */
   private blockSize = 0;
   /** How many pixels are in one side of the grid. */
-  @state() private sideSize = 0;
+  @state() sideSize = 0;
   /** How many pixels on each side of a cell. */
   private _cellSize = 0;
 
@@ -716,8 +476,8 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   /**
-   * The pixel offsets of cells' centers.  There are 9 offsets: they
-   * are indexed by either row or col.
+   * The device-pixel offsets of cells' centers.  There are 9 offsets: they are
+   * indexed by either row or col.
    */
   private centers: number[] = [];
 
