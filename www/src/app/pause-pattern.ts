@@ -65,8 +65,8 @@ export class PausePattern {
           .bg {
             width: 100%;
             height: 100%;
+            ${this.renderBgClass()}
           }
-          ${this.renderBgClass()}
         </style>
         <foreignObject
           x="0"
@@ -92,204 +92,180 @@ export class PausePattern {
     switch (this.sym) {
       case wasm.Sym.Rotation180:
         return svg`
-          .bg {
-            --angle: ${this.angle}deg;
-            background: conic-gradient(
-              from var(--angle) at 50%,
-              var(--gc),
-              var(--gf) 50%,
-              var(--gc) 50%,
-              var(--gf)
-            );
-          }
+          --angle: ${this.angle}deg;
+          background: conic-gradient(
+            from var(--angle) at 50%,
+            var(--gc),
+            var(--gf) 50%,
+            var(--gc) 50%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Rotation90:
         return svg`
-          .bg {
-            --angle: ${this.angle}deg;
-            background: conic-gradient(
-              from var(--angle) at 50%,
-              var(--gc),
-              var(--gf) 25%,
-              var(--gc) 25%,
-              var(--gf) 50%,
-              var(--gc) 50%,
-              var(--gf) 75%,
-              var(--gc) 75%,
-              var(--gf)
-            );
-          }
+          --angle: ${this.angle}deg;
+          background: conic-gradient(
+            from var(--angle) at 50%,
+            var(--gc),
+            var(--gf) 25%,
+            var(--gc) 25%,
+            var(--gf) 50%,
+            var(--gc) 50%,
+            var(--gf) 75%,
+            var(--gc) 75%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Mirror_X:
         return svg`
-          .bg {
-            background: linear-gradient(
-              0deg,
-              var(--gf),
-              var(--gd) 35%,
-              var(--ga) 45%,
-              var(--g9) 50%,
-              var(--ga) 55%,
-              var(--gd) 65%,
-              var(--gf)
-            );
-          }
+          background: linear-gradient(
+            0deg,
+            var(--gf),
+            var(--gd) 35%,
+            var(--ga) 45%,
+            var(--g9) 50%,
+            var(--ga) 55%,
+            var(--gd) 65%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Mirror_Y:
         return svg`
-          .bg {
-            background: linear-gradient(
-              90deg,
-              var(--gf),
-              var(--gd) 35%,
-              var(--ga) 45%,
-              var(--g9) 50%,
-              var(--ga) 55%,
-              var(--gd) 65%,
-              var(--gf)
-            );
-          }
+          background: linear-gradient(
+            90deg,
+            var(--gf),
+            var(--gd) 35%,
+            var(--ga) 45%,
+            var(--g9) 50%,
+            var(--ga) 55%,
+            var(--gd) 65%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Diagonal_Main:
         return svg`
-          .bg {
-            background: linear-gradient(
-              45deg,
-              var(--gf),
-              var(--gd) 35%,
-              var(--ga) 45%,
-              var(--g9) 50%,
-              var(--ga) 55%,
-              var(--gd) 65%,
-              var(--gf)
-            );
-          }
+          background: linear-gradient(
+            45deg,
+            var(--gf),
+            var(--gd) 35%,
+            var(--ga) 45%,
+            var(--g9) 50%,
+            var(--ga) 55%,
+            var(--gd) 65%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Diagonal_Anti:
         return svg`
-          .bg {
-            background: linear-gradient(
-              -45deg,
-              var(--gf),
-              var(--gd) 35%,
-              var(--ga) 45%,
-              var(--g9) 50%,
-              var(--ga) 55%,
-              var(--gd) 65%,
-              var(--gf)
-            );
-          }
+          background: linear-gradient(
+            -45deg,
+            var(--gf),
+            var(--gd) 35%,
+            var(--ga) 45%,
+            var(--g9) 50%,
+            var(--ga) 55%,
+            var(--gd) 65%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.Blockwise_Main:
         return svg`
-          .bg {
-            background: linear-gradient(
-              45deg,
-              var(--gc) 0,
-              var(--gf) 16.67%,
-              var(--gc) 16.67%,
-              var(--gf) 33.33%,
-              var(--gc) 33.33%,
-              var(--gf) 50%,
-              var(--gc) 50%,
-              var(--gf) 66.67%,
-              var(--gc) 66.67%,
-              var(--gf) 83.33%,
-              var(--gc) 83.33%,
-              var(--gf) 100%
-            );
-          }
+          background: linear-gradient(
+            45deg,
+            var(--gc) 0,
+            var(--gf) 16.67%,
+            var(--gc) 16.67%,
+            var(--gf) 33.33%,
+            var(--gc) 33.33%,
+            var(--gf) 50%,
+            var(--gc) 50%,
+            var(--gf) 66.67%,
+            var(--gc) 66.67%,
+            var(--gf) 83.33%,
+            var(--gc) 83.33%,
+            var(--gf) 100%
+          );
         `;
       case wasm.Sym.Blockwise_Anti:
         return svg`
-          .bg {
-            background: linear-gradient(
-              135deg,
-              var(--gc) 0,
-              var(--gf) 16.67%,
-              var(--gc) 16.67%,
-              var(--gf) 33.33%,
-              var(--gc) 33.33%,
-              var(--gf) 50%,
-              var(--gc) 50%,
-              var(--gf) 66.67%,
-              var(--gc) 66.67%,
-              var(--gf) 83.33%,
-              var(--gc) 83.33%,
-              var(--gf) 100%
-            );
-          }
+          background: linear-gradient(
+            135deg,
+            var(--gc) 0,
+            var(--gf) 16.67%,
+            var(--gc) 16.67%,
+            var(--gf) 33.33%,
+            var(--gc) 33.33%,
+            var(--gf) 50%,
+            var(--gc) 50%,
+            var(--gf) 66.67%,
+            var(--gc) 66.67%,
+            var(--gf) 83.33%,
+            var(--gc) 83.33%,
+            var(--gf) 100%
+          );
         `;
       case wasm.Sym.DoubleMirror:
         return svg`
-          .bg {
-            background: conic-gradient(
-              from 0deg at 50%,
-              var(--gf),
-              var(--gd) 15%,
-              var(--ga) 25%,
-              var(--gd) 35%,
-              var(--gf) 50%,
-              var(--gd) 65%,
-              var(--ga) 75%,
-              var(--gd) 85%,
-              var(--gf)
-            );
-          }
+          background: conic-gradient(
+            from 0deg at 50%,
+            var(--gf),
+            var(--gd) 15%,
+            var(--ga) 25%,
+            var(--gd) 35%,
+            var(--gf) 50%,
+            var(--gd) 65%,
+            var(--ga) 75%,
+            var(--gd) 85%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.DoubleDiagonal:
         return svg`
-          .bg {
-            background: conic-gradient(
-              from 45deg at 50%,
-              var(--gf),
-              var(--gd) 15%,
-              var(--ga) 25%,
-              var(--gd) 35%,
-              var(--gf) 50%,
-              var(--gd) 65%,
-              var(--ga) 75%,
-              var(--gd) 85%,
-              var(--gf)
-            );
-          }
+          background: conic-gradient(
+            from 45deg at 50%,
+            var(--gf),
+            var(--gd) 15%,
+            var(--ga) 25%,
+            var(--gd) 35%,
+            var(--gf) 50%,
+            var(--gd) 65%,
+            var(--ga) 75%,
+            var(--gd) 85%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.FullyReflective:
         return svg`
-          .bg {
-            background: conic-gradient(
-              from 45deg at 50%,
-              var(--gf),
-              var(--gd) 7.5%,
-              var(--ga) 12.5%,
-              var(--gd) 17.5%,
-              var(--gf) 25%,
-              var(--gd) 32.5%,
-              var(--ga) 37.5%,
-              var(--gd) 42.5%,
-              var(--gf) 50%,
-              var(--gd) 57.5%,
-              var(--ga) 62.5%,
-              var(--gd) 67.5%,
-              var(--gf) 75%,
-              var(--gd) 82.5%,
-              var(--ga) 87.5%,
-              var(--gd) 92.5%,
-              var(--gf)
-            );
-          }
+          background: conic-gradient(
+            from 45deg at 50%,
+            var(--gf),
+            var(--gd) 7.5%,
+            var(--ga) 12.5%,
+            var(--gd) 17.5%,
+            var(--gf) 25%,
+            var(--gd) 32.5%,
+            var(--ga) 37.5%,
+            var(--gd) 42.5%,
+            var(--gf) 50%,
+            var(--gd) 57.5%,
+            var(--ga) 62.5%,
+            var(--gd) 67.5%,
+            var(--gf) 75%,
+            var(--gd) 82.5%,
+            var(--ga) 87.5%,
+            var(--gd) 92.5%,
+            var(--gf)
+          );
         `;
       case wasm.Sym.None:
         return svg`
-          .bg {
-            background: radial-gradient(
-              circle at ${this.circleCenter},
-              var(--g8),
-              var(--ga) 15%,
-              var(--gd) 40%,
-              var(--gf) 90%
-            );
-          }
+          background: radial-gradient(
+            circle at ${this.circleCenter},
+            var(--g8),
+            var(--ga) 15%,
+            var(--gd) 40%,
+            var(--gf) 90%
+          );
         `;
     }
   }
