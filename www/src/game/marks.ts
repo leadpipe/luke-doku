@@ -124,7 +124,7 @@ export class Marks {
       throw new Error('Empty set not allowed, call `clearCell` instead');
     }
     this.cells[loc.index] = new Set(
-      [...nums].map(n => checkIntRange(n, 1, 10))
+      [...nums].sort().map(n => checkIntRange(n, 1, 10))
     );
   }
 

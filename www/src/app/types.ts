@@ -6,6 +6,12 @@ export type Point = [number, number];
 
 /** Gives information about the Sudoku grid's display. */
 export interface GridContainer {
+  /** The SVG that displays the grid. */
+  readonly svgElement: SVGElement;
+
+  /** Padding in CSS pixels around the edges of the grid. */
+  readonly padding: number;
+
   /** The size of each side of each cell in the grid, in device pixels. */
   readonly cellSize: number;
 
@@ -19,4 +25,7 @@ export interface GridContainer {
   cellCenter(loc: Loc): Point;
 
   readonly theme: Theme;
+
+  /** TODO: move this to Game */
+  readonly isPaused: boolean;
 }

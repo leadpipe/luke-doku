@@ -1,5 +1,5 @@
 import './events';
-import './clock-input';
+import './sudoku-input';
 
 import {css, html, LitElement, PropertyValues, svg} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
@@ -7,7 +7,7 @@ import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
 import {PausePattern, WasmSymMatch} from './pause-pattern';
 import {GridContainer, Point, Theme} from './types';
-import {ClockInput} from './clock-input';
+import {SudokuInput} from './sudoku-input';
 import {Loc} from '../game/loc';
 import {Game} from '../game/game';
 
@@ -132,12 +132,6 @@ export class SudokuView extends LitElement implements GridContainer {
         width=${compSize}
         height=${compSize}
         style="width: ${cssSize}px; height: ${cssSize}px;"
-        @pointerenter=${this.handlePointerHovering}
-        @pointermove=${this.handlePointerHovering}
-        @pointerleave=${this.handlePointerHovering}
-        @pointercancel=${this.handlePointerCancel}
-        @pointerdown=${this.handlePointerDown}
-        @pointerup=${this.handlePointerUp}
       >
         <style>
           .block-border {
@@ -154,7 +148,7 @@ export class SudokuView extends LitElement implements GridContainer {
         ${this.renderGrid()}
         ${pausePattern?.renderPattern() /*      --------------- */}
         ${game && this.renderGameState(game) /* --------------- */}
-        ${this.clockInput?.render()}
+        ${this.input?.renderInGrid()}
       </svg>
     `;
   }
@@ -198,23 +192,8 @@ export class SudokuView extends LitElement implements GridContainer {
 
   private renderGameState(game: Game) {
     if (this.isPaused) return;
-    const {hoverLoc, cellCenter, cellSize} = this;
-    const halfCell = cellSize / 2;
-    const answer = [];
-    if (hoverLoc) {
-      const [x, y] = cellCenter(hoverLoc);
-      answer.push(svg`
-        <rect class="hover-loc"
-              x=${x - halfCell}
-              y=${y - halfCell}
-              width=${cellSize}
-              height=${cellSize}
-              />`);
-      if (!game.marks.getNum(hoverLoc) && !this.inputLoc) {
-        answer.push(svg`
-          <text x=${x} y=${y} class="hover-loc">${this.defaultNum}</text>`);
-      }
-    }
+    const answer = this.input?.renderHoverLoc() ?? [];
+    const {cellCenter} = this;
     for (const loc of Loc.ALL) {
       const clue = game.marks.getClue(loc);
       if (clue) {
@@ -235,7 +214,7 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Light or dark mode. */
   @property({reflect: true}) theme: Theme = 'light';
 
-  /** Minimum padding on all 4 sides of the component around the Sudoku grid. */
+  /** Padding in CSS pixels on all 4 sides of the Sudoku grid. */
   @property({type: Number}) padding = 0;
 
   /** Whether to accept input to the puzzle. */
@@ -258,9 +237,6 @@ export class SudokuView extends LitElement implements GridContainer {
     return this.pausePatterns;
   }
 
-  private readonly keyHandler = (event: KeyboardEvent) =>
-    this.handleKeyDown(event);
-
   private readonly resizeObserver = new ResizeObserver(() => {
     if (!this.svg) return;
     this.calcMetrics();
@@ -269,17 +245,20 @@ export class SudokuView extends LitElement implements GridContainer {
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
-    window.addEventListener('keydown', this.keyHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.resizeObserver.unobserve(this);
-    window.removeEventListener('keydown', this.keyHandler);
   }
 
   get isPaused(): boolean {
     return this.overlayIndex !== null;
+  }
+
+  // From the GridContainer interface.
+  get svgElement() {
+    return this.svg;
   }
 
   private svg!: SVGElement;
@@ -290,151 +269,22 @@ export class SudokuView extends LitElement implements GridContainer {
     }
   }
 
-  /** The possible input location the pointer last hovered over. */
-  @state() private hoverLoc?: Loc;
-
-  /** The location the user is editing. */
-  private inputLoc?: Loc;
-
-  /** The clock-input tracker. */
-  private clockInput?: ClockInput;
-
-  /** The numeral we'll use as input for single taps. */
-  private defaultNum = 1;
-
-  private convertCoordinateToCellNumber(coord: number): number | undefined {
-    const sideSize = this.sideSize / devicePixelRatio;
-    if (coord < 0 || coord >= sideSize) return undefined;
-    return Math.floor(coord / (sideSize / 9));
-  }
-
-  private convertPointToLoc(point: {x: number; y: number}): Loc | undefined {
-    const rect = this.svg.getBoundingClientRect();
-    const col = this.convertCoordinateToCellNumber(point.x - rect.x);
-    const row = this.convertCoordinateToCellNumber(point.y - rect.y);
-    if (col === undefined || row === undefined) return undefined;
-    return new Loc(row, col);
-  }
-
-  private isPossibleInputLoc(loc: Loc): boolean {
-    if (this.isPaused || !this.game) return false;
-    return this.game.marks.getClue(loc) === null;
-  }
-
-  private handlePointerHovering(event: PointerEvent) {
-    const {clockInput, inputLoc} = this;
-    if (clockInput && inputLoc) {
-      clockInput.pointerMoved(event);
-      return;
-    }
-    const loc = this.convertPointToLoc(event);
-    if (loc && this.isPossibleInputLoc(loc)) {
-      this.hoverLoc = loc;
-    } else {
-      this.hoverLoc = undefined;
-    }
-  }
-
-  private handlePointerCancel(event: PointerEvent) {
-    const {clockInput, inputLoc} = this;
-    if (clockInput && inputLoc) {
-      this.svg?.releasePointerCapture(event.pointerId);
-      clockInput.cancelInput();
-      this.inputLoc = undefined;
-      this.hoverLoc = inputLoc;
-    }
-  }
-
-  private handlePointerDown(event: PointerEvent) {
-    if (!this.interactive) return;
-    if (!this.clockInput) this.clockInput = new ClockInput(this);
-    const loc = this.convertPointToLoc(event);
-    const {clockInput, inputLoc, defaultNum} = this;
-    if (clockInput && !inputLoc && loc && this.isPossibleInputLoc(loc)) {
-      this.inputLoc = loc;
-      this.hoverLoc = undefined;
-      this.svg.setPointerCapture(event.pointerId);
-      const num = this.game?.marks.getNum(loc);
-      clockInput.startInput(event, loc, num, defaultNum);
-    }
-  }
-
-  private handlePointerUp(event: PointerEvent) {
-    this.svg?.releasePointerCapture(event.pointerId);
-    const {clockInput, inputLoc, game} = this;
-    if (clockInput && inputLoc && game) {
-      const result = clockInput.completeInput();
-      switch (result) {
-        case 'cancel':
-          break;
-        case 'multiple':
-          // clockInput.startMultipleInput(inputLoc, game.marks.getNums(inputLoc));
-          break;
-        case 'clear':
-          game.marks.clearCell(inputLoc);
-          break;
-        default:
-          if (game.marks.getNum(inputLoc) !== result) {
-            game.marks.setNum(inputLoc, result);
-            this.defaultNum = result;
-          }
-          break;
-      }
-      this.inputLoc = undefined;
-      this.hoverLoc = inputLoc;
-    }
-  }
-
-  private resetPointerInput() {
-    this.hoverLoc = undefined;
-  }
-
-  private handleKeyDown(event: KeyboardEvent) {
-    const {hoverLoc, game} = this;
-    if (!game) return;
-    let update = false;
-    switch (event.key) {
-      case 'Backspace':
-      case 'Delete':
-        // If we're hovering over a set cell, clear it.
-        if (hoverLoc && game.marks.getNum(hoverLoc)) {
-          game.marks.clearCell(hoverLoc);
-          update = true;
-        }
-        break;
-
-      default:
-        // If it's a numeral, change the default input to it, and if we're
-        // hovering over a cell also set the cell to it.
-        if (event.key.length === 1 && event.key >= '1' && event.key <= '9') {
-          const num = Number(event.key);
-          this.defaultNum = num;
-          if (hoverLoc && !game.marks.getClue(hoverLoc)) {
-            game.marks.setNum(hoverLoc, num);
-          }
-          update = true;
-        }
-        break;
-    }
-    if (update) {
-      this.requestUpdate();
-    }
-  }
+  /** The input controller. */
+  private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('puzzle')) {
       this.game = null;
       this.pausePatterns = [];
       this.updateGameAndSymmetries();
-      this.defaultNum = 1;
-      this.resetPointerInput();
     }
   }
 
   private updateGameAndSymmetries() {
-    const {puzzle} = this;
+    const {puzzle, interactive} = this;
     if (puzzle && !this.pausePatterns.length) {
       this.game = new Game(puzzle);
+      this.input = interactive ? new SudokuInput(this, this.game) : undefined;
       const matches: [wasm.Sym, WasmSymMatch][] = wasm.bestSymmetryMatches(
         puzzle,
         MAX_NONCONFORMING_LOCS,
