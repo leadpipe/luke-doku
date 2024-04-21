@@ -6,7 +6,14 @@ import {customElement, property, query, state} from 'lit/decorators.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
 import {PausePattern, WasmSymMatch} from './pause-pattern';
-import {GridContainer, Point, Theme} from './types';
+import {
+  cssPixels,
+  DevicePixels,
+  devicePixels,
+  GridContainer,
+  Point,
+  Theme,
+} from './types';
 import {SudokuInput} from './sudoku-input';
 import {Loc} from '../game/loc';
 import {Game} from '../game/game';
@@ -30,6 +37,8 @@ export class SudokuView extends LitElement implements GridContainer {
         align-items: center;
         justify-content: center;
         background-color: var(--gf);
+        user-select: none;
+        -webkit-user-select: none;
 
         --block-border: #111;
         --hover-loc: #aecbfa;
@@ -37,6 +46,8 @@ export class SudokuView extends LitElement implements GridContainer {
         --clue-fill: #222;
         --solution-fill: #222;
         --clock-fill: #f0f0f0e0;
+        --target-fill: #e0e0e040;
+        --selection-fill: #bdfe;
 
         --gf: #fff;
         --gd: #ddd;
@@ -48,11 +59,13 @@ export class SudokuView extends LitElement implements GridContainer {
 
       :host([theme='dark']) {
         --block-border: #eee;
-        --hover-loc: #337;
+        --hover-loc: #339;
         --hover-loc-text: #aaac;
         --clue-fill: #eee;
         --solution-fill: #ccc;
         --clock-fill: #202020e0;
+        --target-fill: #30303040;
+        --selection-fill: #337e;
 
         --gf: #000;
         --gd: #222;
@@ -100,11 +113,12 @@ export class SudokuView extends LitElement implements GridContainer {
         font-family: 'Merriweather Sans';
         fill: var(--clue-fill);
       }
-      text.solution,
+      .solution,
       text.clock-text {
         font-weight: 400;
         font-family: 'Prompt';
         fill: var(--solution-fill);
+        color: var(--solution-fill);
       }
 
       .clock {
@@ -112,6 +126,53 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       .clock-selection {
         fill: var(--hover-loc);
+      }
+      .multi-input-target {
+        fill: var(--target-fill);
+        stroke: #808080;
+        stroke-width: 1;
+      }
+      .multi-input-background {
+        fill: var(--clock-fill);
+        stroke: var(--clock-fill);
+        stroke-linejoin: round;
+      }
+      .multi-input-num {
+        fill: var(--clock-fill);
+        stroke: #808080;
+        stroke-width: 1;
+      }
+      .multi-input-num.selected {
+        fill: var(--selection-fill);
+      }
+      .multi-input-num.hover-loc {
+        fill: var(--hover-loc);
+      }
+      div.multi {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        height: 100%;
+        padding: 0 10%;
+      }
+      div.solution {
+        text-align: center;
+        overflow-wrap: break-word;
+        text-wrap: balance;
+        line-height: 100%;
+        width: 100%;
+      }
+      .solution.large {
+        font-size: 0.9em;
+      }
+      .solution.medium {
+        font-size: 0.75em;
+      }
+      .solution.small {
+        font-size: 0.6em;
+      }
+      .solution.xsmall {
+        font-size: 0.48em;
       }
     `,
   ];
@@ -126,6 +187,11 @@ export class SudokuView extends LitElement implements GridContainer {
       : undefined;
 
     return html`
+      <style>
+        :host {
+          font-size: ${cellSize * 0.65}px;
+        }
+      </style>
       <svg
         ${ref(this.svgChanged)}
         viewBox="${-svgPadding} ${-svgPadding} ${compSize} ${compSize}"
@@ -137,9 +203,6 @@ export class SudokuView extends LitElement implements GridContainer {
           .block-border {
             stroke-width: ${this.blockBorderWidth};
           }
-          text {
-            font-size: ${cellSize * 0.65}px;
-          }
           text.clock-text {
             font-size: ${cellSize * 0.3}px;
           }
@@ -150,6 +213,7 @@ export class SudokuView extends LitElement implements GridContainer {
         ${game && this.renderGameState(game) /* --------------- */}
         ${this.input?.renderInGrid()}
       </svg>
+      ${this.input?.renderMultiInputPopup()}
     `;
   }
 
@@ -201,11 +265,32 @@ export class SudokuView extends LitElement implements GridContainer {
         answer.push(svg`
           <text x=${x} y=${y} class="clue">${clue}</text>`);
       }
-      const num = game.marks.getNum(loc);
-      if (num) {
-        const [x, y] = cellCenter(loc);
+      const nums = game.marks.getNums(loc);
+      if (!nums) continue;
+      const [x, y] = cellCenter(loc);
+      const {size} = nums;
+      if (size === 1) {
         answer.push(svg`
-          <text x=${x} y=${y} class="solution">${num}</text>`);
+          <text x=${x} y=${y} class="solution">${[...nums]}</text>`);
+      } else {
+        const {cellSize} = this;
+        const cls =
+          size > 5
+            ? 'xsmall'
+            : size > 3
+            ? 'small'
+            : size > 2
+            ? 'medium'
+            : 'large';
+        answer.push(svg`
+          <foreignObject
+            x=${x - cellSize / 2} y=${y - cellSize / 2}
+            width=${cellSize} height=${cellSize}>
+            <div class="multi">
+              <div class="solution ${cls}">${[...nums].join('')}</div>
+            </div>
+          </foreignObject>
+        `);
       }
     }
     return answer;
@@ -214,8 +299,8 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Light or dark mode. */
   @property({reflect: true}) theme: Theme = 'light';
 
-  /** Padding in CSS pixels on all 4 sides of the Sudoku grid. */
-  @property({type: Number}) padding = 0;
+  /** Padding on all 4 sides of the Sudoku grid. */
+  @property({converter: Number}) padding = cssPixels(0);
 
   /** Whether to accept input to the puzzle. */
   @property({type: Boolean}) interactive = false;
@@ -231,6 +316,12 @@ export class SudokuView extends LitElement implements GridContainer {
 
   /** Which overlay to display, or null to display the puzzle. */
   @property({type: Number}) overlayIndex: number | null = null;
+
+  /**
+   * The element that lets you assign more than one possible numeral to a
+   * location.
+   */
+  @query('#multiInputPopup') multiInputPopup?: SVGElement;
 
   /** The symmetry overlays that correspond to the current puzzle. */
   get overlays(): readonly PausePattern[] {
@@ -309,19 +400,20 @@ export class SudokuView extends LitElement implements GridContainer {
     }
   }
 
-  /** How many pixels in the thick grid lines. */
+  /** The number of device pixels in the thick grid lines. */
   private blockBorderWidth = 0;
   /**
-   * How many pixels are in one block, including one block border, two interior
-   * borders, and three cells.
+   * The number of device pixels in one block, including one block border, two
+   * interior borders, and three cells.
    */
   private blockSize = 0;
-  /** How many pixels are in one side of the grid. */
-  @state() sideSize = 0;
-  /** How many pixels on each side of a cell. */
-  private _cellSize = 0;
+  /** The number of device pixels in one side of the grid. */
+  @state() sideSize = devicePixels(0);
+  /** The number of device pixels on each side of a cell. */
+  private _cellSize = devicePixels(0);
 
-  get cellSize(): number {
+  /** The number of device pixels on each side of a cell. */
+  get cellSize(): DevicePixels {
     return this._cellSize;
   }
 
@@ -329,7 +421,7 @@ export class SudokuView extends LitElement implements GridContainer {
    * The device-pixel offsets of cells' centers.  There are 9 offsets: they are
    * indexed by either row or col.
    */
-  private centers: number[] = [];
+  private centers: DevicePixels[] = [];
 
   readonly cellCenter: (loc: Loc) => Point = (loc: Loc) => {
     const {centers} = this;
@@ -344,19 +436,20 @@ export class SudokuView extends LitElement implements GridContainer {
     let sideSize = devicePixelRatio * size;
     const blockBorderWidth = (this.blockBorderWidth =
       sideSize < 150 ? 1 : sideSize < 200 ? 2 : 3);
-    const cellSize = (this._cellSize = Math.floor(
-      (sideSize - 4 * blockBorderWidth - 6 * 1) / 9,
+    const cellSize = (this._cellSize = devicePixels(
+      Math.floor((sideSize - 4 * blockBorderWidth - 6 * 1) / 9),
     ));
     const blockSize = (this.blockSize =
       3 * cellSize + 2 * 1 + 1 * blockBorderWidth);
-    this.sideSize = blockBorderWidth + 3 * blockSize;
+    this.sideSize = devicePixels(blockBorderWidth + 3 * blockSize);
 
     const centers = [];
     const half = cellSize / 2;
     for (let i = 0; i < 3; ++i) {
       for (let j = 0; j < 3; ++j) {
-        centers[i * 3 + j] =
-          blockBorderWidth + blockSize * i + cellSize * j + j + half;
+        centers[i * 3 + j] = devicePixels(
+          blockBorderWidth + blockSize * i + cellSize * j + j + half,
+        );
       }
     }
     this.centers = centers;
