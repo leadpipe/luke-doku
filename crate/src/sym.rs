@@ -2,7 +2,7 @@
 
 use std::{
   cmp::{min, Ordering},
-  convert::TryInto,
+  convert::TryInto, ptr::addr_of_mut,
 };
 
 use num_derive::FromPrimitive;
@@ -333,7 +333,7 @@ type OrbitsLocs = [Loc; 81];
 type Orbits<const N: usize> = [&'static [Loc]; N];
 
 fn new_orbits<const N: usize>(
-  locs: &'static mut OrbitsLocs,
+  locs: *mut OrbitsLocs,
   gen: fn(Loc) -> Vec<Loc>,
 ) -> Orbits<N> {
   let mut orbit_ranges = Vec::with_capacity(N);
@@ -349,7 +349,9 @@ fn new_orbits<const N: usize>(
     assert!(remaining >= in_orbit);
     let start = index;
     in_orbit.iter().for_each(|loc| {
-      locs[index] = loc;
+      unsafe {
+        (*locs)[index] = loc;
+      }
       index += 1
     });
     orbit_ranges.push(start..index);
@@ -358,17 +360,19 @@ fn new_orbits<const N: usize>(
   assert_eq!(orbit_ranges.len(), N);
   let mut orbits = vec![];
   for r in orbit_ranges {
-    orbits.push(&locs[r]);
+    unsafe {
+      orbits.push(&(*locs)[r]);
+    }
   }
   orbits.try_into().unwrap()
 }
 
 static mut ROTATION180_LOCS: OrbitsLocs = [L11; 81];
 static ROTATION180: Lazy<Orbits<{ 80 / 2 + 1 }>> =
-  Lazy::new(|| unsafe { new_orbits(&mut ROTATION180_LOCS, |loc| vec![loc.opp()]) });
+  Lazy::new(|| unsafe { new_orbits(addr_of_mut!(ROTATION180_LOCS), |loc| vec![loc.opp()]) });
 static mut ROTATION90_LOCS: OrbitsLocs = [L11; 81];
 static ROTATION90: Lazy<Orbits<{ 80 / 4 + 1 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut ROTATION90_LOCS, |loc| {
+  new_orbits(addr_of_mut!(ROTATION90_LOCS), |loc| {
     vec![
       Loc::at(loc.col().t(), loc.row().opp().t()),
       loc.opp(),
@@ -378,19 +382,19 @@ static ROTATION90: Lazy<Orbits<{ 80 / 4 + 1 }>> = Lazy::new(|| unsafe {
 });
 static mut MIRROR_X_LOCS: OrbitsLocs = [L11; 81];
 static MIRROR_X: Lazy<Orbits<{ 72 / 2 + 9 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut MIRROR_X_LOCS, |loc| {
+  new_orbits(addr_of_mut!(MIRROR_X_LOCS), |loc| {
     vec![Loc::at(loc.row().opp(), loc.col())]
   })
 });
 static mut MIRROR_Y_LOCS: OrbitsLocs = [L11; 81];
 static MIRROR_Y: Lazy<Orbits<{ 72 / 2 + 9 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut MIRROR_Y_LOCS, |loc| {
+  new_orbits(addr_of_mut!(MIRROR_Y_LOCS), |loc| {
     vec![Loc::at(loc.row(), loc.col().opp())]
   })
 });
 static mut DOUBLE_MIRROR_LOCS: OrbitsLocs = [L11; 81];
 static DOUBLE_MIRROR: Lazy<Orbits<{ 64 / 4 + 16 / 2 + 1 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut DOUBLE_MIRROR_LOCS, |loc| {
+  new_orbits(addr_of_mut!(DOUBLE_MIRROR_LOCS), |loc| {
     vec![
       Loc::at(loc.row().opp(), loc.col()),
       loc.opp(),
@@ -400,19 +404,19 @@ static DOUBLE_MIRROR: Lazy<Orbits<{ 64 / 4 + 16 / 2 + 1 }>> = Lazy::new(|| unsaf
 });
 static mut DIAGONAL_MAIN_LOCS: OrbitsLocs = [L11; 81];
 static DIAGONAL_MAIN: Lazy<Orbits<{ 72 / 2 + 9 }>> =
-  Lazy::new(|| unsafe { new_orbits(&mut DIAGONAL_MAIN_LOCS, |loc| vec![loc.t()]) });
+  Lazy::new(|| unsafe { new_orbits(addr_of_mut!(DIAGONAL_MAIN_LOCS), |loc| vec![loc.t()]) });
 static mut DIAGONAL_ANTI_LOCS: OrbitsLocs = [L11; 81];
 static DIAGONAL_ANTI: Lazy<Orbits<{ 72 / 2 + 9 }>> =
-  Lazy::new(|| unsafe { new_orbits(&mut DIAGONAL_ANTI_LOCS, |loc| vec![loc.t().opp()]) });
+  Lazy::new(|| unsafe { new_orbits(addr_of_mut!(DIAGONAL_ANTI_LOCS), |loc| vec![loc.t().opp()]) });
 static mut DOUBLE_DIAGONAL_LOCS: OrbitsLocs = [L11; 81];
 static DOUBLE_DIAGONAL: Lazy<Orbits<{ 64 / 4 + 16 / 2 + 1 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut DOUBLE_DIAGONAL_LOCS, |loc| {
+  new_orbits(addr_of_mut!(DOUBLE_DIAGONAL_LOCS), |loc| {
     vec![loc.t(), loc.opp(), loc.t().opp()]
   })
 });
 static mut FULLY_REFLECTIVE_LOCS: OrbitsLocs = [L11; 81];
 static FULLY_REFLECTIVE: Lazy<Orbits<{ 48 / 8 + 32 / 4 + 1 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut FULLY_REFLECTIVE_LOCS, |loc| {
+  new_orbits(addr_of_mut!(FULLY_REFLECTIVE_LOCS), |loc| {
     vec![
       loc.t(),
       Loc::at(loc.col().t(), loc.row().opp().t()),
@@ -426,7 +430,7 @@ static FULLY_REFLECTIVE: Lazy<Orbits<{ 48 / 8 + 32 / 4 + 1 }>> = Lazy::new(|| un
 });
 static mut BLOCKWISE_MAIN_LOCS: OrbitsLocs = [L11; 81];
 static BLOCKWISE_MAIN: Lazy<Orbits<{ 81 / 3 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut BLOCKWISE_MAIN_LOCS, |loc| {
+  new_orbits(addr_of_mut!(BLOCKWISE_MAIN_LOCS), |loc| {
     vec![
       Blk::from_bands(loc.row_band().prev(), loc.col_band().prev())
         .loc_at(loc.blk_row(), loc.blk_col()),
@@ -437,7 +441,7 @@ static BLOCKWISE_MAIN: Lazy<Orbits<{ 81 / 3 }>> = Lazy::new(|| unsafe {
 });
 static mut BLOCKWISE_ANTI_LOCS: OrbitsLocs = [L11; 81];
 static BLOCKWISE_ANTI: Lazy<Orbits<{ 81 / 3 }>> = Lazy::new(|| unsafe {
-  new_orbits(&mut BLOCKWISE_ANTI_LOCS, |loc| {
+  new_orbits(addr_of_mut!(BLOCKWISE_ANTI_LOCS), |loc| {
     vec![
       Blk::from_bands(loc.row_band().prev(), loc.col_band().next())
         .loc_at(loc.blk_row(), loc.blk_col()),
@@ -447,7 +451,7 @@ static BLOCKWISE_ANTI: Lazy<Orbits<{ 81 / 3 }>> = Lazy::new(|| unsafe {
   })
 });
 static mut NONE_LOCS: OrbitsLocs = [L11; 81];
-static NONE: Lazy<Orbits<81>> = Lazy::new(|| unsafe { new_orbits(&mut NONE_LOCS, |_| vec![]) });
+static NONE: Lazy<Orbits<81>> = Lazy::new(|| unsafe { new_orbits(addr_of_mut!(NONE_LOCS), |_| vec![]) });
 
 #[cfg(test)]
 mod tests {
