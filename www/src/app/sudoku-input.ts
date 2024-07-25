@@ -348,7 +348,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   private isPossibleInputLoc(loc: Loc): boolean {
-    if (this.host.isPaused) return false;
+    if (this.game.isPaused) return false;
     return this.game.marks.getClue(loc) === null;
   }
 

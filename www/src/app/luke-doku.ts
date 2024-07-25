@@ -1,16 +1,13 @@
-import './color-cube';
 import './events';
+import './game-view';
 import './gen-puzzle';
 import './sudoku-view';
 
 import {css, html, LitElement} from 'lit';
-import {customElement, query, state} from 'lit/decorators.js';
+import {customElement, property, state} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
-import {SudokuView} from './sudoku-view';
+import {getCurrentTheme, prefsTarget} from './prefs';
 import {Theme} from './types';
-import {PausePattern} from './pause-pattern';
-
-const CLUES_OVERLAY = {name: 'clues', value: ''};
 
 /** Top-level component. */
 @customElement('luke-doku')
@@ -19,155 +16,45 @@ export class LukeDoku extends LitElement {
     :host {
       margin-top: 8px;
       display: grid;
-      grid-template-columns: 1fr 2fr 1fr;
+      grid-template-columns: 1fr 3fr;
       gap: 20px;
       justify-items: center;
     }
 
-    gen-puzzle,
-    #controls {
-      width: 240px;
+    gen-puzzle {
+      width: 300px;
       margin-top: 32px;
-    }
-
-    sudoku-view {
-      width: 380px;
-      height: 380px;
-    }
-
-    #controls > div {
-      margin-bottom: 8px;
-      display: flex;
-      align-items: baseline;
-      flex-wrap: wrap;
-      gap: 4px 16px;
-    }
-
-    color-cube {
-      grid-column: 1 / 4;
-    }
-
-    a {
-      text-decoration: underline;
-      cursor: pointer;
     }
   `;
 
   override render() {
-    const {selectedOverlayValue} = this;
-    const overlayIndex = selectedOverlayValue
-      ? Number(selectedOverlayValue)
-      : null;
     return html`
       <gen-puzzle @puzzle-selected=${this.selectPuzzle}></gen-puzzle>
-      <sudoku-view
-        theme=${this.theme}
-        .puzzle=${this.puzzle}
-        .overlayIndex=${overlayIndex}
-        padding="10"
-        interactive
-        @symmetries-updated=${this.updateOverlays}
-      ></sudoku-view>
-      <div id="controls">
-        <div>
-          ${this.overlays.map(({name, value}) => {
-            if (value === selectedOverlayValue) {
-              return html`<b>${name}</b>`;
-            } else {
-              return html`<a @click=${this.selectOverlay} data-value=${value}
-                >${name}</a
-              >`;
-            }
-          })}
-        </div>
-        <div>
-          ${['light', 'dark'].map(theme => {
-            if (this.theme === theme) {
-              return html`<b>${theme}</b>`;
-            } else {
-              return html`<a @click=${this.setTheme} data-theme=${theme}
-                >${theme}</a
-              >`;
-            }
-          })}
-        </div>
-      </div>
-      <!-- <color-cube></color-cube> -->
+      <game-view theme=${this.theme} .puzzle=${this.puzzle}></game-view>
     `;
   }
 
-  private readonly darkModeQuery = window.matchMedia(
-    '(prefers-color-scheme: dark)',
-  );
-  private readonly handleDarkModeChange = (evt: {matches: boolean}) => {
-    this.theme = evt.matches ? 'dark' : 'light';
+  @property({reflect: true}) private theme: Theme = getCurrentTheme();
+
+  @state() private puzzle: wasm.Grid | null = null;
+
+  private readonly themeHandler = (event: CustomEvent<Theme>) => {
+    this.theme = event.detail;
   };
 
-  constructor() {
-    super();
-    this.handleDarkModeChange(this.darkModeQuery);
-    this.darkModeQuery.addEventListener('change', this.handleDarkModeChange);
+  override connectedCallback(): void {
+    super.connectedCallback();
+    prefsTarget.addEventListener('current-theme', this.themeHandler);
   }
 
-  @state() private selectedOverlayValue = '';
-  @state() private theme: Theme = 'light';
-  @state() private puzzle: wasm.Grid | null = null;
-  @state() private overlays: Array<{name: string; value: string}> = [
-    CLUES_OVERLAY,
-  ];
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    prefsTarget.removeEventListener('current-theme', this.themeHandler);
+  }
 
   private selectPuzzle(event: CustomEvent<wasm.Grid>) {
     this.puzzle = event.detail;
-    this.selectedOverlayValue = '0';
   }
-
-  private selectOverlay(event: Event) {
-    const value = (event.target as HTMLElement).dataset.value ?? '';
-    this.selectedOverlayValue = value;
-  }
-
-  private setTheme(event: Event) {
-    const theme = (event.target as HTMLElement).dataset.theme ?? 'light';
-    this.theme = theme as 'dark' | 'light';
-  }
-
-  @query('sudoku-view') sudokuView!: SudokuView;
-
-  private updateOverlays(event: CustomEvent<PausePattern[]>) {
-    this.overlays = [
-      CLUES_OVERLAY,
-      ...event.detail.map((symMatch, i) => {
-        return {
-          name: symmetryName(symMatch.sym),
-          value: i.toString(),
-        };
-      }),
-    ];
-  }
-}
-
-function symmetryName(sym: wasm.Sym): string {
-  switch (sym) {
-    case wasm.Sym.Blockwise_Anti:
-    case wasm.Sym.Blockwise_Main:
-      return 'translation';
-    case wasm.Sym.Diagonal_Anti:
-    case wasm.Sym.Diagonal_Main:
-      return 'diagonal';
-    case wasm.Sym.DoubleDiagonal:
-      return 'diagonal/rotation';
-    case wasm.Sym.Mirror_X:
-    case wasm.Sym.Mirror_Y:
-      return 'mirror';
-    case wasm.Sym.DoubleMirror:
-      return 'mirror/rotation';
-    case wasm.Sym.Rotation180:
-    case wasm.Sym.Rotation90:
-      return 'rotation';
-    case wasm.Sym.FullyReflective:
-      return 'mirror/diagonal/rotation';
-  }
-  return 'none';
 }
 
 declare global {

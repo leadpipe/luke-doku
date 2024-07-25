@@ -178,13 +178,13 @@ export class SudokuView extends LitElement implements GridContainer {
   ];
 
   override render() {
-    const {sideSize, cellSize, padding, game} = this;
+    const {sideSize, cellSize, padding, game, running} = this;
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
-    const pausePattern = this.isPaused
-      ? this.pausePatterns[this.overlayIndex!]
-      : undefined;
+    const pausePattern = running
+      ? undefined
+      : this.pausePatterns[this.overlayIndex];
 
     return html`
       <style>
@@ -210,7 +210,7 @@ export class SudokuView extends LitElement implements GridContainer {
         ${pausePattern?.renderBackground() /*   --------------- */}
         ${this.renderGrid()}
         ${pausePattern?.renderPattern() /*      --------------- */}
-        ${game && this.renderGameState(game) /* --------------- */}
+        ${game && this.renderGameState(game, running) /* ------- */}
         ${this.input?.renderInGrid()}
       </svg>
       ${this.input?.renderMultiInputPopup()}
@@ -254,8 +254,8 @@ export class SudokuView extends LitElement implements GridContainer {
     `;
   }
 
-  private renderGameState(game: Game) {
-    if (this.isPaused) return;
+  private renderGameState(game: Game, running: boolean) {
+    if (!running) return;
     const answer = this.input?.renderHoverLoc() ?? [];
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
@@ -305,17 +305,18 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Whether to accept input to the puzzle. */
   @property({type: Boolean}) interactive = false;
 
-  /** The puzzle we're displaying. Setting this will update `overlays`. */
-  @property({attribute: false}) puzzle: wasm.Grid | null = null;
+  /** Whether the game is running.  Reflects `!game.isPaused`. */
+  @property({type: Boolean, reflect: true}) running = false;
+
+  /** The game state.  */
+  @property({attribute: false}) game: Game | null = null;
+  private puzzle: wasm.Grid | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
 
-  /** The game state. */
-  private game: Game | null = null;
-
-  /** Which overlay to display, or null to display the puzzle. */
-  @property({type: Number}) overlayIndex: number | null = null;
+  /** Which overlay to display when the game is paused. */
+  @state() private overlayIndex = 0;
 
   /**
    * The element that lets you assign more than one possible numeral to a
@@ -323,14 +324,14 @@ export class SudokuView extends LitElement implements GridContainer {
    */
   @query('#multiInputPopup') multiInputPopup?: SVGElement;
 
-  /** The symmetry overlays that correspond to the current puzzle. */
-  get overlays(): readonly PausePattern[] {
-    return this.pausePatterns;
-  }
-
-  private readonly resizeObserver = new ResizeObserver(() => {
-    if (!this.svg) return;
-    this.calcMetrics();
+  private resizing = false;
+  private readonly resizeObserver = new ResizeObserver(async () => {
+    if (!this.svg || this.resizing) return;
+    this.resizing = true;
+    setTimeout(() => {
+      this.resizing = false;
+      this.calcMetrics();
+    }, 20);
   });
 
   override connectedCallback(): void {
@@ -341,10 +342,6 @@ export class SudokuView extends LitElement implements GridContainer {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.resizeObserver.unobserve(this);
-  }
-
-  get isPaused(): boolean {
-    return this.overlayIndex !== null;
   }
 
   // From the GridContainer interface.
@@ -364,39 +361,33 @@ export class SudokuView extends LitElement implements GridContainer {
   private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
-    if (changedProperties.has('puzzle')) {
-      this.game = null;
+    if (changedProperties.has('game') && this.game?.puzzle != this.puzzle) {
+      // single = on purpose
+      this.puzzle = this.game ? this.game.puzzle : null;
       this.pausePatterns = [];
-      this.updateGameAndSymmetries();
+      this.updateSymmetries();
     }
   }
 
-  private updateGameAndSymmetries() {
-    const {puzzle, interactive} = this;
-    if (puzzle && !this.pausePatterns.length) {
-      this.game = new Game(puzzle);
-      this.input = interactive ? new SudokuInput(this, this.game) : undefined;
+  private updateSymmetries() {
+    const {game, interactive} = this;
+    if (game && !this.pausePatterns.length) {
+      this.input = interactive ? new SudokuInput(this, game) : undefined;
+      const {puzzle} = game;
       const matches: [wasm.Sym, WasmSymMatch][] = wasm.bestSymmetryMatches(
         puzzle,
         MAX_NONCONFORMING_LOCS,
       );
+      const seed = puzzle.toFlatString();
       this.pausePatterns = matches.map(([sym, match]) => {
-        const random = new wasm.JsRandom(puzzle.toFlatString());
+        const random = new wasm.JsRandom(seed);
         try {
           return new PausePattern(sym, match, puzzle, this, random);
         } finally {
           random.free();
         }
       });
-      if (
-        this.overlayIndex !== null &&
-        this.overlayIndex >= this.pausePatterns.length
-      ) {
-        this.overlayIndex = 0;
-      }
-      this.dispatchEvent(
-        new CustomEvent('symmetries-updated', {detail: this.pausePatterns}),
-      );
+      this.overlayIndex = 0;
     }
   }
 

@@ -1,7 +1,6 @@
 import * as wasm from 'luke-doku-rust';
 import {checkIntRange} from './ints';
 import {Loc} from './loc';
-import {ReadonlyGrid} from './types';
 
 /**
  * Represents a partial solution to a Sudoku in the form of the pencil marks
@@ -16,7 +15,7 @@ export class Marks {
   private cells: Array<number | ReadonlySet<number> | null>;
 
   /** Bootstraps a Marks from a puzzle grid. */
-  constructor(puzzle: ReadonlyGrid);
+  constructor(puzzle: wasm.Grid);
 
   /** Clones another Marks. */
   constructor(marks: Marks);
@@ -24,14 +23,14 @@ export class Marks {
   /** Makes an empty Marks. */
   constructor();
 
-  constructor(marksOrPuzzle?: Marks | ReadonlyGrid) {
+  constructor(marksOrPuzzle?: Marks | wasm.Grid) {
     if (marksOrPuzzle instanceof Marks) {
       this.cells = Array.from(marksOrPuzzle.cells);
     } else {
       const cells = Array.from<number | null>({length: 81});
       this.cells = cells;
       if (marksOrPuzzle) {
-        const puzzle: ReadonlyGrid = marksOrPuzzle;
+        const puzzle: wasm.Grid = marksOrPuzzle;
         for (let loc = 0; loc < 81; ++loc) {
           cells[loc] = puzzle.get(loc) || null;
         }

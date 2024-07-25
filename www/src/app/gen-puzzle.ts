@@ -7,6 +7,9 @@ import * as wasm from 'luke-doku-rust';
 @customElement('gen-puzzle')
 export class GenPuzzle extends LitElement {
   static override styles = css`
+    table {
+      margin: auto;
+    }
     th {
       text-align: right;
       padding-right: 8px;

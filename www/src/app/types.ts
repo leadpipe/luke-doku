@@ -1,6 +1,7 @@
 import {Loc} from '../game/loc';
 
 export type Theme = 'dark' | 'light';
+export type ThemeOrAuto = Theme | 'auto';
 
 declare const brandKey: unique symbol;
 type Brand<B> = {[brandKey]: B};
@@ -55,7 +56,4 @@ export interface GridContainer {
   cellCenter(loc: Loc): Point;
 
   readonly theme: Theme;
-
-  /** TODO: move this to Game */
-  readonly isPaused: boolean;
 }
