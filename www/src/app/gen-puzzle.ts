@@ -3,6 +3,7 @@ import './events';
 import {css, html, LitElement, PropertyValues} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
+import {Grid} from '../game/grid';
 
 @customElement('gen-puzzle')
 export class GenPuzzle extends LitElement {
@@ -121,7 +122,9 @@ export class GenPuzzle extends LitElement {
       }
       this.puzzleDesc = puzzleDesc;
       this.dispatchEvent(
-        new CustomEvent('puzzle-selected', {detail: this.puzzleDesc.puzzle})
+        new CustomEvent('puzzle-selected', {
+          detail: new Grid(this.puzzleDesc.puzzle),
+        }),
       );
     }
   }

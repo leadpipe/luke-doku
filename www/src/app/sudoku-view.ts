@@ -5,7 +5,7 @@ import {css, html, LitElement, PropertyValues, svg} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
-import {PausePattern, WasmSymMatch} from './pause-pattern';
+import {PausePattern} from './pause-pattern';
 import {
   cssPixels,
   DevicePixels,
@@ -17,6 +17,7 @@ import {
 import {SudokuInput} from './sudoku-input';
 import {Loc} from '../game/loc';
 import {Game} from '../game/game';
+import {ReadonlyGrid, SymMatch} from '../game/grid';
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -310,7 +311,7 @@ export class SudokuView extends LitElement implements GridContainer {
 
   /** The game state.  */
   @property({attribute: false}) game: Game | null = null;
-  private puzzle: wasm.Grid | null = null;
+  private puzzle: ReadonlyGrid | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
@@ -374,8 +375,7 @@ export class SudokuView extends LitElement implements GridContainer {
     if (game && !this.pausePatterns.length) {
       this.input = interactive ? new SudokuInput(this, game) : undefined;
       const {puzzle} = game;
-      const matches: [wasm.Sym, WasmSymMatch][] = wasm.bestSymmetryMatches(
-        puzzle,
+      const matches: [wasm.Sym, SymMatch][] = puzzle.bestSymmetryMatches(
         MAX_NONCONFORMING_LOCS,
       );
       const seed = puzzle.toFlatString();

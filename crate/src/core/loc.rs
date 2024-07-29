@@ -15,7 +15,6 @@ use wasm_bindgen::convert::IntoWasmAbi;
 use wasm_bindgen::describe::inform;
 use wasm_bindgen::describe::WasmDescribe;
 use wasm_bindgen::describe::I8;
-use wasm_bindgen::prelude::wasm_bindgen;
 
 define_id_types! {
     /// Identifies one of the 81 locations in a Sudoku grid.
@@ -277,7 +276,6 @@ impl IntoWasmAbi for Band {
 
 /// A set of `Loc`s.
 #[derive(Clone, Copy, Eq, Hash, PartialEq)]
-#[wasm_bindgen]
 pub struct LocSet(pub Bits3x27);
 
 impl LocSet {

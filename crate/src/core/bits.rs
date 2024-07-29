@@ -8,7 +8,6 @@ use std::{
 };
 use wasm_bindgen::convert::{FromWasmAbi, IntoWasmAbi};
 use wasm_bindgen::describe::{inform, WasmDescribe, U16, U32, U8};
-use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Operations on a fixed-capacity collection of bits.
 ///
@@ -482,7 +481,6 @@ macro_rules! define_bits_array_types {
         $(
         #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
         #[repr(C)]
-        #[wasm_bindgen]
         $(#[$outer])*
         pub struct $type_name([$nested; $count]);
 
@@ -691,7 +689,6 @@ macro_rules! define_bits_array_types {
 
 define_bits_array_types! {
     /// An 81-bit set, as an array of 3 27-bit sets.
-//    #[wasm_bindgen]
     Bits3x27: [Bits27; 3];
 
     /// A 729-bit set, as an array of 9 arrays of 3 27-bit sets.

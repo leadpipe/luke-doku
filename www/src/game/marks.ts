@@ -1,6 +1,6 @@
-import * as wasm from 'luke-doku-rust';
 import {checkIntRange} from './ints';
 import {Loc} from './loc';
+import {Grid, ReadonlyGrid} from './grid';
 
 /**
  * Represents a partial solution to a Sudoku in the form of the pencil marks
@@ -15,7 +15,7 @@ export class Marks {
   private cells: Array<number | ReadonlySet<number> | null>;
 
   /** Bootstraps a Marks from a puzzle grid. */
-  constructor(puzzle: wasm.Grid);
+  constructor(puzzle: ReadonlyGrid);
 
   /** Clones another Marks. */
   constructor(marks: Marks);
@@ -23,16 +23,16 @@ export class Marks {
   /** Makes an empty Marks. */
   constructor();
 
-  constructor(marksOrPuzzle?: Marks | wasm.Grid) {
+  constructor(marksOrPuzzle?: Marks | ReadonlyGrid) {
     if (marksOrPuzzle instanceof Marks) {
       this.cells = Array.from(marksOrPuzzle.cells);
     } else {
       const cells = Array.from<number | null>({length: 81});
       this.cells = cells;
       if (marksOrPuzzle) {
-        const puzzle: wasm.Grid = marksOrPuzzle;
+        const puzzleBytes = marksOrPuzzle.bytes;
         for (let loc = 0; loc < 81; ++loc) {
-          cells[loc] = puzzle.get(loc) || null;
+          cells[loc] = puzzleBytes[loc] || null;
         }
       } else {
         cells.fill(null);
@@ -123,31 +123,21 @@ export class Marks {
       throw new Error('Empty set not allowed, call `clearCell` instead');
     }
     this.cells[loc.index] = new Set(
-      [...nums].sort().map(n => checkIntRange(n, 1, 10))
+      [...nums].sort().map(n => checkIntRange(n, 1, 10)),
     );
   }
 
   /**
-   * Converts this Marks to a Grid, if every cell has either a clue or a single
-   * numeral marked in it.  Otherwise, returns null.
+   * Converts this Marks to a Grid, with every clue and single-value cell assigned and the rest blank.
    *
-   * @returns A Grid, if this Marks has a clue or single numeral marked in every
-   *     location, or null otherwise.
+   * @returns A Grid with all of this Marks's assignments set.
    */
-  asCompleteGrid(): wasm.Grid | null {
-    if (
-      this.cells.every(
-        value =>
-          typeof value === 'number' ||
-          (value instanceof Set && value.size === 1)
-      )
-    ) {
-      const grid = wasm.Grid.new();
-      for (const loc of Loc.ALL) {
-        grid.set(loc.index, this.getClue(loc) || this.getNum(loc)!);
-      }
-      return grid;
+  asGrid(): Grid | null {
+    const grid = new Grid();
+    for (const loc of Loc.ALL) {
+      const num = this.getClue(loc) || this.getNum(loc);
+      if (num) grid.set(loc, num);
     }
-    return null;
+    return grid;
   }
 }

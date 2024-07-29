@@ -5,10 +5,10 @@ import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
-import * as wasm from 'luke-doku-rust';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {Game} from '../game/game';
+import {Grid} from '../game/grid';
 
 /** Encapsulates the entire game page. */
 @customElement('game-view')
@@ -153,7 +153,7 @@ export class GameView extends LitElement {
     `;
   }
   @property({reflect: true}) private theme: Theme = 'light';
-  @property({attribute: false}) puzzle: wasm.Grid | null = null;
+  @property({attribute: false}) puzzle: Grid | null = null;
   @state() game: Game | null = null;
 
   override updated(changedProperties: PropertyValues<this>) {

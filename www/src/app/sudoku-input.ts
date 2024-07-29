@@ -320,7 +320,7 @@ export class SudokuInput implements ReactiveController {
     const col = this.convertCoordinateToCellNumber(event.x - rect.x - padding);
     const row = this.convertCoordinateToCellNumber(event.y - rect.y - padding);
     if (col === undefined || row === undefined) return undefined;
-    return new Loc(row, col);
+    return Loc.of(row, col);
   }
 
   /** Finds the number, or the close button, on the multi-input popup. */

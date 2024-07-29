@@ -1,17 +1,8 @@
 import {svg, SVGTemplateResult} from 'lit';
 import * as wasm from 'luke-doku-rust';
 import {Loc} from '../game/loc';
+import {ReadonlyGrid, SymMatch} from '../game/grid';
 import {GridContainer} from './types';
-
-/**
- * The wasm code matches the possible symmetries of the Sudoku board against the
- * clues of a given puzzle to produce one or more of these objects.
- */
-export declare interface WasmSymMatch {
-  full_orbits: number[][];
-  num_nonconforming_locs: number;
-  partial_orbits: number[][];
-}
 
 /**
  * Renders the pause overlay for a given board symmetry of a given puzzle.
@@ -23,8 +14,8 @@ export class PausePattern {
 
   constructor(
     readonly sym: wasm.Sym,
-    private readonly match: WasmSymMatch,
-    readonly puzzle: wasm.Grid,
+    private readonly match: SymMatch,
+    readonly puzzle: ReadonlyGrid,
     readonly gridContainer: GridContainer,
     random: wasm.JsRandom,
   ) {
@@ -38,12 +29,12 @@ export class PausePattern {
         ? newMotleyChooser(random)
         : newTwoColorChooser(random);
     const symTransform = SYM_TRANSFORMS[sym];
-    for (const orbit of match.full_orbits) {
+    for (const orbit of match.fullOrbits) {
       orbits.push(
         new OrbitShape(orbit, symTransform).init(chooseColor(), random),
       );
     }
-    for (const orbit of match.partial_orbits) {
+    for (const orbit of match.partialOrbits) {
       orbits.push(
         new PartialOrbitShape(orbit, symTransform, puzzle).init(
           chooseColor(),
@@ -55,7 +46,7 @@ export class PausePattern {
   }
 
   isBroken(): boolean {
-    return this.match.num_nonconforming_locs > 0;
+    return this.match.numNonconformingLocs > 0;
   }
 
   renderBackground() {
@@ -446,7 +437,7 @@ class OrbitShape {
   color = '';
 
   constructor(
-    readonly orbit: readonly number[],
+    readonly orbit: readonly Loc[],
     readonly symTransform: SymTransform,
   ) {}
 
@@ -497,13 +488,12 @@ class OrbitShape {
     this.color = color.toColor();
   }
 
-  render(gridContainer: GridContainer, puzzle: wasm.Grid): SVGTemplateResult[] {
+  render(gridContainer: GridContainer, puzzle: ReadonlyGrid): SVGTemplateResult[] {
     const {cellCenter, cellSize, theme} = gridContainer;
     const dark = theme === 'dark';
     const answer: SVGTemplateResult[] = [];
-    for (const locIndex of this.orbit) {
-      const hasClue = puzzle.get(locIndex) !== 0;
-      const loc = Loc.of(locIndex);
+    for (const loc of this.orbit) {
+      const hasClue = puzzle.get(loc) != null;
       const [dx, dy] = cellCenter(loc);
       const scale = cellSize / 2;
       // Sets the origin at the center of the cell, and scales the axes so the
@@ -562,14 +552,14 @@ class PartialOrbitShape extends OrbitShape {
   inverted: boolean;
 
   constructor(
-    orbit: readonly number[],
+    orbit: readonly Loc[],
     symTransform: SymTransform,
-    puzzle: wasm.Grid,
+    puzzle: ReadonlyGrid,
   ) {
     super(orbit, symTransform);
     let numMissing = 0;
     for (const loc of orbit) {
-      if (puzzle.get(loc) === 0) {
+      if (puzzle.get(loc) == null) {
         ++numMissing;
       }
     }

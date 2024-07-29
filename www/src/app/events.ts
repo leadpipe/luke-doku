@@ -1,9 +1,9 @@
-import * as wasm from 'luke-doku-rust';
+import {Grid} from '../game/grid';
 import {Theme} from './types';
 
 declare global {
   interface HTMLElementEventMap {
-    'puzzle-selected': CustomEvent<wasm.Grid>;
+    'puzzle-selected': CustomEvent<Grid>;
     /**
      * Sent by game-clock when another second has passed.  The event detail
      * tells whether the clock was being shown.

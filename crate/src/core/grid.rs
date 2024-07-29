@@ -22,10 +22,27 @@ impl Grid {
     Grid([None; 81])
   }
 
-  /// Constructs a Grid from a string.
-  #[wasm_bindgen(constructor)]
-  pub fn new_from_string(s: &str) -> Grid {
-    Grid::from_str(&s).unwrap()
+  /// Constructs a Grid from a byte array.
+  #[wasm_bindgen(js_name = "newFromBytes")]
+  pub fn new_from_bytes(bytes: Box<[u8]>) -> Option<Grid> {
+    if bytes.len() != 81 || bytes.iter().any(|&b| b > 9) {
+      None
+    } else {
+      unsafe {
+        // Safe because we've just checked the requirements for Grid.
+        let p = (&bytes).as_ptr() as *const [Option<Num>; 81];
+        Some(Grid(*p))
+      }
+    }
+  }
+
+  /// Converts the grid to a Uint8Array.
+  pub fn bytes(&self) -> Box<[u8]> {
+    unsafe {
+      // Safe because Option<Num> is stored as a byte.
+      let p = (&self.0).as_ptr() as *const [u8; 81];
+      Box::new(*p)
+    }
   }
 
   /// Duplicates this grid.
@@ -53,18 +70,6 @@ impl Grid {
     self.0.iter().filter(|optional| optional.is_some()).count()
   }
 
-  /// Tells whether this grid is completely blank.
-  #[wasm_bindgen(js_name = "isEmpty")]
-  pub fn is_empty(&self) -> bool {
-    self.len() == 0
-  }
-
-  /// Tells whether this grid is completely full.
-  #[wasm_bindgen(js_name = "isComplete")]
-  pub fn is_complete(&self) -> bool {
-    self.len() == 81
-  }
-
   /// Returns the debug string (ASCII grid).
   #[wasm_bindgen(js_name = "toString")]
   pub fn to_debug_string(&self) -> String {
@@ -77,26 +82,13 @@ impl Grid {
     format!("{}", self)
   }
 
-  /// Clears all cells that have different assignments from `other`.
-  pub fn intersect(&mut self, other: &Grid) {
-    for loc in Loc::all() {
-      if self[loc] != other[loc] {
-        self[loc] = None;
-      }
-    }
-  }
-
-  /// Converts this grid to a SolvedGrid when this grid is solved.
-  #[wasm_bindgen(js_name = "solvedGrid")]
-  pub fn solved_grid(&self) -> Option<SolvedGrid> {
-    self.state().solved_grid()
-  }
-
-  /// When this grid is complete but broken, returns a set of the broken locations.
+  /// When this grid is complete but broken, returns a list of the broken
+  /// locations' indices.
   #[wasm_bindgen(js_name = "brokenLocs")]
-  pub fn broken_locs(&self) -> Option<LocSet> {
+  pub fn broken_locs(&self) -> Option<Box<[u8]>> {
     if let GridState::Broken(locs) = self.state() {
-      Some(locs)
+      let bytes = locs.iter().map(|loc| loc.index() as u8).collect::<Vec<u8>>().into_boxed_slice();
+      Some(bytes)
     } else {
       None
     }
@@ -137,6 +129,20 @@ impl Grid {
     } else {
       GridState::Broken(broken)
     }
+  }
+
+  /// Clears all cells that have different assignments from `other`.
+  pub fn intersect(&mut self, other: &Grid) {
+    for loc in Loc::all() {
+      if self[loc] != other[loc] {
+        self[loc] = None;
+      }
+    }
+  }
+
+  /// Converts this grid to a SolvedGrid when this grid is solved.
+  pub fn solved_grid(&self) -> Option<SolvedGrid> {
+    self.state().solved_grid()
   }
 }
 
@@ -261,8 +267,7 @@ impl SolvedGrid {
   ///
   /// # Safety
   ///
-  /// Callers must ensure that the
-  /// Grid's state is Solved.
+  /// Callers must ensure that the Grid's state is Solved.
   pub unsafe fn new(grid: &Grid) -> SolvedGrid {
     // Note we use the fact that Option<Num> and Num have the same single-byte
     // representation when there is actually a Num present.

@@ -10,23 +10,10 @@ export class Loc {
   /** The location index, in 0..81. */
   readonly index: number;
 
-  /** The row-col constructor. */
-  constructor(row: number, col: number);
-  /** The loc constructor. */
-  constructor(loc: number);
-
-  constructor(rowOrIndex: number, col?: number) {
-    if (col === undefined) {
-      const index = rowOrIndex;
-      this.index = checkIntRange(index, 0, 81);
-      this.row = Math.floor(index / 9);
-      this.col = index % 9;
-    } else {
-      const row = rowOrIndex;
-      this.row = checkIntRange(row, 0, 9);
-      this.col = checkIntRange(col, 0, 9);
-      this.index = row * 9 + col;
-    }
+  private constructor(index: number) {
+    this.index = index;
+    this.row = Math.floor(index / 9);
+    this.col = index % 9;
   }
 
   /**
@@ -35,7 +22,15 @@ export class Loc {
   static readonly ALL: readonly Loc[] = iota(81).map(i => new Loc(i));
 
   /** Converts a location index into a Loc. */
-  static of(index: number): Loc {
+  static of(index: number): Loc;
+
+  /** Converts a row-column pair into a Loc. */
+  static of(row: number, col: number): Loc;
+
+  static of(rowOrIndex: number, col?: number): Loc {
+    if (col === undefined) return Loc.ALL[checkIntRange(rowOrIndex, 0, 81)];
+    const row = checkIntRange(rowOrIndex, 0, 9);
+    const index = row * 9 + checkIntRange(col, 0, 9);
     return Loc.ALL[index];
   }
 }

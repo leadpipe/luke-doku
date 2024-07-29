@@ -5,7 +5,7 @@ import './sudoku-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
-import * as wasm from 'luke-doku-rust';
+import {Grid} from '../game/grid';
 import {getCurrentTheme, prefsTarget} from './prefs';
 import {Theme} from './types';
 
@@ -36,7 +36,7 @@ export class LukeDoku extends LitElement {
 
   @property({reflect: true}) private theme: Theme = getCurrentTheme();
 
-  @state() private puzzle: wasm.Grid | null = null;
+  @state() private puzzle: Grid | null = null;
 
   private readonly themeHandler = (event: CustomEvent<Theme>) => {
     this.theme = event.detail;
@@ -52,7 +52,7 @@ export class LukeDoku extends LitElement {
     prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
-  private selectPuzzle(event: CustomEvent<wasm.Grid>) {
+  private selectPuzzle(event: CustomEvent<Grid>) {
     this.puzzle = event.detail;
   }
 }

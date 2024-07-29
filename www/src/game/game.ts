@@ -1,4 +1,4 @@
-import * as wasm from 'luke-doku-rust';
+import {ReadonlyGrid} from './grid';
 import {Marks} from './marks';
 
 /** Manages the game state for solving a sudoku interactively. */
@@ -10,7 +10,7 @@ export class Game {
   /** When the current period started, or 0. */
   private resumedTimestamp = 0;
 
-  constructor(readonly puzzle: wasm.Grid) {
+  constructor(readonly puzzle: ReadonlyGrid) {
     this.marks = new Marks(puzzle);
   }
 
