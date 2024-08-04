@@ -82,6 +82,16 @@ impl Grid {
     format!("{}", self)
   }
 
+  /// Tells whether this grid is a complete and valid Sudoku solution.
+  #[wasm_bindgen(js_name = "isSolved")]
+  pub fn is_solved(&self) -> bool {
+    if let GridState::Solved(_g) = self.state() {
+      true
+    } else {
+      false
+    }
+  }
+
   /// When this grid is complete but broken, returns a list of the broken
   /// locations' indices.
   #[wasm_bindgen(js_name = "brokenLocs")]

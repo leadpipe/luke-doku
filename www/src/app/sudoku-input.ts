@@ -1,7 +1,7 @@
 import {html, LitElement, ReactiveController, svg, TemplateResult} from 'lit';
 import {classMap} from 'lit/directives/class-map.js';
 import {map} from 'lit/directives/map.js';
-import {Game} from '../game/game';
+import {Game, GameState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
 import {
@@ -348,7 +348,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   private isPossibleInputLoc(loc: Loc): boolean {
-    if (this.game.isPaused) return false;
+    if (this.game.state !== GameState.RUNNING) return false;
     return this.game.marks.getClue(loc) === null;
   }
 
@@ -454,6 +454,7 @@ export class SudokuInput implements ReactiveController {
         default:
           if (game.marks.getNum(inputLoc) !== result) {
             game.marks.setNum(inputLoc, result);
+            this.checkSolved(game);
             this.defaultResult = result;
           }
           break;
@@ -462,6 +463,18 @@ export class SudokuInput implements ReactiveController {
       this.hoverLoc = inputLoc;
       this.host.requestUpdate();
     }
+  }
+
+  private checkSolved(game: Game) {
+    if (game.marks.asGrid().isSolved()) {
+      game.markSolved();
+      this.host.dispatchEvent(
+        new CustomEvent('puzzle-solved', {
+          bubbles: true,
+          composed: true,
+        }),
+      );
+      }
   }
 
   private handleKeyDown(event: KeyboardEvent) {
@@ -509,6 +522,7 @@ export class SudokuInput implements ReactiveController {
             this.defaultResult = num;
             if (hoverLoc && !game.marks.getClue(hoverLoc)) {
               game.marks.setNum(hoverLoc, num);
+              this.checkSolved(game);
             }
           }
           update = true;
@@ -530,6 +544,7 @@ export class SudokuInput implements ReactiveController {
     }
     if (multiInput.size) {
       game.marks.setNums(inputLoc, multiInput);
+      this.checkSolved(game);
     } else {
       game.marks.clearCell(inputLoc);
     }

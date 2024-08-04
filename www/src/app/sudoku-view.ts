@@ -3,6 +3,7 @@ import './sudoku-input';
 
 import {css, html, LitElement, PropertyValues, svg} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
+import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
 import {PausePattern} from './pause-pattern';
@@ -16,7 +17,7 @@ import {
 } from './types';
 import {SudokuInput} from './sudoku-input';
 import {Loc} from '../game/loc';
-import {Game} from '../game/game';
+import {Game, GameState} from '../game/game';
 import {ReadonlyGrid, SymMatch} from '../game/grid';
 
 /**
@@ -49,6 +50,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --clock-fill: #f0f0f0e0;
         --target-fill: #e0e0e040;
         --selection-fill: #bdfe;
+        --broken-fill: #f00;
 
         --gf: #fff;
         --gd: #ddd;
@@ -122,6 +124,10 @@ export class SudokuView extends LitElement implements GridContainer {
         color: var(--solution-fill);
       }
 
+      text.broken {
+        fill: var(--broken-fill);
+      }
+
       .clock {
         fill: var(--clock-fill);
       }
@@ -179,11 +185,13 @@ export class SudokuView extends LitElement implements GridContainer {
   ];
 
   override render() {
-    const {sideSize, cellSize, padding, game, running} = this;
+    const {sideSize, cellSize, padding, game, gameState} = this;
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
-    const pausePattern = running
+    const showNumbers =
+      gameState === GameState.RUNNING || gameState === GameState.SOLVED;
+    const pausePattern = showNumbers
       ? undefined
       : this.pausePatterns[this.overlayIndex];
 
@@ -211,7 +219,7 @@ export class SudokuView extends LitElement implements GridContainer {
         ${pausePattern?.renderBackground() /*   --------------- */}
         ${this.renderGrid()}
         ${pausePattern?.renderPattern() /*      --------------- */}
-        ${game && this.renderGameState(game, running) /* ------- */}
+        ${game && this.renderGameState(game, showNumbers) /* ------- */}
         ${this.input?.renderInGrid()}
       </svg>
       ${this.input?.renderMultiInputPopup()}
@@ -255,16 +263,18 @@ export class SudokuView extends LitElement implements GridContainer {
     `;
   }
 
-  private renderGameState(game: Game, running: boolean) {
-    if (!running) return;
+  private renderGameState(game: Game, showNumbers: boolean) {
+    if (!showNumbers) return;
+    const brokenLocs = game.marks.asGrid().brokenLocs();
     const answer = this.input?.renderHoverLoc() ?? [];
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
+      const broken = {broken: brokenLocs.has(loc)};
       const clue = game.marks.getClue(loc);
       if (clue) {
         const [x, y] = cellCenter(loc);
         answer.push(svg`
-          <text x=${x} y=${y} class="clue">${clue}</text>`);
+          <text x=${x} y=${y} class="clue ${classMap(broken)}">${clue}</text>`);
       }
       const nums = game.marks.getNums(loc);
       if (!nums) continue;
@@ -272,7 +282,9 @@ export class SudokuView extends LitElement implements GridContainer {
       const {size} = nums;
       if (size === 1) {
         answer.push(svg`
-          <text x=${x} y=${y} class="solution">${[...nums]}</text>`);
+          <text x=${x} y=${y} class="solution ${classMap(broken)}">${[
+          ...nums,
+        ]}</text>`);
       } else {
         const {cellSize} = this;
         const cls =
@@ -306,8 +318,8 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Whether to accept input to the puzzle. */
   @property({type: Boolean}) interactive = false;
 
-  /** Whether the game is running.  Reflects `!game.isPaused`. */
-  @property({type: Boolean, reflect: true}) running = false;
+  /** The game's state.  Reflects `game.state`. */
+  @property({attribute: false}) gameState: GameState = GameState.UNSTARTED;
 
   /** The game state.  */
   @property({attribute: false}) game: Game | null = null;

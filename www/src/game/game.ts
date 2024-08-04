@@ -1,6 +1,13 @@
 import {ReadonlyGrid} from './grid';
 import {Marks} from './marks';
 
+export enum GameState {
+  UNSTARTED,
+  RUNNING,
+  PAUSED,
+  SOLVED,
+}
+
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
   readonly marks: Marks;
@@ -10,23 +17,14 @@ export class Game {
   /** When the current period started, or 0. */
   private resumedTimestamp = 0;
 
+  private gameState = GameState.UNSTARTED;
+
   constructor(readonly puzzle: ReadonlyGrid) {
     this.marks = new Marks(puzzle);
   }
 
-  /**
-   * Tells whether this game has started.
-   */
-  get isStarted(): boolean {
-    return this.priorElapsedMs > 0 || !this.isPaused;
-  }
-
-  /**
-   * Tells whether the game is currently paused.  Games always start paused, and
-   * only are unpaused with the initial call to `resume`.
-   */
-  get isPaused(): boolean {
-    return this.resumedTimestamp === 0;
+  get state(): GameState {
+    return this.gameState;
   }
 
   /**
@@ -46,8 +44,12 @@ export class Game {
    * previously paused.
    */
   resume() {
-    if (this.isPaused) {
+    if (
+      this.gameState === GameState.UNSTARTED ||
+      this.gameState === GameState.PAUSED
+    ) {
       this.resumedTimestamp = Date.now();
+      this.gameState = GameState.RUNNING;
     }
   }
 
@@ -55,9 +57,18 @@ export class Game {
    * Stops the clock for this game, if it was previously running.
    */
   pause() {
-    if (!this.isPaused) {
+    if (this.gameState === GameState.RUNNING) {
       this.priorElapsedMs = this.elapsedMs;
       this.resumedTimestamp = 0;
+      this.gameState = GameState.PAUSED;
     }
+  }
+
+  /**
+   * Marks this game as solved.
+   */
+  markSolved() {
+    this.pause();
+    this.gameState = GameState.SOLVED;
   }
 }

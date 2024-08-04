@@ -7,7 +7,7 @@ import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
-import {Game} from '../game/game';
+import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
 
 /** Encapsulates the entire game page. */
@@ -102,56 +102,61 @@ export class GameView extends LitElement {
   }
 
   private renderGame(theme: Theme, game: Game | null) {
+    const gameState = game?.state ?? GameState.UNSTARTED;
+    const running = gameState === GameState.RUNNING;
     return html`
       <sudoku-view
         theme=${theme}
         .game=${game}
-        ?running=${!game?.isPaused}
+        .gameState=${gameState}
         .padding=${cssPixels(10)}
         interactive
+        @puzzle-solved=${this.notePuzzleSolved}
       ></sudoku-view>
       <div id="below-grid">
         ${game
           ? html`
               <game-clock
                 .game=${game}
-                ?running=${!game?.isPaused}
+                ?running=${running}
                 @clock-ticked=${this.saveGame}
               ></game-clock>
-              ${game.isPaused
-                ? html`
-                    <div>
-                      ${game.isStarted
-                        ? html`
-                            <a @click=${this.resumePlay} title="Resume play">
-                              <mat-icon
-                                name="play_circle"
-                                size="large"
-                              ></mat-icon>
-                            </a>
-                          `
-                        : html`
-                            <a @click=${this.resumePlay} title="Start play">
-                              <mat-icon
-                                name="not_started"
-                                size="large"
-                              ></mat-icon>
-                            </a>
-                          `}
-                    </div>
-                  `
-                : html`
-                    <div>
-                      <a @click=${this.pausePlay} title="Pause play">
-                        <mat-icon name="pause_circle" size="large"></mat-icon>
-                      </a>
-                    </div>
-                  `}
+              ${this.renderPauseResume(game.state)}
             `
           : ''}
       </div>
     `;
   }
+
+  private renderPauseResume(gameState: GameState) {
+    switch (gameState) {
+      case GameState.UNSTARTED:
+        return html`
+          <div>
+            <a @click=${this.resumePlay} title="Start play">
+              <mat-icon name="not_started" size="large"></mat-icon>
+            </a>
+          </div>
+        `;
+      case GameState.RUNNING:
+        return html`
+          <div>
+            <a @click=${this.pausePlay} title="Pause play">
+              <mat-icon name="pause_circle" size="large"></mat-icon>
+            </a>
+          </div>
+        `;
+      case GameState.PAUSED:
+        return html`
+          <div>
+            <a @click=${this.resumePlay} title="Resume play">
+              <mat-icon name="play_circle" size="large"></mat-icon>
+            </a>
+          </div>
+        `;
+    }
+  }
+
   @property({reflect: true}) private theme: Theme = 'light';
   @property({attribute: false}) puzzle: Grid | null = null;
   @state() game: Game | null = null;
@@ -169,6 +174,10 @@ export class GameView extends LitElement {
 
   private saveGame() {
     // TODO: implement
+  }
+
+  private notePuzzleSolved() {
+    this.requestUpdate();
   }
 
   private resumePlay() {

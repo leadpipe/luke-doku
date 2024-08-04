@@ -9,6 +9,10 @@ declare global {
      * tells whether the clock was being shown.
      */
     'clock-ticked': CustomEvent<boolean>;
+    /**
+     * Sent by sudoku-input when the puzzle has been solved.
+     */
+    'puzzle-solved': CustomEvent;
   }
 }
 

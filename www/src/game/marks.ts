@@ -132,7 +132,7 @@ export class Marks {
    *
    * @returns A Grid with all of this Marks's assignments set.
    */
-  asGrid(): Grid | null {
+  asGrid(): Grid {
     const grid = new Grid();
     for (const loc of Loc.ALL) {
       const num = this.getClue(loc) || this.getNum(loc);

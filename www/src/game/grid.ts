@@ -75,22 +75,32 @@ export class Grid {
   }
 
   /**
-   * Returns the state of this grid: true means it's a complete and valid
-   * solution grid, false means it isn't complete, and a non-empty set of
-   * locations means that every location has a numeral but the given locations
-   * have errors.
+   * Returns the set of locations that should be displayed as erroneous.  This
+   * is empty when the grid is incomplete, and when the puzzle is solved.
    */
-  state(): boolean | Set<Loc> {
+  brokenLocs(): Set<Loc> {
     const complete = this.array.every(num => num > 0);
-    if (!complete) return false;
+    if (!complete) return new Set();
     const grid = this.toWasm();
     try {
       const broken = grid.brokenLocs();
-      if (!broken) return true;
+      if (!broken) return new Set();
       const locs = Array.prototype.map.apply(broken, [
         index => Loc.of(index),
       ]) as Loc[];
       return new Set(locs);
+    } finally {
+      grid.free();
+    }
+  }
+
+  /**
+   * Tells whether this grid is a valid Sudoku solution.
+   */
+  isSolved(): boolean {
+    const grid = this.toWasm();
+    try {
+      return grid.isSolved();
     } finally {
       grid.free();
     }
