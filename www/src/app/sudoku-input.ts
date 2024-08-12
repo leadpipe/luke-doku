@@ -1,7 +1,7 @@
 import {html, LitElement, ReactiveController, svg, TemplateResult} from 'lit';
 import {classMap} from 'lit/directives/class-map.js';
 import {map} from 'lit/directives/map.js';
-import {Game, GameState} from '../game/game';
+import {CompletionState, Game, GameState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
 import {
@@ -467,14 +467,14 @@ export class SudokuInput implements ReactiveController {
 
   private checkSolved(game: Game) {
     if (game.marks.asGrid().isSolved()) {
-      game.markSolved();
+      game.markComplete(CompletionState.SOLVED);
       this.host.dispatchEvent(
         new CustomEvent('puzzle-solved', {
           bubbles: true,
           composed: true,
         }),
       );
-      }
+    }
   }
 
   private handleKeyDown(event: KeyboardEvent) {

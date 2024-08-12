@@ -190,7 +190,7 @@ export class SudokuView extends LitElement implements GridContainer {
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
     const showNumbers =
-      gameState === GameState.RUNNING || gameState === GameState.SOLVED;
+      gameState === GameState.RUNNING || gameState === GameState.COMPLETE;
     const pausePattern = showNumbers
       ? undefined
       : this.pausePatterns[this.overlayIndex];
