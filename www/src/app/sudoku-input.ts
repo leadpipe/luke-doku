@@ -478,13 +478,21 @@ export class SudokuInput implements ReactiveController {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    const {hoverLoc, game} = this;
+    const {hoverLoc, game, multiInput} = this;
     let update = false;
     switch (event.key) {
       case 'Backspace':
       case 'Delete':
+        // If we're in multi-input mode, remove the last number from the set.
+        if (multiInput) {
+          const last = [...multiInput].pop();
+          if (last) {
+            this.toggleMultiInput(last);
+            update = true;
+          }
+        }
         // If we're hovering over a set cell, clear it.
-        if (hoverLoc && game.marks.getNum(hoverLoc)) {
+        else if (hoverLoc && game.marks.getNum(hoverLoc)) {
           game.marks.clearCell(hoverLoc);
           update = true;
         }
@@ -492,7 +500,7 @@ export class SudokuInput implements ReactiveController {
 
       case 'Escape':
       case 'Enter':
-        if (this.multiInput) {
+        if (multiInput) {
           this.cancelInput();
           update = true;
         }
@@ -516,7 +524,7 @@ export class SudokuInput implements ReactiveController {
         // toggle it.
         if (event.key.length === 1 && event.key >= '1' && event.key <= '9') {
           const num = Number(event.key);
-          if (this.multiInput) {
+          if (multiInput) {
             this.toggleMultiInput(num);
           } else {
             this.defaultResult = num;
