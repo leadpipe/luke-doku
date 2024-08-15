@@ -1,5 +1,17 @@
+import {Command, ExecutedCommand, GameInternals, isUndoable} from './command';
+import {
+  ClearCell,
+  Redo,
+  RedoToEnd,
+  SetNum,
+  SetNums,
+  Undo,
+  UndoToStart,
+} from './commands';
 import {ReadonlyGrid} from './grid';
-import {Marks} from './marks';
+import {Loc} from './loc';
+import {Marks, ReadonlyMarks} from './marks';
+import {UndoStack} from './undo-stack';
 
 /**
  * The possible states of a Luke-doku puzzle.
@@ -42,7 +54,10 @@ export enum CompletionState {
 
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
-  readonly marks: Marks;
+  private readonly writableMarks: Marks;
+  private readonly history: ExecutedCommand[] = [];
+  private readonly undoStack: UndoStack = new UndoStack();
+  private readonly internals: GameInternals;
 
   /** Elapsed play time in milliseconds prior to the current period. */
   private priorElapsedMs = 0;
@@ -53,7 +68,16 @@ export class Game {
   private completionState?: CompletionState;
 
   constructor(readonly puzzle: ReadonlyGrid) {
-    this.marks = new Marks(puzzle);
+    this.writableMarks = new Marks(puzzle);
+    this.internals = {
+      marks: this.writableMarks,
+      undoStack: this.undoStack,
+      executeFromUndoStack: command => this.execute(command, true),
+    };
+  }
+
+  get marks(): ReadonlyMarks {
+    return this.writableMarks;
   }
 
   get state(): GameState {
@@ -108,5 +132,59 @@ export class Game {
     this.pause();
     this.gameState = GameState.COMPLETE;
     this.completionState = completionState;
+  }
+
+  clearCell(loc: Loc): void {
+    this.execute(new ClearCell(loc));
+  }
+
+  setNum(loc: Loc, num: number): void {
+    this.execute(new SetNum(loc, num));
+  }
+
+  setNums(loc: Loc, nums: ReadonlySet<number>): void {
+    this.execute(new SetNums(loc, nums));
+  }
+
+  canUndo(): boolean {
+    return this.undoStack.canUndo();
+  }
+
+  canRedo(): boolean {
+    return this.undoStack.canRedo();
+  }
+
+  undo(): boolean {
+    return this.execute(new Undo());
+  }
+
+  redo(): boolean {
+    return this.execute(new Redo());
+  }
+
+  undoToStart(): boolean {
+    return this.execute(new UndoToStart());
+  }
+
+  redoToEnd(): boolean {
+    return this.execute(new RedoToEnd());
+  }
+
+  private execute(
+    command: Command,
+    fromUndoStack?: boolean,
+    elapsedTimestamp?: number,
+  ): boolean {
+    const done = command.execute(
+      this.internals,
+      elapsedTimestamp ?? this.elapsedMs,
+    );
+    if (done) {
+      this.history.push(done);
+      if (!fromUndoStack && isUndoable(done)) {
+        this.undoStack.push(done);
+      }
+    }
+    return !!done;
   }
 }

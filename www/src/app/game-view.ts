@@ -4,11 +4,12 @@ import './mat-icon';
 import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html} from 'lit';
-import {customElement, property, state} from 'lit/decorators.js';
+import {customElement, property, query, state} from 'lit/decorators.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
+import { SudokuView } from './sudoku-view';
 
 /** Encapsulates the entire game page. */
 @customElement('game-view')
@@ -77,10 +78,20 @@ export class GameView extends LitElement {
 
   protected override render() {
     const {theme, game} = this;
-    return [this.renderControls(theme, game), this.renderGame(theme, game)];
+    const gameState = game?.state ?? GameState.UNSTARTED;
+    const running = gameState === GameState.RUNNING;
+    return [
+      this.renderControls(theme, game, gameState, running),
+      this.renderGame(theme, game, gameState, running),
+    ];
   }
 
-  private renderControls(theme: Theme, game: Game | null) {
+  private renderControls(
+    theme: Theme,
+    game: Game | null,
+    gameState: GameState,
+    running: boolean,
+  ) {
     const newTheme =
       theme === getCurrentSystemTheme()
         ? theme === 'light'
@@ -96,14 +107,33 @@ export class GameView extends LitElement {
               data-theme=${newTheme}
             ></mat-icon>
           </a>
+          ${running
+            ? html`
+                <a @click=${this.undoToStart} title="Undo to start">
+                  <mat-icon name="first_page"></mat-icon>
+                </a>
+                <a @click=${this.undo} title="Undo">
+                  <mat-icon name="undo"></mat-icon>
+                </a>
+                <a @click=${this.redo} title="Redo">
+                  <mat-icon name="redo"></mat-icon>
+                </a>
+                <a @click=${this.redoToEnd} title="Redo to end">
+                  <mat-icon name="last_page"></mat-icon>
+                </a>
+              `
+            : ''}
         </div>
       </div>
     `;
   }
 
-  private renderGame(theme: Theme, game: Game | null) {
-    const gameState = game?.state ?? GameState.UNSTARTED;
-    const running = gameState === GameState.RUNNING;
+  private renderGame(
+    theme: Theme,
+    game: Game | null,
+    gameState: GameState,
+    running: boolean,
+  ) {
     return html`
       <sudoku-view
         theme=${theme}
@@ -160,6 +190,7 @@ export class GameView extends LitElement {
   @property({reflect: true}) private theme: Theme = 'light';
   @property({attribute: false}) puzzle: Grid | null = null;
   @state() game: Game | null = null;
+  @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('puzzle')) {
@@ -170,6 +201,26 @@ export class GameView extends LitElement {
   private setTheme(event: Event) {
     const theme = (event.target as HTMLElement).dataset.theme;
     setPreferredTheme(theme as ThemeOrAuto);
+  }
+
+  private undo(_event: Event) {
+    this.game?.undo();
+    this.sudokuView?.requestUpdate();
+  }
+
+  private redo(_event: Event) {
+    this.game?.redo();
+    this.sudokuView?.requestUpdate();
+  }
+
+  private undoToStart(_event: Event) {
+    this.game?.undoToStart();
+    this.sudokuView?.requestUpdate();
+  }
+
+  private redoToEnd(_event: Event) {
+    this.game?.redoToEnd();
+    this.sudokuView?.requestUpdate();
   }
 
   private saveGame() {

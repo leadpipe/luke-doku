@@ -141,3 +141,6 @@ export class Marks {
     return grid;
   }
 }
+
+/** A Marks that you can't modify. */
+export type ReadonlyMarks = Omit<Marks, 'clearCell'|'setClue'|'setNum'|'setNums'>;
