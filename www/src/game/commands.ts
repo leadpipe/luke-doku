@@ -1,4 +1,4 @@
-import {Command, GameInternals} from './command';
+import {Command, CompletionState, GameInternals} from './command';
 import {Loc} from './loc';
 
 export enum CommandTag {
@@ -15,19 +15,23 @@ export enum CommandTag {
 
 export class Resume extends Command {
   protected override apply(internals: GameInternals): boolean {
-    throw new Error('Method not implemented.');
+    return internals.resume();
   }
 }
 
 export class Pause extends Command {
   protected override apply(internals: GameInternals): boolean {
-    throw new Error('Method not implemented.');
+    return internals.pause();
   }
 }
 
 export class MarkComplete extends Command {
+  constructor(readonly completionState: CompletionState) {
+    super();
+  }
+
   protected override apply(internals: GameInternals): boolean {
-    throw new Error('Method not implemented.');
+    return internals.markComplete(this.completionState);
   }
 }
 

@@ -1,8 +1,17 @@
-import {Command, ExecutedCommand, GameInternals, isUndoable} from './command';
+import {
+  Command,
+  CompletionState,
+  ExecutedCommand,
+  GameInternals,
+  isUndoable,
+} from './command';
 import {
   ClearCell,
+  MarkComplete,
+  Pause,
   Redo,
   RedoToEnd,
+  Resume,
   SetNum,
   SetNums,
   Undo,
@@ -40,18 +49,6 @@ export enum GameState {
   COMPLETE,
 }
 
-/**
- * The possible ways of completing a Luke-doku puzzle.
- */
-export enum CompletionState {
-  /** You solved the puzzle. */
-  SOLVED,
-  /** You quit before you'd solved it. */
-  QUIT,
-  /** You solved it but then guessed wrong about how many solutions there were. */
-  SOLVED_OOPS,
-}
-
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
   private readonly writableMarks: Marks;
@@ -73,6 +70,32 @@ export class Game {
       marks: this.writableMarks,
       undoStack: this.undoStack,
       executeFromUndoStack: command => this.execute(command, true),
+      resume: () => {
+        if (
+          this.gameState === GameState.UNSTARTED ||
+          this.gameState === GameState.PAUSED
+        ) {
+          this.resumedTimestamp = Date.now();
+          this.gameState = GameState.RUNNING;
+          return true;
+        }
+        return false;
+      },
+      pause: () => {
+        if (this.gameState === GameState.RUNNING) {
+          this.priorElapsedMs = this.elapsedMs;
+          this.resumedTimestamp = 0;
+          this.gameState = GameState.PAUSED;
+          return true;
+        }
+        return false;
+      },
+      markComplete: completionState => {
+        this.internals.pause();
+        this.gameState = GameState.COMPLETE;
+        this.completionState = completionState;
+        return true;
+      },
     };
   }
 
@@ -105,33 +128,21 @@ export class Game {
    * previously paused.
    */
   resume() {
-    if (
-      this.gameState === GameState.UNSTARTED ||
-      this.gameState === GameState.PAUSED
-    ) {
-      this.resumedTimestamp = Date.now();
-      this.gameState = GameState.RUNNING;
-    }
+    this.execute(new Resume());
   }
 
   /**
    * Stops the clock for this game, if it was previously running.
    */
   pause() {
-    if (this.gameState === GameState.RUNNING) {
-      this.priorElapsedMs = this.elapsedMs;
-      this.resumedTimestamp = 0;
-      this.gameState = GameState.PAUSED;
-    }
+    this.execute(new Pause());
   }
 
   /**
    * Marks this game as solved.
    */
   markComplete(completionState: CompletionState) {
-    this.pause();
-    this.gameState = GameState.COMPLETE;
-    this.completionState = completionState;
+    this.execute(new MarkComplete(completionState));
   }
 
   clearCell(loc: Loc): void {

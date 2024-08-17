@@ -1,7 +1,8 @@
 import {html, LitElement, ReactiveController, svg, TemplateResult} from 'lit';
 import {classMap} from 'lit/directives/class-map.js';
 import {map} from 'lit/directives/map.js';
-import {CompletionState, Game, GameState} from '../game/game';
+import {CompletionState} from '../game/command';
+import {Game, GameState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
 import {

@@ -1,6 +1,5 @@
-import {Game} from './game';
 import {Marks} from './marks';
-import { UndoStack } from './undo-stack';
+import {UndoStack} from './undo-stack';
 
 /**
  * Describes an action that the user can take on a Luke-doku game.
@@ -93,8 +92,22 @@ export interface UndoableCommand extends ExecutedCommand {
 /**
  * Converts an executed command into an undoable one (for the TS compiler).
  */
-export function isUndoable(command: ExecutedCommand): command is UndoableCommand {
+export function isUndoable(
+  command: ExecutedCommand,
+): command is UndoableCommand {
   return command.undo != null;
+}
+
+/**
+ * The possible ways of completing a Luke-doku puzzle.
+ */
+export enum CompletionState {
+  /** You solved the puzzle. */
+  SOLVED,
+  /** You quit before you'd solved it. */
+  QUIT,
+  /** You solved it but then guessed wrong about how many solutions there were. */
+  SOLVED_OOPS,
 }
 
 /**
@@ -104,4 +117,7 @@ export interface GameInternals {
   readonly marks: Marks;
   readonly undoStack: UndoStack;
   executeFromUndoStack(command: Command): boolean;
+  resume(): boolean;
+  pause(): boolean;
+  markComplete(completionState: CompletionState): boolean;
 }
