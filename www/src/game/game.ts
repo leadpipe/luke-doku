@@ -1,9 +1,9 @@
 import {
   Command,
   CompletionState,
-  ExecutedCommand,
   GameInternals,
   isUndoable,
+  RecordedCommand,
 } from './command';
 import {
   ClearCell,
@@ -52,7 +52,7 @@ export enum GameState {
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
   private readonly writableMarks: Marks;
-  private readonly history: ExecutedCommand[] = [];
+  private readonly history: RecordedCommand[] = [];
   private readonly undoStack: UndoStack = new UndoStack();
   private readonly internals: GameInternals;
 
@@ -64,12 +64,13 @@ export class Game {
   private gameState = GameState.UNSTARTED;
   private completionState?: CompletionState;
 
-  constructor(readonly puzzle: ReadonlyGrid) {
+  constructor(readonly puzzle: ReadonlyGrid, history: RecordedCommand[] = []) {
     this.writableMarks = new Marks(puzzle);
     this.internals = {
       marks: this.writableMarks,
       undoStack: this.undoStack,
-      executeFromUndoStack: command => this.execute(command, true),
+      executeFromUndoStack: command =>
+        this.execute(command, {fromUndoStack: true}),
       resume: () => {
         if (
           this.gameState === GameState.UNSTARTED ||
@@ -97,6 +98,15 @@ export class Game {
         return true;
       },
     };
+    // Restore historical state.
+    for (const {command, elapsedTimestamp} of history) {
+      const ok = this.execute(command, {elapsedTimestamp});
+      if (!ok) {
+        throw new Error(
+          `Unable to restore history: failed to execute ${command}`,
+        );
+      }
+    }
   }
 
   get marks(): ReadonlyMarks {
@@ -128,7 +138,7 @@ export class Game {
    * previously paused.
    */
   resume() {
-    this.execute(new Resume());
+    this.execute(new Resume(Date.now()));
   }
 
   /**
@@ -145,16 +155,16 @@ export class Game {
     this.execute(new MarkComplete(completionState));
   }
 
-  clearCell(loc: Loc): void {
-    this.execute(new ClearCell(loc));
+  clearCell(loc: Loc): boolean {
+    return this.execute(new ClearCell(loc));
   }
 
-  setNum(loc: Loc, num: number): void {
-    this.execute(new SetNum(loc, num));
+  setNum(loc: Loc, num: number): boolean {
+    return this.execute(new SetNum(loc, num));
   }
 
-  setNums(loc: Loc, nums: ReadonlySet<number>): void {
-    this.execute(new SetNums(loc, nums));
+  setNums(loc: Loc, nums: ReadonlySet<number>): boolean {
+    return this.execute(new SetNums(loc, nums));
   }
 
   canUndo(): boolean {
@@ -183,16 +193,15 @@ export class Game {
 
   private execute(
     command: Command,
-    fromUndoStack?: boolean,
-    elapsedTimestamp?: number,
+    opts: {fromUndoStack?: boolean; elapsedTimestamp?: number} = {},
   ): boolean {
     const done = command.execute(
       this.internals,
-      elapsedTimestamp ?? this.elapsedMs,
+      opts.elapsedTimestamp ?? this.elapsedMs,
     );
     if (done) {
       this.history.push(done);
-      if (!fromUndoStack && isUndoable(done)) {
+      if (!opts.fromUndoStack && isUndoable(done)) {
         this.undoStack.push(done);
       }
     }

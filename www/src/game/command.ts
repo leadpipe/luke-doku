@@ -4,7 +4,7 @@ import {UndoStack} from './undo-stack';
 /**
  * Describes an action that the user can take on a Luke-doku game.
  */
-export abstract class Command {
+export abstract class Command extends Object {
   /**
    * Attempts to apply this command to the given game, and returns a record of
    * what happened, or returns null if the command could not be executed.
@@ -34,6 +34,14 @@ export abstract class Command {
   }
 
   /**
+   * Overrides Object's toString by showing the name of the command and any
+   * relevant state.
+   */
+  override toString(): string {
+    return `${this.constructor.name}(${this.stateAsString()})`;
+  }
+
+  /**
    * Constructs a command that will undo this command, or returns null if this
    * command should not be put on the undo stack.  The default implementation
    * returns null.
@@ -55,18 +63,28 @@ export abstract class Command {
   protected get partialUndoStep(): boolean {
     return false;
   }
+
+  /** Commands with state should override this to return it in string form. */
+  protected stateAsString(): string {
+    return '';
+  }
 }
 
 /**
  * Records an action taken on a Luke-doku game.
  */
-export interface ExecutedCommand {
+export interface RecordedCommand {
   /** The command that was executed. */
   readonly command: Command;
 
   /** How many milliseconds into the game this happened. */
   readonly elapsedTimestamp: number;
+}
 
+/**
+ * The result of an action taken on a Luke-doku game.
+ */
+export interface ExecutedCommand extends RecordedCommand {
   /**
    * When `command` should be included in the undo stack, the command that will
    * undo it.

@@ -1,19 +1,11 @@
 import {Command, CompletionState, GameInternals} from './command';
 import {Loc} from './loc';
 
-export enum CommandTag {
-  RESUME,
-  PAUSE,
-  MARK_COMPLETE,
-  CLEAR_CELL,
-  ASSIGN,
-  UNDO,
-  REDO,
-  UNDO_TO_START,
-  REDO_TO_END,
-}
-
 export class Resume extends Command {
+  constructor(readonly timestamp: number) {
+    super();
+  }
+
   protected override apply(internals: GameInternals): boolean {
     return internals.resume();
   }
@@ -46,9 +38,13 @@ abstract class Move extends Command {
     return new ClearCell(this.loc);
   }
 
-  protected canApply(internals: GameInternals): boolean {
-    return internals.marks.getClue(this.loc) == null;
+  protected override apply(internals: GameInternals): boolean {
+    if (internals.marks.getClue(this.loc) != null) return false;
+    this.move(internals);
+    return true;
   }
+
+  protected abstract move(internals: GameInternals): void;
 }
 
 export class ClearCell extends Move {
@@ -56,12 +52,12 @@ export class ClearCell extends Move {
     super(loc);
   }
 
-  protected override apply(internals: GameInternals): boolean {
-    if (this.canApply(internals)) {
-      internals.marks.clearCell(this.loc);
-      return true;
-    }
-    return false;
+  protected override move(internals: GameInternals): void {
+    internals.marks.clearCell(this.loc);
+  }
+
+  protected override stateAsString(): string {
+    return `${this.loc}`;
   }
 }
 
@@ -78,12 +74,12 @@ export class SetNum extends Assign {
     super(loc);
   }
 
-  protected override apply(internals: GameInternals): boolean {
-    if (this.canApply(internals)) {
-      internals.marks.setNum(this.loc, this.num);
-      return true;
-    }
-    return false;
+  protected override move(internals: GameInternals): void {
+    internals.marks.setNum(this.loc, this.num);
+  }
+
+  protected override stateAsString(): string {
+    return `${this.loc}, ${this.num}`;
   }
 }
 
@@ -92,12 +88,12 @@ export class SetNums extends Assign {
     super(loc);
   }
 
-  protected override apply(internals: GameInternals): boolean {
-    if (this.canApply(internals)) {
-      internals.marks.setNums(this.loc, this.nums);
-      return true;
-    }
-    return false;
+  protected override move(internals: GameInternals): void {
+    internals.marks.setNums(this.loc, this.nums);
+  }
+
+  protected override stateAsString(): string {
+    return `${this.loc}, {${[...this.nums].join()}}`;
   }
 }
 

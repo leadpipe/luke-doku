@@ -2,7 +2,7 @@ import {checkIntRange} from './ints';
 import {iota} from './iota';
 
 /** A TypeScript analog of our Rust Loc type. */
-export class Loc {
+export class Loc extends Object {
   /** The row index, in 0..9. */
   readonly row: number;
   /** The column index, in 0..9. */
@@ -11,9 +11,15 @@ export class Loc {
   readonly index: number;
 
   private constructor(index: number) {
+    super();
     this.index = index;
     this.row = Math.floor(index / 9);
     this.col = index % 9;
+  }
+
+  /** The location as an ordered pair, and 1-based rather than 0-based. */
+  override toString(): string {
+    return `(${this.row + 1}, ${this.col + 1})`;
   }
 
   /**
