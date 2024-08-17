@@ -2,17 +2,18 @@ import {GameInternals, UndoableCommand} from './command';
 
 export class UndoStack {
   private readonly commands: UndoableCommand[] = [];
-  private pointer = 0;
+  private next = 0;
 
   push(undoable: UndoableCommand) {
-    const {commands, pointer} = this;
-    commands.splice(pointer); // delete everything after pointer
-    // Check for the current last item being superceded by the new one
-    if (pointer > 0 && undoable.command.supercedes(commands[pointer - 1].command)) {
-      commands[pointer - 1] = {...undoable, undo: commands[pointer - 1].undo};
+    const {commands, next} = this;
+    commands.splice(next); // delete everything after the previous item
+    const prev = next - 1;
+    // Check for the previous item being superceded by the new one.
+    if (prev >= 0 && undoable.command.supercedes(commands[prev].command)) {
+      commands[prev] = {...undoable, undo: commands[prev].undo};
     } else {
       commands.push(undoable);
-      this.pointer = commands.length; // point after the last item
+      this.next = commands.length; // point after the last item
     }
   }
 
@@ -20,7 +21,7 @@ export class UndoStack {
    * Tells whether there is a command available to undo.
    */
   canUndo(): boolean {
-    return this.pointer > 0;
+    return this.next > 0;
   }
 
   /**
@@ -28,7 +29,7 @@ export class UndoStack {
    * after an undo has taken place.
    */
   canRedo(): boolean {
-    return this.pointer < this.commands.length;
+    return this.next < this.commands.length;
   }
 
   /**
@@ -38,8 +39,8 @@ export class UndoStack {
   undo(internals: GameInternals): boolean {
     if (!this.canUndo()) return false;
     const {commands} = this;
-    while (this.pointer > 0) {
-      const executedCommand = commands[--this.pointer];
+    while (this.next > 0) {
+      const executedCommand = commands[--this.next];
       if (!internals.executeFromUndoStack(executedCommand.undo)) {
         return false;
       }
@@ -55,8 +56,8 @@ export class UndoStack {
   redo(internals: GameInternals): boolean {
     if (!this.canRedo()) return false;
     const {commands} = this;
-    while (this.pointer < commands.length) {
-      const executedCommand = commands[this.pointer++];
+    while (this.next < commands.length) {
+      const executedCommand = commands[this.next++];
       if (!internals.executeFromUndoStack(executedCommand.command)) {
         return false;
       }

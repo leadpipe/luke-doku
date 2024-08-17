@@ -450,10 +450,12 @@ export class SudokuInput implements ReactiveController {
           return; // Skip the cleanup required for the other results: we're still in input mode.
         case 'clear':
           game.clearCell(inputLoc);
+          this.cellModified(inputLoc);
           break;
         default:
           if (game.marks.getNum(inputLoc) !== result) {
             game.setNum(inputLoc, result);
+            this.cellModified(inputLoc);
             this.checkSolved(game);
             this.defaultResult = result;
           }
@@ -477,6 +479,16 @@ export class SudokuInput implements ReactiveController {
     }
   }
 
+  private cellModified(loc: Loc) {
+    this.host.dispatchEvent(
+      new CustomEvent('cell-modified', {
+        detail: loc,
+        bubbles: true,
+        composed: true,
+      }),
+    );
+  }
+
   private handleKeyDown(event: KeyboardEvent) {
     const {hoverLoc, game, multiInput} = this;
     let update = false;
@@ -494,6 +506,7 @@ export class SudokuInput implements ReactiveController {
         // If we're hovering over a set cell, clear it.
         else if (hoverLoc && game.marks.getNum(hoverLoc)) {
           game.clearCell(hoverLoc);
+          this.cellModified(hoverLoc);
           update = true;
         }
         break;
@@ -530,6 +543,7 @@ export class SudokuInput implements ReactiveController {
             this.defaultResult = num;
             if (hoverLoc && !game.marks.getClue(hoverLoc)) {
               game.setNum(hoverLoc, num);
+              this.cellModified(hoverLoc);
               this.checkSolved(game);
             }
           }
@@ -552,9 +566,11 @@ export class SudokuInput implements ReactiveController {
     }
     if (multiInput.size) {
       game.setNums(inputLoc, multiInput);
+      this.cellModified(inputLoc);
       this.checkSolved(game);
     } else {
       game.clearCell(inputLoc);
+      this.cellModified(inputLoc);
     }
   }
 

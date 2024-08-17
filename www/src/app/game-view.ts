@@ -9,7 +9,7 @@ import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
-import { SudokuView } from './sudoku-view';
+import {SudokuView} from './sudoku-view';
 
 /** Encapsulates the entire game page. */
 @customElement('game-view')
@@ -26,15 +26,20 @@ export class GameView extends LitElement {
         --controls-height: calc(25px + 16px);
       }
 
-      a {
+      button {
         text-decoration: none;
         cursor: pointer;
         user-select: none;
         -webkit-user-select: none;
+        color: inherit;
+        background: none;
+        border: none;
+        padding: 0;
       }
 
-      :host a {
-        color: var(--text-color);
+      button:disabled {
+        cursor: auto;
+        color: gray;
       }
 
       #controls {
@@ -101,26 +106,42 @@ export class GameView extends LitElement {
     return html`
       <div id="controls">
         <div>
-          <a @click=${this.setTheme} title="Switch to ${newTheme} theme">
+          <button @click=${this.setTheme} title="Switch to ${newTheme} theme">
             <mat-icon
               name=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
               data-theme=${newTheme}
             ></mat-icon>
-          </a>
+          </button>
           ${running
             ? html`
-                <a @click=${this.undoToStart} title="Undo to start">
+                <button
+                  @click=${this.undoToStart}
+                  ?disabled=${!game?.canUndo()}
+                  title="Undo to start"
+                >
                   <mat-icon name="first_page"></mat-icon>
-                </a>
-                <a @click=${this.undo} title="Undo">
+                </button>
+                <button
+                  @click=${this.undo}
+                  ?disabled=${!game?.canUndo()}
+                  title="Undo"
+                >
                   <mat-icon name="undo"></mat-icon>
-                </a>
-                <a @click=${this.redo} title="Redo">
+                </button>
+                <button
+                  @click=${this.redo}
+                  ?disabled=${!game?.canRedo()}
+                  title="Redo"
+                >
                   <mat-icon name="redo"></mat-icon>
-                </a>
-                <a @click=${this.redoToEnd} title="Redo to end">
+                </button>
+                <button
+                  @click=${this.redoToEnd}
+                  ?disabled=${!game?.canRedo()}
+                  title="Redo to end"
+                >
                   <mat-icon name="last_page"></mat-icon>
-                </a>
+                </button>
               `
             : ''}
         </div>
@@ -141,6 +162,7 @@ export class GameView extends LitElement {
         .gameState=${gameState}
         .padding=${cssPixels(10)}
         interactive
+        @cell-modified=${this.noteCellModified}
         @puzzle-solved=${this.notePuzzleSolved}
       ></sudoku-view>
       <div id="below-grid">
@@ -163,25 +185,25 @@ export class GameView extends LitElement {
       case GameState.UNSTARTED:
         return html`
           <div>
-            <a @click=${this.resumePlay} title="Start play">
+            <button @click=${this.resumePlay} title="Start play">
               <mat-icon name="not_started" size="large"></mat-icon>
-            </a>
+            </button>
           </div>
         `;
       case GameState.RUNNING:
         return html`
           <div>
-            <a @click=${this.pausePlay} title="Pause play">
+            <button @click=${this.pausePlay} title="Pause play">
               <mat-icon name="pause_circle" size="large"></mat-icon>
-            </a>
+            </button>
           </div>
         `;
       case GameState.PAUSED:
         return html`
           <div>
-            <a @click=${this.resumePlay} title="Resume play">
+            <button @click=${this.resumePlay} title="Resume play">
               <mat-icon name="play_circle" size="large"></mat-icon>
-            </a>
+            </button>
           </div>
         `;
     }
@@ -206,21 +228,25 @@ export class GameView extends LitElement {
   private undo(_event: Event) {
     this.game?.undo();
     this.sudokuView?.requestUpdate();
+    this.requestUpdate();
   }
 
   private redo(_event: Event) {
     this.game?.redo();
     this.sudokuView?.requestUpdate();
+    this.requestUpdate();
   }
 
   private undoToStart(_event: Event) {
     this.game?.undoToStart();
     this.sudokuView?.requestUpdate();
+    this.requestUpdate();
   }
 
   private redoToEnd(_event: Event) {
     this.game?.redoToEnd();
     this.sudokuView?.requestUpdate();
+    this.requestUpdate();
   }
 
   private saveGame() {
@@ -228,6 +254,10 @@ export class GameView extends LitElement {
   }
 
   private notePuzzleSolved() {
+    this.requestUpdate();
+  }
+
+  private noteCellModified() {
     this.requestUpdate();
   }
 

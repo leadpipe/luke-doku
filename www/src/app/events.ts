@@ -1,3 +1,4 @@
+import { Loc } from 'src/game/loc';
 import {Grid} from '../game/grid';
 import {Theme} from './types';
 
@@ -10,9 +11,14 @@ declare global {
      */
     'clock-ticked': CustomEvent<boolean>;
     /**
-     * Sent by sudoku-input when the puzzle has been solved.
+     * Sent by sudoku-view (via sudoku-input) when the puzzle has been solved.
      */
     'puzzle-solved': CustomEvent;
+    /**
+     * Sent by sudoku-view (via sudoku-input) when the user has changed the
+     * contents of a cell. The event detail says which cell.
+     */
+    'cell-modified': CustomEvent<Loc>;
   }
 }
 
