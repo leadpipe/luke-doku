@@ -36,7 +36,13 @@ export function serializeCommands(history: RecordedCommand[]): number[] {
     }
     sink(s.tag);
     s.serializeArgs(c.command, sink);
-    sink(c.elapsedTimestamp - prevTimestamp);
+    const delta = c.elapsedTimestamp - prevTimestamp;
+    if (delta < 0) {
+      throw new Error(
+        `Time going backwards not allowed, ${prevTimestamp} -> ${c.elapsedTimestamp}`,
+      );
+    }
+    sink(delta);
     prevTimestamp = c.elapsedTimestamp;
   }
   return answer;
@@ -64,7 +70,7 @@ export function deserializeCommands(serialized: number[]): RecordedCommand[] {
     if (!s) {
       throw new Error(`No serializer found for tag ${tag}`);
     }
-    const command = new s.ctor(s.deserializeArgs(source));
+    const command = new s.ctor(...s.deserializeArgs(source));
     const elapsedTimestamp = prevTimestamp + source();
     prevTimestamp = elapsedTimestamp;
     answer.push({command, elapsedTimestamp});
@@ -72,23 +78,24 @@ export function deserializeCommands(serialized: number[]): RecordedCommand[] {
   return answer;
 }
 
-interface CommandConstructor<T extends Command> {
-  new (...args: any[]): T;
+interface CommandCtor<T extends Command = Command> {
+  new (...args: any): T;
 }
 
-interface Serializer<T extends Command> {
+interface Serializer<Ctor extends CommandCtor> {
   readonly tag: number;
-  readonly ctor: CommandConstructor<T>;
-  serializeArgs(command: T, sink: (value: number) => void): void;
-  deserializeArgs(
-    source: () => number,
-  ): ConstructorParameters<CommandConstructor<T>>;
+  readonly ctor: Ctor;
+  serializeArgs(
+    command: InstanceType<Ctor>,
+    sink: (value: number) => void,
+  ): void;
+  deserializeArgs(source: () => number): ConstructorParameters<Ctor>;
 }
 
 const noSerialize = () => {};
-const noDeserialize = () => [];
+const noDeserialize = () => [] as [x?: unknown];
 
-const resume: Serializer<Resume> = {
+const resume: Serializer<typeof Resume> = {
   tag: 0,
   ctor: Resume,
   serializeArgs(command, sink) {
@@ -98,13 +105,13 @@ const resume: Serializer<Resume> = {
     return [source()];
   },
 };
-const pause: Serializer<Pause> = {
+const pause: Serializer<typeof Pause> = {
   tag: 1,
   ctor: Pause,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const markComplete: Serializer<MarkComplete> = {
+const markComplete: Serializer<typeof MarkComplete> = {
   tag: 2,
   ctor: MarkComplete,
   serializeArgs(command, sink) {
@@ -114,7 +121,7 @@ const markComplete: Serializer<MarkComplete> = {
     return [source()];
   },
 };
-const clearCell: Serializer<ClearCell> = {
+const clearCell: Serializer<typeof ClearCell> = {
   tag: 3,
   ctor: ClearCell,
   serializeArgs(command, sink) {
@@ -124,7 +131,7 @@ const clearCell: Serializer<ClearCell> = {
     return [Loc.of(source())];
   },
 };
-const setNum: Serializer<SetNum> = {
+const setNum: Serializer<typeof SetNum> = {
   tag: 4,
   ctor: SetNum,
   serializeArgs(command, sink) {
@@ -135,7 +142,7 @@ const setNum: Serializer<SetNum> = {
     return [Loc.of(source()), source()];
   },
 };
-const setNums: Serializer<SetNums> = {
+const setNums: Serializer<typeof SetNums> = {
   tag: 5,
   ctor: SetNums,
   serializeArgs(command, sink) {
@@ -146,32 +153,32 @@ const setNums: Serializer<SetNums> = {
     return [Loc.of(source()), new Set(String(source()).split('').map(Number))];
   },
 };
-const undo: Serializer<Undo> = {
+const undo: Serializer<typeof Undo> = {
   tag: 6,
   ctor: Undo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const redo: Serializer<Redo> = {
+const redo: Serializer<typeof Redo> = {
   tag: 7,
   ctor: Redo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const undoToStart: Serializer<UndoToStart> = {
+const undoToStart: Serializer<typeof UndoToStart> = {
   tag: 8,
   ctor: UndoToStart,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const redoToEnd: Serializer<RedoToEnd> = {
+const redoToEnd: Serializer<typeof RedoToEnd> = {
   tag: 9,
   ctor: RedoToEnd,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 
-const serializersByTag: ReadonlyArray<Serializer<Command>> = [
+const serializersByTag: ReadonlyArray<Serializer<any>> = [
   resume,
   pause,
   markComplete,
@@ -184,7 +191,7 @@ const serializersByTag: ReadonlyArray<Serializer<Command>> = [
   redoToEnd,
 ];
 
-const serializersByCtor: ReadonlyMap<Function, Serializer<Command>> = new Map(
+const serializersByCtor: ReadonlyMap<Function, Serializer<any>> = new Map(
   serializersByTag.map((s, i) => {
     if (i != s.tag) {
       throw new Error(
