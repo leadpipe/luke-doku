@@ -1,4 +1,5 @@
 import {Marks} from './marks';
+import {Trails} from './trails';
 import {UndoStack} from './undo-stack';
 
 /**
@@ -132,8 +133,9 @@ export enum CompletionState {
  * Exposes the internals of a Game object for commands to manipulate.
  */
 export interface GameInternals {
-  readonly marks: Marks;
   readonly undoStack: UndoStack;
+  marks: Marks;
+  trails: Trails;
   executeFromUndoStack(command: Command): boolean;
   resume(): boolean;
   pause(): boolean;

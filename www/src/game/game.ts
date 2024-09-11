@@ -6,7 +6,12 @@ import {
   RecordedCommand,
 } from './command';
 import {
+  ActivateTrail,
+  ArchiveTrail,
   ClearCell,
+  CopyFromTrail,
+  CreateTrail,
+  DuplicateTrail,
   MarkComplete,
   Pause,
   Redo,
@@ -14,46 +19,24 @@ import {
   Resume,
   SetNum,
   SetNums,
+  ToggleTrailsActive,
+  ToggleTrailVisibility,
   Undo,
   UndoToStart,
 } from './commands';
 import {ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {Marks, ReadonlyMarks} from './marks';
+import {ReadonlyTrail} from './trail';
+import {ReadonlyTrails, Trails} from './trails';
 import {UndoStack} from './undo-stack';
-
-/**
- * The possible states of a Luke-doku puzzle.
- */
-export enum GameState {
-  /**
-   * The grid of numbers is invisible, and the clock is stopped at 0:00.  No
-   * cells have been filled in except the clues.
-   */
-  UNSTARTED,
-  /**
-   * The clues are visible, the clock is ticking, and the cells can be filled
-   * in.
-   */
-  RUNNING,
-  /**
-   * The grid is invisible, like UNSTARTED, but the clock is stopped at some
-   * non-zero time.
-   */
-  PAUSED,
-  /**
-   * The game is over, either because the grid has been completely filled in and
-   * satisfies the Sudoku conditions, or the user has given up. The clock has
-   * the total time spent on the puzzle.
-   */
-  COMPLETE,
-}
 
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
-  private readonly writableMarks: Marks;
+  private writableMarks: Marks;
   private readonly history: RecordedCommand[] = [];
   private readonly undoStack: UndoStack = new UndoStack();
+  private writableTrails: Trails;
   private readonly internals: GameInternals;
 
   /** Elapsed play time in milliseconds prior to the current period. */
@@ -66,9 +49,25 @@ export class Game {
 
   constructor(readonly puzzle: ReadonlyGrid, history: RecordedCommand[] = []) {
     this.writableMarks = new Marks(puzzle);
+    this.writableTrails = new Trails();
+    const getMarks = () => this.writableMarks;
+    const setMarks = (marks: Marks) => (this.writableMarks = marks);
+    const getTrails = () => this.writableTrails;
+    const setTrails = (trails: Trails) => (this.writableTrails = trails);
     this.internals = {
-      marks: this.writableMarks,
       undoStack: this.undoStack,
+      get marks(): Marks {
+        return getMarks();
+      },
+      set marks(marks: Marks) {
+        setMarks(marks);
+      },
+      get trails(): Trails {
+        return getTrails();
+      },
+      set trails(trails: Trails) {
+        setTrails(trails);
+      },
       executeFromUndoStack: command =>
         this.execute(command, {fromUndoStack: true}),
       resume: () => {
@@ -111,6 +110,10 @@ export class Game {
 
   get marks(): ReadonlyMarks {
     return this.writableMarks;
+  }
+
+  get trails(): ReadonlyTrails {
+    return this.writableTrails;
   }
 
   get state(): GameState {
@@ -191,6 +194,34 @@ export class Game {
     return this.execute(new RedoToEnd());
   }
 
+  createTrail(): boolean {
+    return this.execute(new CreateTrail());
+  }
+
+  duplicateTrail(trail: ReadonlyTrail): boolean {
+    return this.execute(new DuplicateTrail(trail.id));
+  }
+
+  activateTrail(trail: ReadonlyTrail): boolean {
+    return this.execute(new ActivateTrail(trail.id));
+  }
+
+  toggleTrailVisibility(trail: ReadonlyTrail): boolean {
+    return this.execute(new ToggleTrailVisibility(trail.id));
+  }
+
+  archiveTrail(trail: ReadonlyTrail): boolean {
+    return this.execute(new ArchiveTrail(trail.id));
+  }
+
+  toggleTrailsActive(): boolean {
+    return this.execute(new ToggleTrailsActive());
+  }
+
+  copyFromTrail(trail: ReadonlyTrail): boolean {
+    return this.execute(new CopyFromTrail(trail.id));
+  }
+
   private execute(
     command: Command,
     opts: {fromUndoStack?: boolean; elapsedTimestamp?: number} = {},
@@ -207,4 +238,31 @@ export class Game {
     }
     return !!done;
   }
+}
+
+/**
+ * The possible states of a Luke-doku puzzle.
+ */
+export enum GameState {
+  /**
+   * The grid of numbers is invisible, and the clock is stopped at 0:00.  No
+   * cells have been filled in except the clues.
+   */
+  UNSTARTED,
+  /**
+   * The number are visible, the clock is ticking, and the cells can be filled
+   * in.
+   */
+  RUNNING,
+  /**
+   * The numbers are invisible, like UNSTARTED, but the clock is stopped at some
+   * non-zero time.
+   */
+  PAUSED,
+  /**
+   * The game is over, either because the grid has been completely filled in and
+   * satisfies the Sudoku conditions, or the user has given up. The clock has
+   * the total time spent on the puzzle.
+   */
+  COMPLETE,
 }

@@ -10,12 +10,10 @@ export class Grid {
   // The cells of the grid are either 0, meaning blank, or 1..=9, the numeral.
   private readonly array: Uint8Array;
 
-  /** Constructs an empty grid. */
-  constructor();
   /** Constructs a grid from the contents of a Rust grid. */
   constructor(grid: wasm.Grid);
-  /** Duplicates a grid. */
-  constructor(grid: ReadonlyGrid);
+  /** Duplicates a grid, or constructs an empty grid if no grid is supplied. */
+  constructor(grid?: ReadonlyGrid);
 
   constructor(grid?: wasm.Grid | ReadonlyGrid) {
     this.array =
@@ -52,6 +50,11 @@ export class Grid {
   /** Returns a read-only view of the array backing the grid. */
   get bytes(): Readonly<Uint8Array> {
     return this.array;
+  }
+
+  /** Returns the number of locations with an assigned numeral. */
+  getAssignedCount(): number {
+    return this.bytes.reduce((count, num) => count + Number(!!num), 0);
   }
 
   /** Returns an ASCII-art version of this grid. */

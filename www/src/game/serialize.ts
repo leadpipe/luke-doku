@@ -4,7 +4,12 @@
 
 import {Command, CompletionState, RecordedCommand} from './command';
 import {
+  ActivateTrail,
+  ArchiveTrail,
   ClearCell,
+  CopyFromTrail,
+  CreateTrail,
+  DuplicateTrail,
   MarkComplete,
   Pause,
   Redo,
@@ -12,6 +17,8 @@ import {
   Resume,
   SetNum,
   SetNums,
+  ToggleTrailsActive,
+  ToggleTrailVisibility,
   Undo,
   UndoToStart,
 } from './commands';
@@ -94,6 +101,15 @@ interface Serializer<Ctor extends CommandCtor> {
 
 const noSerialize = () => {};
 const noDeserialize = () => [] as [x?: unknown];
+const serializeTrailId = (
+  command: {trailId: number},
+  sink: (value: number) => void,
+) => {
+  sink(command.trailId);
+};
+const deserializeTrailId: (
+  source: () => number,
+) => [trailId: number] = source => [source()];
 
 const resume: Serializer<typeof Resume> = {
   tag: 0,
@@ -177,6 +193,48 @@ const redoToEnd: Serializer<typeof RedoToEnd> = {
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
+const createTrail: Serializer<typeof CreateTrail> = {
+  tag: 10,
+  ctor: CreateTrail,
+  serializeArgs: noSerialize,
+  deserializeArgs: noDeserialize,
+};
+const duplicateTrail: Serializer<typeof DuplicateTrail> = {
+  tag: 11,
+  ctor: DuplicateTrail,
+  serializeArgs: serializeTrailId,
+  deserializeArgs: deserializeTrailId,
+};
+const activateTrail: Serializer<typeof ActivateTrail> = {
+  tag: 12,
+  ctor: ActivateTrail,
+  serializeArgs: serializeTrailId,
+  deserializeArgs: deserializeTrailId,
+};
+const toggleTrailVisibility: Serializer<typeof ToggleTrailVisibility> = {
+  tag: 13,
+  ctor: ToggleTrailVisibility,
+  serializeArgs: serializeTrailId,
+  deserializeArgs: deserializeTrailId,
+};
+const archiveTrail: Serializer<typeof ArchiveTrail> = {
+  tag: 14,
+  ctor: ArchiveTrail,
+  serializeArgs: serializeTrailId,
+  deserializeArgs: deserializeTrailId,
+};
+const toggleTrailsActive: Serializer<typeof ToggleTrailsActive> = {
+  tag: 15,
+  ctor: ToggleTrailsActive,
+  serializeArgs: noSerialize,
+  deserializeArgs: noDeserialize,
+};
+const copyFromTrail: Serializer<typeof CopyFromTrail> = {
+  tag: 16,
+  ctor: CopyFromTrail,
+  serializeArgs: serializeTrailId,
+  deserializeArgs: deserializeTrailId,
+};
 
 const serializersByTag: ReadonlyArray<Serializer<any>> = [
   resume,
@@ -189,6 +247,13 @@ const serializersByTag: ReadonlyArray<Serializer<any>> = [
   redo,
   undoToStart,
   redoToEnd,
+  createTrail,
+  duplicateTrail,
+  activateTrail,
+  toggleTrailVisibility,
+  archiveTrail,
+  toggleTrailsActive,
+  copyFromTrail,
 ];
 
 const serializersByCtor: ReadonlyMap<Function, Serializer<any>> = new Map(

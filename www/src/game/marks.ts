@@ -128,7 +128,8 @@ export class Marks {
   }
 
   /**
-   * Converts this Marks to a Grid, with every clue and single-value cell assigned and the rest blank.
+   * Converts this Marks to a Grid, with every clue and single-value cell
+   * assigned and the rest blank.
    *
    * @returns A Grid with all of this Marks's assignments set.
    */
