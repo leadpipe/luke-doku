@@ -12,6 +12,10 @@ export class IconButton extends LitElement {
       align-items: center;
     }
 
+    :host([disabled]) {
+      opacity: 50%;
+    }
+
     button {
       text-decoration: none;
       cursor: pointer;
@@ -21,11 +25,6 @@ export class IconButton extends LitElement {
       background: none;
       border: none;
       padding: 0;
-    }
-
-    button:disabled {
-      cursor: auto;
-      color: gray;
     }
   `;
 
