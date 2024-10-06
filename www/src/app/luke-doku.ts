@@ -14,11 +14,11 @@ import {Theme} from './types';
 export class LukeDoku extends LitElement {
   static override styles = css`
     :host {
-      margin-top: 8px;
       display: grid;
       grid-template-columns: 1fr 3fr;
       gap: 20px;
       justify-items: center;
+      height: 100vh;
     }
 
     gen-puzzle {
