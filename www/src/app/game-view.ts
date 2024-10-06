@@ -65,8 +65,17 @@ export class GameView extends LitElement {
         flex-direction: column;
       }
 
+      .trail span {
+        cursor: pointer;
+      }
+
       .trail.archived > span {
         opacity: 50%;
+      }
+
+      .trailhead {
+        font-weight: 700;
+        font-style: italic;
       }
 
       #bottom-controls {
@@ -269,7 +278,11 @@ export class GameView extends LitElement {
     const classes = `trail trail-${trail.id} ${isArchived ? 'archived' : ''}`;
     return html`
       <div class=${classes} data-index=${index}>
-        <span>
+        <span
+          @pointerdown=${this.startTrailClick}
+          @pointerup=${this.finishTrailClick}
+          @pointercancel=${this.cancelTrailClick}
+        >
           ${1 + trail.id}:
           ${trailhead
             ? html`
@@ -439,6 +452,50 @@ export class GameView extends LitElement {
       game.copyFromTrail(game.trails.order[index]);
       this.gameUpdated();
     }
+  }
+
+  private pendingClickedTrailIndex: number | null = null;
+  private pendingClickedTrailTimer = 0;
+
+  private startTrailClick(event: PointerEvent) {
+    const {game} = this;
+    const index = this.getTrailIndex(event);
+    this.pendingClickedTrailIndex = null;
+    window.clearTimeout(this.pendingClickedTrailTimer);
+    if (game != null && index != null) {
+      const target = event.target as HTMLElement;
+      target.setPointerCapture(event.pointerId);
+      event.preventDefault();
+      this.pendingClickedTrailIndex = index;
+      this.pendingClickedTrailTimer = window.setTimeout(() => {
+        if (this.pendingClickedTrailIndex === index) {
+          this.pendingClickedTrailIndex = null;
+          this.pendingClickedTrailTimer = 0;
+          target.releasePointerCapture(event.pointerId);
+          navigator.vibrate(200);
+          game.archiveTrail(game.trails.order[index]);
+          this.gameUpdated();
+        }
+      }, 1000);
+    }
+  }
+
+  private finishTrailClick(event: PointerEvent) {
+    const index = this.pendingClickedTrailIndex;
+    if (index != null) {
+      this.pendingClickedTrailIndex = null;
+      window.clearTimeout(this.pendingClickedTrailTimer);
+      this.pendingClickedTrailTimer = 0;
+      const trail = this.game?.trails.order[index];
+      trail && this.game?.activateTrail(trail);
+      this.gameUpdated();
+    }
+  }
+
+  private cancelTrailClick(event: PointerEvent) {
+    this.pendingClickedTrailIndex = null;
+    window.clearTimeout(this.pendingClickedTrailTimer);
+    this.pendingClickedTrailTimer = 0;
   }
 }
 
