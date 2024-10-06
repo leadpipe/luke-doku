@@ -10,17 +10,19 @@ export class IconButton extends LitElement {
       flex-direction: column;
       font-size: x-small;
       align-items: center;
+      cursor: pointer;
+      user-select: none;
+      -webkit-user-select: none;
     }
 
     :host([disabled]) {
       opacity: 50%;
+      cursor: inherit;
     }
 
     button {
+      cursor: inherit;
       text-decoration: none;
-      cursor: pointer;
-      user-select: none;
-      -webkit-user-select: none;
       color: inherit;
       background: none;
       border: none;
