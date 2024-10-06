@@ -34,7 +34,7 @@ import {UndoStack} from './undo-stack';
 /** Manages the game state for solving a sudoku interactively. */
 export class Game {
   private writableMarks: Marks;
-  private readonly history: RecordedCommand[] = [];
+  private readonly writableHistory: RecordedCommand[] = [];
   private readonly undoStack: UndoStack = new UndoStack();
   private writableTrails: Trails;
   private readonly internals: GameInternals;
@@ -47,7 +47,7 @@ export class Game {
   private gameState = GameState.UNSTARTED;
   private completionState?: CompletionState;
 
-  constructor(readonly puzzle: ReadonlyGrid, history: RecordedCommand[] = []) {
+  constructor(readonly puzzle: ReadonlyGrid, history: readonly RecordedCommand[] = []) {
     this.writableMarks = new Marks(puzzle);
     this.writableTrails = new Trails();
     const getMarks = () => this.writableMarks;
@@ -106,6 +106,10 @@ export class Game {
         );
       }
     }
+  }
+
+  get history(): readonly RecordedCommand[] {
+    return this.writableHistory;
   }
 
   get marks(): ReadonlyMarks {
@@ -230,9 +234,9 @@ export class Game {
       this.internals,
       opts.elapsedTimestamp ?? this.elapsedMs,
     );
-    if (done) {
-      this.history.push(done);
-      if (!opts.fromUndoStack && isUndoable(done)) {
+    if (done && !opts.fromUndoStack) {
+      this.writableHistory.push(done);
+      if (isUndoable(done)) {
         this.undoStack.push(done);
       }
     }
