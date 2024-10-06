@@ -209,6 +209,9 @@ export class Trails {
       return false;
     } else {
       this._active = true;
+      if (this._numArchived === this._order.length) {
+        --this._numArchived;
+      }
       if (this._numVisible === 0) {
         this.incrementNumVisible();
       }
@@ -253,5 +256,5 @@ export class Trails {
 
 export type ReadonlyTrails = Pick<
   Trails,
-  'order' | 'active' | 'numVisible' | 'numArchived'
+  'order' | 'active' | 'numVisible' | 'numArchived' | 'activeTrail' | 'isArchived' | 'isVisible'
 >;

@@ -264,6 +264,24 @@ describe(`Trails`, () => {
       expect(trails.isVisible(trail)).toBe(true);
       expect(trails.isArchived(trail)).toBe(false);
     });
+
+    it(`revives an archived trail`, () => {
+      const trails = new Trails();
+      const trail = trails.create();
+      trails.archive(trail);
+      expect(trails.toggleActive()).toBe(true);
+      expect(trails).toEqual(
+        objectContaining({
+          order: [trail],
+          numVisible: 1,
+          numArchived: 0,
+          active: true,
+          activeTrail: trail,
+        }),
+      );
+      expect(trails.isVisible(trail)).toBe(true);
+      expect(trails.isArchived(trail)).toBe(false);
+    });
   });
 
   describe(`replaceActiveTrail`, () => {
