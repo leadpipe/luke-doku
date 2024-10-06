@@ -157,7 +157,7 @@ class RestoreTrailsCommand extends Command {
   }
 
   protected override apply(internals: GameInternals): boolean {
-    internals.trails = this.prevTrails;
+    internals.trails = new Trails(this.prevTrails);
     return true;
   }
 }
@@ -175,7 +175,9 @@ class RestoreActiveTrailCommand extends Command {
   }
 
   protected override apply(internals: GameInternals): boolean {
-    return internals.trails.replaceActiveTrail(this.prevTrail);
+    return internals.trails.replaceActiveTrail(
+      new Trail(this.prevTrail.id, this.prevTrail),
+    );
   }
 }
 
@@ -191,7 +193,7 @@ class RestoreMarksCommand extends Command {
   }
 
   protected override apply(internals: GameInternals): boolean {
-    internals.marks = this.prevMarks;
+    internals.marks = new Marks(this.prevMarks);
     return true;
   }
 }
@@ -298,7 +300,13 @@ export class CopyFromTrail extends Command {
       // This should never happen in real life
       if (trail.get(loc) && marks.getClue(loc)) return false;
     }
-    const activeTrail = internals.trails.activeTrail;
+    
+    const {activeTrail} = internals.trails;
+    // Start with the trailhead, so it's preserved if a trail is active.
+    if (activeTrail && !activeTrail.trailhead && trail.trailhead) {
+      activeTrail.set(trail.trailhead, trail.get(trail.trailhead));
+    }
+
     for (const loc of Loc.ALL) {
       const num = trail.get(loc);
       if (num) {
