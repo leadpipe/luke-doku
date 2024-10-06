@@ -1,4 +1,5 @@
 import './events';
+import './icon-button';
 import './mat-icon';
 
 import {css, html, LitElement, PropertyValues} from 'lit';
@@ -14,13 +15,12 @@ import {getShowClock, setShowClock} from './prefs';
 export class GameClock extends LitElement {
   static override styles = css`
     :host {
-      display: block;
+      display: flex;
+      justify-content: space-between;
+      min-width: 100px;
+      align-items: flex-end;
       user-select: none;
       -webkit-user-select: none;
-    }
-
-    a {
-      cursor: pointer;
     }
   `;
 
@@ -29,16 +29,20 @@ export class GameClock extends LitElement {
     if (!game) return '';
     if (!getShowClock()) {
       return html`
-        <a @click=${this.showClock} title="Show clock">
-          <mat-icon name="visibility"></mat-icon>
-        </a>
+        <icon-button
+          @click=${this.showClock}
+          iconName="visibility"
+          title="Show clock"
+        ></icon-button>
       `;
     }
     return html`
-      ${this.elapsedTime()}<br />
-      <a @click=${this.hideClock} title="Hide clock">
-        <mat-icon name="visibility_off"></mat-icon>
-      </a>
+      <icon-button
+        @click=${this.hideClock}
+        iconName="visibility_off"
+        title="Hide clock"
+      ></icon-button>
+      ${this.elapsedTime()}
     `;
   }
 
@@ -48,7 +52,7 @@ export class GameClock extends LitElement {
   protected override updated(_changedProperties: PropertyValues): void {
     if (this.running) {
       const elapsedMs = this.game?.elapsedMs ?? 0;
-      window.setTimeout(() => this.clockTicked(), ((elapsedMs - 1) % 1000) + 1);
+      window.setTimeout(() => this.clockTicked(), 1000 - (elapsedMs % 1000));
     }
   }
 
