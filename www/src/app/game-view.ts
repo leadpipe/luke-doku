@@ -5,11 +5,15 @@ import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
+import {classMap} from 'lit/directives/class-map.js';
+import {repeat} from 'lit/directives/repeat.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
 import {SudokuView} from './sudoku-view';
+import {ReadonlyTrail} from 'src/game/trail';
+import {ReadonlyTrails} from 'src/game/trails';
 
 /** Encapsulates the entire game page. */
 @customElement('game-view')
@@ -20,35 +24,19 @@ export class GameView extends LitElement {
         padding-top: var(--page-grid-gap);
         display: flex;
         flex-direction: column;
+        align-items: center;
         gap: var(--page-grid-gap);
         --page-grid-gap: 8px;
-        --below-grid-height: 80px;
-        --controls-height: calc(25px + 16px);
+        --top-panel-height: calc(25px + 16px);
       }
 
-      button {
-        text-decoration: none;
-        cursor: pointer;
-        user-select: none;
-        -webkit-user-select: none;
-        color: inherit;
-        background: none;
-        border: none;
-        padding: 0;
-      }
-
-      button:disabled {
-        cursor: auto;
-        color: gray;
-      }
-
-      #controls {
+      #top-panel {
         margin-bottom: 16px;
         display: flex;
         justify-content: center;
       }
 
-      #controls > div {
+      #top-panel > div {
         flex: 1 1 0;
         display: flex;
         justify-content: center;
@@ -61,22 +49,38 @@ export class GameView extends LitElement {
         height: 380px;
       }
 
-      #below-grid {
-        height: var(--below-grid-height);
+      #bottom-panel {
+        flex: 1 0 auto;
         width: 100%;
+        display: grid;
+        grid-template-columns: 3fr 1fr;
+        justify-content: space-between;
+        gap: 8px;
+        align-items: self-start;
+        padding: 8px 0;
+      }
+
+      #trails {
+        flex-grow: 3;
         display: flex;
+        flex-direction: column;
+      }
+
+      #bottom-controls {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
         align-items: center;
-        user-select: none;
-        -webkit-user-select: none;
       }
 
-      #below-grid > * {
-        text-align: center;
-        flex: 3 1 0;
+      #pause-button {
+        display: flex;
+        align-items: flex-end;
+        flex-grow: 100;
       }
 
-      #below-grid > *:nth-child(odd) {
-        flex: 1 1 0;
+      game-clock {
+        flex-grow: 1;
       }
     `,
   ];
@@ -84,18 +88,17 @@ export class GameView extends LitElement {
   protected override render() {
     const {theme, game} = this;
     const gameState = game?.state ?? GameState.UNSTARTED;
-    const running = gameState === GameState.RUNNING;
     return [
-      this.renderControls(theme, game, gameState, running),
-      this.renderGame(theme, game, gameState, running),
+      this.renderTopPanel(theme, game, gameState),
+      this.renderBoard(theme, game, gameState),
+      this.renderBottomPanel(theme, game, gameState),
     ];
   }
 
-  private renderControls(
+  private renderTopPanel(
     theme: Theme,
     game: Game | null,
     gameState: GameState,
-    running: boolean,
   ) {
     const newTheme =
       theme === getCurrentSystemTheme()
@@ -103,45 +106,48 @@ export class GameView extends LitElement {
           ? 'dark'
           : 'light'
         : 'auto';
+    const newThemeName =
+      newTheme === 'auto' ? 'System' : newTheme === 'dark' ? 'Dark' : 'Light';
     return html`
-      <div id="controls">
+      <div id="top-panel">
         <div>
-          <button @click=${this.setTheme} title="Switch to ${newTheme} theme">
-            <mat-icon
-              name=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
-              data-theme=${newTheme}
-            ></mat-icon>
-          </button>
-          ${running
+          <icon-button
+            @click=${this.setTheme}
+            iconName=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
+            title="Switch to ${newThemeName} theme"
+            label="${newThemeName} theme"
+            data-theme=${newTheme}
+          ></icon-button>
+          ${gameState === GameState.RUNNING
             ? html`
-                <button
+                <icon-button
                   @click=${this.undoToStart}
+                  iconName="first_page"
                   ?disabled=${!game?.canUndo()}
                   title="Undo to start"
-                >
-                  <mat-icon name="first_page"></mat-icon>
-                </button>
-                <button
+                  label="Undo all"
+                ></icon-button>
+                <icon-button
                   @click=${this.undo}
+                  iconName="undo"
                   ?disabled=${!game?.canUndo()}
                   title="Undo"
-                >
-                  <mat-icon name="undo"></mat-icon>
-                </button>
-                <button
+                  label="Undo"
+                ></icon-button>
+                <icon-button
                   @click=${this.redo}
+                  iconName="redo"
                   ?disabled=${!game?.canRedo()}
                   title="Redo"
-                >
-                  <mat-icon name="redo"></mat-icon>
-                </button>
-                <button
+                  label="Redo"
+                ></icon-button>
+                <icon-button
                   @click=${this.redoToEnd}
+                  iconName="last_page"
                   ?disabled=${!game?.canRedo()}
                   title="Redo to end"
-                >
-                  <mat-icon name="last_page"></mat-icon>
-                </button>
+                  label="Redo all"
+                ></icon-button>
               `
             : ''}
         </div>
@@ -149,12 +155,7 @@ export class GameView extends LitElement {
     `;
   }
 
-  private renderGame(
-    theme: Theme,
-    game: Game | null,
-    gameState: GameState,
-    running: boolean,
-  ) {
+  private renderBoard(theme: Theme, game: Game | null, gameState: GameState) {
     return html`
       <sudoku-view
         theme=${theme}
@@ -165,17 +166,59 @@ export class GameView extends LitElement {
         @cell-modified=${this.noteCellModified}
         @puzzle-solved=${this.notePuzzleSolved}
       ></sudoku-view>
-      <div id="below-grid">
-        ${game
-          ? html`
-              <game-clock
-                .game=${game}
-                ?running=${running}
-                @clock-ticked=${this.saveGame}
-              ></game-clock>
-              ${this.renderPauseResume(game.state)}
-            `
-          : ''}
+    `;
+  }
+
+  private renderBottomPanel(
+    _theme: Theme,
+    game: Game | null,
+    gameState: GameState,
+  ) {
+    if (!game) return undefined;
+    const button = this.renderPauseResume(gameState);
+    const startOrResumeButton =
+      button && gameState !== GameState.RUNNING
+        ? html`<div id="resume-button">${button}</div>`
+        : undefined;
+    const pauseButton = gameState === GameState.RUNNING ? button : undefined;
+    const {trails} = game;
+    return html`
+      ${startOrResumeButton}
+      <div id="bottom-panel">
+        <div id="trails">
+          ${pauseButton
+            ? repeat(
+                trails.order,
+                t => t.id,
+                (t, i) => this.renderTrailItem(trails, t, i),
+              )
+            : ''}
+        </div>
+        <div id="bottom-controls">
+          ${pauseButton
+            ? html`
+                <div>
+                  <icon-button
+                    @click=${this.createTrail}
+                    iconName="hiking"
+                    label="New trail"
+                  ></icon-button>
+                  <icon-button
+                    @click=${this.toggleTrailsActive}
+                    iconName=${trails.active ? 'toggle_on' : 'toggle_off'}
+                    label=${trails.active ? 'Active' : 'Inactive'}
+                    ?disabled=${trails.order.length === 0}
+                  ></icon-button>
+                </div>
+                <div id="pause-button">${pauseButton}</div>
+              `
+            : ''}
+          <game-clock
+            .game=${game}
+            ?running=${gameState === GameState.RUNNING}
+            @clock-ticked=${this.saveGame}
+          ></game-clock>
+        </div>
       </div>
     `;
   }
@@ -184,29 +227,75 @@ export class GameView extends LitElement {
     switch (gameState) {
       case GameState.UNSTARTED:
         return html`
-          <div>
-            <button @click=${this.resumePlay} title="Start play">
-              <mat-icon name="not_started" size="large"></mat-icon>
-            </button>
-          </div>
+          <icon-button
+            @click=${this.resumePlay}
+            iconName="not_started"
+            iconSize="large"
+            label="Start"
+          ></icon-button>
         `;
       case GameState.RUNNING:
         return html`
-          <div>
-            <button @click=${this.pausePlay} title="Pause play">
-              <mat-icon name="pause_circle" size="large"></mat-icon>
-            </button>
-          </div>
+          <icon-button
+            @click=${this.pausePlay}
+            iconName="pause_circle"
+            iconSize="large"
+            label="Pause"
+          ></icon-button>
         `;
       case GameState.PAUSED:
         return html`
-          <div>
-            <button @click=${this.resumePlay} title="Resume play">
-              <mat-icon name="play_circle" size="large"></mat-icon>
-            </button>
-          </div>
+          <icon-button
+            @click=${this.resumePlay}
+            iconName="play_circle"
+            iconSize="large"
+            label="Resume"
+          ></icon-button>
         `;
     }
+  }
+
+  private renderTrailItem(
+    trails: ReadonlyTrails,
+    trail: ReadonlyTrail,
+    index: number,
+  ) {
+    const {trailhead} = trail;
+    const isVisible = trails.numVisible > index;
+    const isArchived = index >= trails.order.length - trails.numArchived;
+    const classes = {
+      trail: true,
+      [`trail-${trail.id}`]: true,
+      archived: isArchived,
+    };
+    return html`
+      <div class=${classMap(classes)} data-index=${index}>
+        ${1 + trail.id}:
+        ${trailhead
+          ? html`
+              <span class="trailhead">${trail.get(trailhead)}</span> ➔
+              ${trailhead}
+            `
+          : '—'}
+        <span class="trail-length">${trail.getAssignedCount()}</span>
+        <icon-button
+          @click=${this.activateTrail}
+          iconName="arrow_upward"
+          label="Activate"
+          ?disabled=${index === 0 && trails.active}
+        ></icon-button>
+        <icon-button
+          @click=${this.toggleTrailVisibility}
+          iconName=${isVisible ? 'visibility_off' : 'visibility'}
+          label=${isVisible ? 'Hide' : 'Show'}
+        ></icon-button>
+        <icon-button
+          @click=${this.archiveTrail}
+          iconName="archive"
+          label="Archive"
+        ></icon-button>
+      </div>
+    `;
   }
 
   @property({reflect: true}) private theme: Theme = 'light';
@@ -225,28 +314,29 @@ export class GameView extends LitElement {
     setPreferredTheme(theme as ThemeOrAuto);
   }
 
-  private undo(_event: Event) {
-    this.game?.undo();
+  private gameUpdated() {
     this.sudokuView?.requestUpdate();
     this.requestUpdate();
+  }
+
+  private undo(_event: Event) {
+    this.game?.undo();
+    this.gameUpdated();
   }
 
   private redo(_event: Event) {
     this.game?.redo();
-    this.sudokuView?.requestUpdate();
-    this.requestUpdate();
+    this.gameUpdated();
   }
 
   private undoToStart(_event: Event) {
     this.game?.undoToStart();
-    this.sudokuView?.requestUpdate();
-    this.requestUpdate();
+    this.gameUpdated();
   }
 
   private redoToEnd(_event: Event) {
     this.game?.redoToEnd();
-    this.sudokuView?.requestUpdate();
-    this.requestUpdate();
+    this.gameUpdated();
   }
 
   private saveGame() {
@@ -265,7 +355,7 @@ export class GameView extends LitElement {
     const {game} = this;
     if (game) {
       game.resume();
-      this.requestUpdate();
+      this.gameUpdated();
     }
   }
 
@@ -273,12 +363,65 @@ export class GameView extends LitElement {
     const {game} = this;
     if (game) {
       game.pause();
-      this.requestUpdate();
+      this.gameUpdated();
     }
   }
 
   private quit() {
     // TODO: implement
+  }
+
+  private createTrail() {
+    const {game} = this;
+    if (game) {
+      game.createTrail();
+      this.gameUpdated();
+    }
+  }
+
+  private toggleTrailsActive() {
+    const {game} = this;
+    if (game) {
+      game.toggleTrailsActive();
+      this.gameUpdated();
+    }
+  }
+
+  private getTrailIndex(event: Event): number | null {
+    const target = event.target as HTMLElement;
+    for (let el: HTMLElement|null = target; el; el = el.parentElement) {
+      if (el.dataset.index != null) {
+        return Number(el.dataset.index);
+      }
+    }
+    return null;
+  }
+
+  private activateTrail(event: Event) {
+    const {game} = this;
+    const index = this.getTrailIndex(event);
+    if (game != null && index != null) {
+      game.activateTrail(game.trails.order[index]);
+      this.gameUpdated();
+    }
+  }
+
+  private toggleTrailVisibility(event: Event) {
+    const {game} = this;
+    const index = this.getTrailIndex(event);
+    if (game != null && index != null) {
+      game.toggleTrailVisibility(game.trails.order[index]);
+      this.gameUpdated();
+    }
+  }
+
+  private archiveTrail(event: Event) {
+    const {game} = this;
+    const index = this.getTrailIndex(event);
+    if (game != null && index != null) {
+      game.archiveTrail(game.trails.order[index]);
+      this.gameUpdated();
+    }
   }
 }
 

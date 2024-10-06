@@ -1,11 +1,15 @@
 import './events';
 import './sudoku-input';
 
-import {css, html, LitElement, PropertyValues, svg} from 'lit';
+import {css, html, LitElement, PropertyValues, svg, TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
+import {Game, GameState} from '../game/game';
+import {ReadonlyGrid, SymMatch} from '../game/grid';
+import {Loc} from '../game/loc';
+import {ReadonlyMarks} from '../game/marks';
 import {PausePattern} from './pause-pattern';
 import {
   cssPixels,
@@ -16,9 +20,7 @@ import {
   Theme,
 } from './types';
 import {SudokuInput} from './sudoku-input';
-import {Loc} from '../game/loc';
-import {Game, GameState} from '../game/game';
-import {ReadonlyGrid, SymMatch} from '../game/grid';
+import {ReadonlyTrails} from 'src/game/trails';
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -117,11 +119,25 @@ export class SudokuView extends LitElement implements GridContainer {
         fill: var(--clue-fill);
       }
       .solution,
-      text.clock-text {
+      text.clock-text,
+      text.trail {
         font-weight: 400;
         font-family: 'Prompt';
         fill: var(--solution-fill);
         color: var(--solution-fill);
+      }
+      text.trail.trailhead {
+        font-weight: 700;
+        font-style: italic;
+      }
+      text.solution, text.trail {
+        opacity: 50%;
+      }
+      svg.trail-active text.trail.trail-index-0 {
+        opacity: 100%;
+      }
+      svg:not(.trail-active) text.solution {
+        opacity: 100%;
       }
 
       text.broken {
@@ -207,6 +223,7 @@ export class SudokuView extends LitElement implements GridContainer {
         width=${compSize}
         height=${compSize}
         style="width: ${cssSize}px; height: ${cssSize}px;"
+        class=${game?.trails.active ? 'trail-active' : ''}
       >
         <style>
           .block-border {
@@ -214,6 +231,21 @@ export class SudokuView extends LitElement implements GridContainer {
           }
           text.clock-text {
             font-size: ${cellSize * 0.3}px;
+          }
+          text.trail {
+            font-size: ${cellSize * 0.4}px;
+          }
+          text.trail-index-0 {
+            transform: translate(-${cellSize * 0.3}px, -${cellSize * 0.3}px);
+          }
+          text.trail-index-1 {
+            transform: translate(${cellSize * 0.3}px, -${cellSize * 0.3}px);
+          }
+          text.trail-index-2 {
+            transform: translate(-${cellSize * 0.3}px, ${cellSize * 0.3}px);
+          }
+          text.trail-index-3 {
+            transform: translate(${cellSize * 0.3}px, ${cellSize * 0.3}px);
           }
         </style>
         ${pausePattern?.renderBackground() /*   --------------- */}
@@ -267,24 +299,46 @@ export class SudokuView extends LitElement implements GridContainer {
     if (!showNumbers) return;
     const brokenLocs = game.marks.asGrid().brokenLocs();
     const answer = this.input?.renderHoverLoc() ?? [];
+    this.pushClues(game.marks, brokenLocs, answer);
+    this.pushSolutionCells(game.marks, brokenLocs, answer);
+    this.pushTrails(game.trails, answer);
+    return answer;
+  }
+
+  private pushClues(
+    marks: ReadonlyMarks,
+    brokenLocs: Set<Loc>,
+    answer: TemplateResult[],
+  ): void {
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
-      const broken = {broken: brokenLocs.has(loc)};
-      const clue = game.marks.getClue(loc);
+      const clue = marks.getClue(loc);
       if (clue) {
         const [x, y] = cellCenter(loc);
         answer.push(svg`
-          <text x=${x} y=${y} class="clue ${classMap(broken)}">${clue}</text>`);
+          <text x=${x} y=${y} class="clue ${classMap({
+          broken: brokenLocs.has(loc),
+        })}">${clue}</text>`);
       }
-      const nums = game.marks.getNums(loc);
+    }
+  }
+
+  private pushSolutionCells(
+    marks: ReadonlyMarks,
+    brokenLocs: Set<Loc>,
+    answer: TemplateResult[],
+  ): void {
+    const {cellCenter} = this;
+    for (const loc of Loc.ALL) {
+      const nums = marks.getNums(loc);
       if (!nums) continue;
       const [x, y] = cellCenter(loc);
       const {size} = nums;
       if (size === 1) {
         answer.push(svg`
-          <text x=${x} y=${y} class="solution ${classMap(broken)}">${[
-          ...nums,
-        ]}</text>`);
+          <text x=${x} y=${y} class="solution ${classMap({
+          broken: brokenLocs.has(loc),
+        })}">${nums.values().next().value}</text>`);
       } else {
         const {cellSize} = this;
         const cls =
@@ -306,7 +360,25 @@ export class SudokuView extends LitElement implements GridContainer {
         `);
       }
     }
-    return answer;
+  }
+
+  private pushTrails(trails: ReadonlyTrails, answer: TemplateResult[]): void {
+    const {cellCenter} = this;
+    for (let i = 0, c = trails.numVisible; i < c; ++i) {
+      const trail = trails.order[i];
+      const classes = `trail trail-${trail.id} trail-index-${i}`;
+      for (const loc of Loc.ALL) {
+        const num = trail.get(loc);
+        if (num) {
+          const [x, y] = cellCenter(loc);
+          const locClasses =
+            loc === trail.trailhead ? `${classes} trailhead` : classes;
+          answer.push(
+            svg`<text x=${x} y=${y} class=${locClasses}>${num}</text>`,
+          );
+        }
+      }
+    }
   }
 
   /** Light or dark mode. */
