@@ -184,6 +184,13 @@ export class Trails {
       // It's already archived.
       return false;
     }
+    if (index < this._numVisible) {
+      // It's visible.  We decrement the number visible and flip active off if
+      // none remain visible.
+      if (!--this._numVisible) {
+        this._active = false;
+      }
+    }
     ++this._numArchived;
     this.moveTrail(trail, index, targetIndex);
     return true;
@@ -215,7 +222,7 @@ export class Trails {
    * trail has the same ID as the active trail.
    */
   replaceActiveTrail(trail: Trail): boolean {
-    if (!this._active || trail.id !== this._order[0].id) {
+    if (trail.id !== this.activeTrail?.id) {
       return false;
     }
     this._order[0] = trail;
