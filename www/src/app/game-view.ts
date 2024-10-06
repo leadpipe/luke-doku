@@ -5,7 +5,6 @@ import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
-import {classMap} from 'lit/directives/class-map.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
@@ -64,6 +63,10 @@ export class GameView extends LitElement {
         flex-grow: 3;
         display: flex;
         flex-direction: column;
+      }
+
+      .trail.archived > span {
+        opacity: 50%;
       }
 
       #bottom-controls {
@@ -261,28 +264,26 @@ export class GameView extends LitElement {
     index: number,
   ) {
     const {trailhead} = trail;
-    const isVisible = trails.numVisible > index;
-    const isArchived = index >= trails.order.length - trails.numArchived;
-    const classes = {
-      trail: true,
-      [`trail-${trail.id}`]: true,
-      archived: isArchived,
-    };
+    const isVisible = trails.isVisible(trail);
+    const isArchived = trails.isArchived(trail);
+    const classes = `trail trail-${trail.id} ${isArchived ? 'archived' : ''}`;
     return html`
-      <div class=${classMap(classes)} data-index=${index}>
-        ${1 + trail.id}:
-        ${trailhead
-          ? html`
-              <span class="trailhead">${trail.get(trailhead)}</span> ➔
-              ${trailhead}
-            `
-          : '—'}
-        <span class="trail-length">${trail.getAssignedCount()}</span>
+      <div class=${classes} data-index=${index}>
+        <span>
+          ${1 + trail.id}:
+          ${trailhead
+            ? html`
+                <span class="trailhead">${trail.get(trailhead)}</span> ➔
+                ${trailhead}
+              `
+            : '—'}
+          <span class="trail-length">${trail.getAssignedCount()}</span>
+        </span>
         <icon-button
           @click=${this.activateTrail}
           iconName="arrow_upward"
           label="Activate"
-          ?disabled=${index === 0 && trails.active}
+          ?disabled=${trail === trails.activeTrail}
         ></icon-button>
         <icon-button
           @click=${this.toggleTrailVisibility}
@@ -293,6 +294,13 @@ export class GameView extends LitElement {
           @click=${this.archiveTrail}
           iconName="archive"
           label="Archive"
+          ?disabled=${isArchived}
+        ></icon-button>
+        <icon-button
+          @click=${this.copyFromTrail}
+          iconName="content_copy"
+          label="Copy"
+          ?disabled=${trail.isEmpty}
         ></icon-button>
       </div>
     `;
@@ -389,7 +397,7 @@ export class GameView extends LitElement {
 
   private getTrailIndex(event: Event): number | null {
     const target = event.target as HTMLElement;
-    for (let el: HTMLElement|null = target; el; el = el.parentElement) {
+    for (let el: HTMLElement | null = target; el; el = el.parentElement) {
       if (el.dataset.index != null) {
         return Number(el.dataset.index);
       }
@@ -420,6 +428,15 @@ export class GameView extends LitElement {
     const index = this.getTrailIndex(event);
     if (game != null && index != null) {
       game.archiveTrail(game.trails.order[index]);
+      this.gameUpdated();
+    }
+  }
+
+  private copyFromTrail(event: Event) {
+    const {game} = this;
+    const index = this.getTrailIndex(event);
+    if (game != null && index != null) {
+      game.copyFromTrail(game.trails.order[index]);
       this.gameUpdated();
     }
   }

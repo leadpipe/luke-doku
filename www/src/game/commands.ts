@@ -182,17 +182,18 @@ class RestoreActiveTrailCommand extends Command {
 }
 
 /**
- * An undo action for commands that make multiple changes to marks.
+ * An undo action for commands that make multiple changes to marks and trails.
  */
-class RestoreMarksCommand extends Command {
+class RestoreMarksAndTrailsCommand extends RestoreTrailsCommand {
   readonly prevMarks: Marks;
 
   constructor(internals: GameInternals) {
-    super();
+    super(internals);
     this.prevMarks = new Marks(internals.marks);
   }
 
   protected override apply(internals: GameInternals): boolean {
+    super.apply(internals);
     internals.marks = new Marks(this.prevMarks);
     return true;
   }
@@ -271,10 +272,10 @@ export class CopyFromTrail extends Command {
   }
 
   protected override makeUndo(internals: GameInternals): Command {
-    if (internals.trails.active) {
+    if (internals.trails.activeTrail?.id !== this.trailId) {
       return new RestoreActiveTrailCommand(internals);
     }
-    return new RestoreMarksCommand(internals);
+    return new RestoreMarksAndTrailsCommand(internals);
   }
 
   protected override apply(internals: GameInternals): boolean {
@@ -286,7 +287,15 @@ export class CopyFromTrail extends Command {
       if (trail.get(loc) && marks.getClue(loc)) return false;
     }
     
-    const {activeTrail} = internals.trails;
+    let {activeTrail} = internals.trails;
+    if (activeTrail === trail) {
+      // Whoops, instead of copying it to itself we deactivate the trails, make
+      // this trail invisible, and copy it to the solution.
+      internals.trails.toggleActive();
+      internals.trails.toggleVisibility(activeTrail);
+      activeTrail = null;
+    }
+
     // Start with the trailhead, so it's preserved if a trail is active.
     if (activeTrail && !activeTrail.trailhead && trail.trailhead) {
       activeTrail.set(trail.trailhead, trail.get(trail.trailhead));
