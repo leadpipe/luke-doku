@@ -226,21 +226,6 @@ export class CreateTrail extends TrailCommand {
   }
 }
 
-export class DuplicateTrail extends TrailCommand {
-  constructor(readonly trailId: number) {
-    super();
-  }
-
-  protected override apply(internals: GameInternals): boolean {
-    const trail = internals.trails.get(this.trailId);
-    if (!trail || trail.isEmpty) {
-      return false; // you can't clone an empty trail
-    }
-    internals.trails.create(trail);
-    return true;
-  }
-}
-
 export class ActivateTrail extends TrailCommand {
   constructor(readonly trailId: number) {
     super();

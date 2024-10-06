@@ -11,7 +11,6 @@ import {
   ClearCell,
   MarkComplete,
   CreateTrail,
-  DuplicateTrail,
   ActivateTrail,
   ToggleTrailVisibility,
   ArchiveTrail,
@@ -33,7 +32,8 @@ export const FAKE_HISTORY: RecordedCommand[] = [
   {command: new ClearCell(Loc.of(0)), elapsedTimestamp: 7000},
   {command: new CreateTrail(), elapsedTimestamp: 8000},
   {command: new SetNum(Loc.of(1), 4), elapsedTimestamp: 9000},
-  {command: new DuplicateTrail(0), elapsedTimestamp: 10_000},
+  {command: new CreateTrail(), elapsedTimestamp: 10_000},
+  {command: new CopyFromTrail(0), elapsedTimestamp: 10_000},
   {command: new ActivateTrail(0), elapsedTimestamp: 11000},
   {command: new ToggleTrailVisibility(1), elapsedTimestamp: 12000},
   {command: new ArchiveTrail(1), elapsedTimestamp: 13000},
@@ -57,11 +57,12 @@ export const FAKE_HISTORY_SERIALIZED: number[] = [
   3, 0, 1000,       // clearCell
   10, 1000,         // createTrail
   4, 1, 4, 1000,    // setNum
-  11, 0, 1000,      // duplicateTrail
-  12, 0, 1000,      // activateTrail
-  13, 1, 1000,      // toggleTrailVisibility
-  14, 1, 1000,      // archiveTrail
-  15, 1000,         // toggleTrailsActive
-  16, 1, 1000,      // copyFromTrail
+  10, 1000,         // createTrail
+  15, 0, 0,         // copyFromTrail
+  11, 0, 1000,      // activateTrail
+  12, 1, 1000,      // toggleTrailVisibility
+  13, 1, 1000,      // archiveTrail
+  14, 1000,         // toggleTrailsActive
+  15, 1, 1000,      // copyFromTrail
   2, 1, 1000,       // markComplete (QUIT)
 ];

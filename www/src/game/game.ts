@@ -11,7 +11,6 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  DuplicateTrail,
   MarkComplete,
   Pause,
   Redo,
@@ -200,10 +199,6 @@ export class Game {
 
   createTrail(): boolean {
     return this.execute(new CreateTrail());
-  }
-
-  duplicateTrail(trail: ReadonlyTrail): boolean {
-    return this.execute(new DuplicateTrail(trail.id));
   }
 
   activateTrail(trail: ReadonlyTrail): boolean {

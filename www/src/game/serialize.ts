@@ -9,7 +9,6 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  DuplicateTrail,
   MarkComplete,
   Pause,
   Redo,
@@ -199,38 +198,32 @@ const createTrail: Serializer<typeof CreateTrail> = {
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const duplicateTrail: Serializer<typeof DuplicateTrail> = {
-  tag: 11,
-  ctor: DuplicateTrail,
-  serializeArgs: serializeTrailId,
-  deserializeArgs: deserializeTrailId,
-};
 const activateTrail: Serializer<typeof ActivateTrail> = {
-  tag: 12,
+  tag: 11,
   ctor: ActivateTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const toggleTrailVisibility: Serializer<typeof ToggleTrailVisibility> = {
-  tag: 13,
+  tag: 12,
   ctor: ToggleTrailVisibility,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const archiveTrail: Serializer<typeof ArchiveTrail> = {
-  tag: 14,
+  tag: 13,
   ctor: ArchiveTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const toggleTrailsActive: Serializer<typeof ToggleTrailsActive> = {
-  tag: 15,
+  tag: 14,
   ctor: ToggleTrailsActive,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const copyFromTrail: Serializer<typeof CopyFromTrail> = {
-  tag: 16,
+  tag: 15,
   ctor: CopyFromTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
@@ -248,7 +241,6 @@ const serializersByTag: ReadonlyArray<Serializer<any>> = [
   undoToStart,
   redoToEnd,
   createTrail,
-  duplicateTrail,
   activateTrail,
   toggleTrailVisibility,
   archiveTrail,
