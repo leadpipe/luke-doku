@@ -13,6 +13,7 @@ import {Grid} from '../game/grid';
 import {SudokuView} from './sudoku-view';
 import {ReadonlyTrail} from 'src/game/trail';
 import {ReadonlyTrails} from 'src/game/trails';
+import {setBooleanAttribute} from './utils';
 
 /** Encapsulates the entire game page. */
 @customElement('game-view')
@@ -59,14 +60,60 @@ export class GameView extends LitElement {
         padding: 8px 0;
       }
 
+      #trail-menu {
+        margin: 0;
+      }
+      #trail-menu table {
+        border-collapse: collapse;
+      }
+      #trail-menu span {
+        cursor: default;
+      }
+      #trail-menu td:has(icon-button) span {
+        cursor: pointer;
+      }
+      #trail-menu tr:has(icon-button[disabled]) span {
+        cursor: default;
+        opacity: 50%;
+      }
+      #trail-menu tr:has(td:hover icon-button:not([disabled])) {
+        background-color: aliceblue; // TODO: choose something better
+      }
+      #trail-menu td {
+        vertical-align: bottom;
+      }
+
       #trails {
         flex-grow: 3;
         display: flex;
         flex-direction: column;
       }
 
-      .trail span {
+      div.trail {
+        display: flex;
+        column-gap: 4px;
+      }
+      .trail > span {
         cursor: pointer;
+        flex: 1 0 content;
+        display: inline-flex;
+        column-gap: 8px;
+      }
+
+      span.trail-number {
+        text-align: right;
+        width: 2em;
+      }
+      span.trail-assignment {
+        flex: 1 0 content;
+        display: inline-flex;
+        column-gap: 6px;
+      }
+      span.trail-length {
+        min-width: 3em;
+        text-align: right;
+        padding-right: 8px;
+        opacity: 50%;
       }
 
       .trail.archived > span {
@@ -76,6 +123,8 @@ export class GameView extends LitElement {
       .trailhead {
         font-weight: 700;
         font-style: italic;
+        min-width: 1em;
+        text-align: right;
       }
 
       #bottom-controls {
@@ -83,6 +132,12 @@ export class GameView extends LitElement {
         flex-direction: column;
         height: 100%;
         align-items: center;
+      }
+
+      #global-trail-controls {
+        display: flex;
+        justify-content: space-between;
+        column-gap: 8px;
       }
 
       #pause-button {
@@ -197,6 +252,35 @@ export class GameView extends LitElement {
     return html`
       ${startOrResumeButton}
       <div id="bottom-panel">
+        <div id="trail-menu" popover @toggle=${this.trailMenuToggled}>
+          <table>
+            <tr>
+              <td @click=${this.copyFromTrail}>
+                <icon-button iconName="content_copy"></icon-button>
+                <span>Copy from trail</span>
+              </td>
+              <td></td>
+            </tr>
+            <tr>
+              <td @click=${this.activateTrail}>
+                <icon-button iconName="arrow_upward"></icon-button>
+                <span>Activate trail</span>
+              </td>
+              <td>
+                <span class="hint">[tap]</span>
+              </td>
+            </tr>
+            <tr>
+              <td @click=${this.archiveTrail}>
+                <icon-button iconName="archive"></icon-button>
+                <span>Archive trail</span>
+              </td>
+              <td>
+                <span class="hint">[long press]</span>
+              </td>
+            </tr>
+          </table>
+        </div>
         <div id="trails">
           ${pauseButton
             ? repeat(
@@ -209,11 +293,12 @@ export class GameView extends LitElement {
         <div id="bottom-controls">
           ${pauseButton
             ? html`
-                <div>
+                <div id="global-trail-controls">
                   <icon-button
                     @click=${this.createTrail}
                     iconName="hiking"
                     label="New trail"
+                    ?disabled=${trails.activeTrail?.isEmpty}
                   ></icon-button>
                   <icon-button
                     @click=${this.toggleTrailsActive}
@@ -283,37 +368,24 @@ export class GameView extends LitElement {
           @pointerup=${this.finishTrailClick}
           @pointercancel=${this.cancelTrailClick}
         >
-          ${1 + trail.id}:
-          ${trailhead
-            ? html`
-                <span class="trailhead">${trail.get(trailhead)}</span> ➔
-                ${trailhead}
-              `
-            : '—'}
+          <span class="trail-number">${1 + trail.id}:</span>
+          <span class="trail-assignment">
+            ${trailhead
+              ? html`
+                  <span class="trailhead">${trail.get(trailhead)}</span> ➔
+                  ${trailhead}
+                `
+              : '—'}
+          </span>
           <span class="trail-length">${trail.getAssignedCount()}</span>
         </span>
         <icon-button
-          @click=${this.activateTrail}
-          iconName="arrow_upward"
-          label="Activate"
-          ?disabled=${trail === trails.activeTrail}
-        ></icon-button>
-        <icon-button
           @click=${this.toggleTrailVisibility}
           iconName=${isVisible ? 'visibility_off' : 'visibility'}
-          label=${isVisible ? 'Hide' : 'Show'}
         ></icon-button>
         <icon-button
-          @click=${this.archiveTrail}
-          iconName="archive"
-          label="Archive"
-          ?disabled=${isArchived}
-        ></icon-button>
-        <icon-button
-          @click=${this.copyFromTrail}
-          iconName="content_copy"
-          label="Copy"
-          ?disabled=${trail.isEmpty}
+          @click=${this.toggleTrailMenu}
+          iconName="more_horiz"
         ></icon-button>
       </div>
     `;
@@ -418,15 +490,6 @@ export class GameView extends LitElement {
     return null;
   }
 
-  private activateTrail(event: Event) {
-    const {game} = this;
-    const index = this.getTrailIndex(event);
-    if (game != null && index != null) {
-      game.activateTrail(game.trails.order[index]);
-      this.gameUpdated();
-    }
-  }
-
   private toggleTrailVisibility(event: Event) {
     const {game} = this;
     const index = this.getTrailIndex(event);
@@ -436,20 +499,81 @@ export class GameView extends LitElement {
     }
   }
 
-  private archiveTrail(event: Event) {
+  private trailForMenu: ReadonlyTrail | null = null;
+
+  private toggleTrailMenu(event: Event) {
     const {game} = this;
     const index = this.getTrailIndex(event);
-    if (game != null && index != null) {
-      game.archiveTrail(game.trails.order[index]);
+    const popover = this.shadowRoot?.getElementById('trail-menu');
+    if (game != null && index != null && popover != null) {
+      const trail = game.trails.order[index];
+      if (trail === this.trailForMenu) {
+        popover.hidePopover();
+        this.trailForMenu = null;
+      } else {
+        this.trailForMenu = trail;
+        const buttons = popover.getElementsByTagName('icon-button');
+        setBooleanAttribute(buttons[0], 'disabled', trail.isEmpty); // the copy button
+        setBooleanAttribute(
+          buttons[1], // the activate button
+          'disabled',
+          game.trails.activeTrail === trail,
+        );
+        setBooleanAttribute(
+          buttons[2], // the archive button
+          'disabled',
+          game.trails.isArchived(trail),
+        );
+        const menuButton = event.target as HTMLElement;
+        const buttonRect = menuButton.getBoundingClientRect();
+        popover.style.top = `${buttonRect.bottom}px`;
+        popover.style.left = `${buttonRect.left}px`;
+        const thisRect = this.getBoundingClientRect();
+        popover.showPopover();
+        const menuRect = popover.getBoundingClientRect();
+        if (menuRect.right > thisRect.right) {
+          popover.style.left = `${
+            buttonRect.left - (menuRect.right - thisRect.right)
+          }px`;
+        }
+      }
+    }
+  }
+
+  private trailMenuToggled(event: ToggleEvent) {
+    if (event.newState === 'closed') {
+      this.trailForMenu = null;
+    }
+  }
+
+  private hideTrailMenu() {
+    this.shadowRoot?.getElementById('trail-menu')?.hidePopover();
+    this.trailForMenu = null;
+  }
+
+  private copyFromTrail(_event: Event) {
+    const {game, trailForMenu} = this;
+    if (game != null && trailForMenu != null) {
+      game.copyFromTrail(trailForMenu);
+      this.hideTrailMenu();
       this.gameUpdated();
     }
   }
 
-  private copyFromTrail(event: Event) {
-    const {game} = this;
-    const index = this.getTrailIndex(event);
-    if (game != null && index != null) {
-      game.copyFromTrail(game.trails.order[index]);
+  private activateTrail(_event: Event) {
+    const {game, trailForMenu} = this;
+    if (game != null && trailForMenu != null) {
+      game.activateTrail(trailForMenu);
+      this.hideTrailMenu();
+      this.gameUpdated();
+    }
+  }
+
+  private archiveTrail(_event: Event) {
+    const {game, trailForMenu} = this;
+    if (game != null && trailForMenu != null) {
+      game.archiveTrail(trailForMenu);
+      this.hideTrailMenu();
       this.gameUpdated();
     }
   }
