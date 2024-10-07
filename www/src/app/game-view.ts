@@ -136,8 +136,13 @@ export class GameView extends LitElement {
 
       #global-trail-controls {
         display: flex;
+        width: 100%;
         justify-content: space-between;
-        column-gap: 8px;
+        padding-left: 8px;
+      }
+
+      #global-trail-controls icon-button {
+        flex: 1 0 0;
       }
 
       #pause-button {
@@ -295,16 +300,16 @@ export class GameView extends LitElement {
             ? html`
                 <div id="global-trail-controls">
                   <icon-button
-                    @click=${this.createTrail}
-                    iconName="hiking"
-                    label="New trail"
-                    ?disabled=${trails.activeTrail?.isEmpty}
-                  ></icon-button>
-                  <icon-button
                     @click=${this.toggleTrailsActive}
                     iconName=${trails.active ? 'toggle_on' : 'toggle_off'}
                     label=${trails.active ? 'Active' : 'Inactive'}
                     ?disabled=${trails.order.length === 0}
+                  ></icon-button>
+                  <icon-button
+                    @click=${this.createTrail}
+                    iconName="hiking"
+                    label="New trail"
+                    ?disabled=${trails.activeTrail?.isEmpty}
                   ></icon-button>
                 </div>
                 <div id="pause-button">${pauseButton}</div>
