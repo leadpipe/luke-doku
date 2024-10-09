@@ -33,16 +33,18 @@ export class Trail extends Grid {
    * Overrides Grid's `set` method to track the first location set, and to
    * return a boolean telling whether the location could be set.  In a Trail,
    * any location can be assigned or cleared, except the trailhead may not be
-   * cleared if there are any other locations that are also assigned.
+   * altered if there are any other locations that are also assigned.
    */
   override set(loc: Loc, num: number | null): boolean {
     const count = this.getAssignedCount();
-    if (num == null && loc === this.trailheadState && count > 1) {
-      return false; // You can't clear the trailhead unless it's the only location with an assignment.
+    if (loc === this.trailheadState && count > 1) {
+      return false; // You can't change the trailhead unless it's the only location with an assignment.
     }
     super.set(loc, num);
-    if (count === 0) {
+    if (count === 0 && num) {
       this.trailheadState = loc;
+    } else if (count === 1 && !num) {
+      this.trailheadState = null;
     }
     return true;
   }
