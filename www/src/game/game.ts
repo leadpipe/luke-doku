@@ -46,15 +46,22 @@ export class Game {
   private gameState = GameState.UNSTARTED;
   private completionState?: CompletionState;
 
-  constructor(readonly puzzle: ReadonlyGrid, history: readonly RecordedCommand[] = []) {
+  constructor(
+    readonly puzzle: ReadonlyGrid,
+    history: readonly RecordedCommand[] = [],
+  ) {
     this.writableMarks = new Marks(puzzle);
     this.writableTrails = new Trails();
+    const game = this;
     const getMarks = () => this.writableMarks;
     const setMarks = (marks: Marks) => (this.writableMarks = marks);
     const getTrails = () => this.writableTrails;
     const setTrails = (trails: Trails) => (this.writableTrails = trails);
     this.internals = {
       undoStack: this.undoStack,
+      get elapsedMs(): number {
+        return game.elapsedMs;
+      },
       get marks(): Marks {
         return getMarks();
       },
@@ -67,8 +74,6 @@ export class Game {
       set trails(trails: Trails) {
         setTrails(trails);
       },
-      executeFromUndoStack: command =>
-        this.execute(command, {fromUndoStack: true}),
       resume: () => {
         if (
           this.gameState === GameState.UNSTARTED ||
@@ -98,7 +103,7 @@ export class Game {
     };
     // Restore historical state.
     for (const {command, elapsedTimestamp} of history) {
-      const ok = this.execute(command, {elapsedTimestamp});
+      const ok = this.execute(command, elapsedTimestamp);
       if (!ok) {
         throw new Error(
           `Unable to restore history: failed to execute ${command}`,
@@ -221,15 +226,12 @@ export class Game {
     return this.execute(new CopyFromTrail(trail.id));
   }
 
-  private execute(
-    command: Command,
-    opts: {fromUndoStack?: boolean; elapsedTimestamp?: number} = {},
-  ): boolean {
+  private execute(command: Command, elapsedTimestamp?: number): boolean {
     const done = command.execute(
       this.internals,
-      opts.elapsedTimestamp ?? this.elapsedMs,
+      elapsedTimestamp ?? this.elapsedMs,
     );
-    if (done && !opts.fromUndoStack) {
+    if (done) {
       this.writableHistory.push(done);
       if (isUndoable(done)) {
         this.undoStack.push(done);

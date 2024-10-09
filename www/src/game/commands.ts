@@ -1,7 +1,7 @@
-import {Command, CompletionState, GameInternals} from './command';
+import {Command, CompletionState, GameInternals, Operation} from './command';
 import {Loc} from './loc';
 import {Marks} from './marks';
-import {ReadonlyTrail, Trail} from './trail';
+import {Trail} from './trail';
 import {Trails} from './trails';
 
 export class Resume extends Command {
@@ -9,13 +9,13 @@ export class Resume extends Command {
     super();
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.resume();
   }
 }
 
 export class Pause extends Command {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.pause();
   }
 }
@@ -25,7 +25,7 @@ export class MarkComplete extends Command {
     super();
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.markComplete(this.completionState);
   }
 }
@@ -41,7 +41,7 @@ abstract class Move extends Command {
     return new ClearCell(this.loc);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     if (internals.marks.getClue(this.loc) != null) return false;
     this.move(internals);
     return true;
@@ -101,7 +101,7 @@ export class SetNums extends Assign {
     super(loc);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     if (internals.trails.active) return false;
     return super.apply(internals);
   }
@@ -116,19 +116,19 @@ export class SetNums extends Assign {
 }
 
 export class Undo extends Command {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.undoStack.undo(internals);
   }
 }
 
 export class Redo extends Command {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.undoStack.redo(internals);
   }
 }
 
 export class UndoToStart extends Command {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     while (internals.undoStack.canUndo()) {
       if (!internals.undoStack.undo(internals)) return false;
     }
@@ -137,7 +137,7 @@ export class UndoToStart extends Command {
 }
 
 export class RedoToEnd extends Command {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     while (internals.undoStack.canRedo()) {
       if (!internals.undoStack.redo(internals)) return false;
     }
@@ -148,16 +148,15 @@ export class RedoToEnd extends Command {
 /**
  * The universal undo action for trail commands.
  */
-class RestoreTrailsCommand extends Command {
+class RestoreTrailsOperation implements Operation {
   readonly prevTrails: Trails;
 
   constructor(internals: GameInternals) {
-    super();
     this.prevTrails = new Trails(internals.trails);
   }
 
-  protected override apply(internals: GameInternals): boolean {
-    internals.trails = new Trails(this.prevTrails);
+  apply(internals: GameInternals): boolean {
+    internals.trails = this.prevTrails;
     return true;
   }
 }
@@ -165,26 +164,23 @@ class RestoreTrailsCommand extends Command {
 /**
  * An undo action for commands that make multiple changes to the active trail.
  */
-class RestoreActiveTrailCommand extends Command {
+class RestoreActiveTrailOperation implements Operation {
   readonly prevTrail: Trail;
 
   constructor(internals: GameInternals) {
-    super();
     const active = internals.trails.order[0];
     this.prevTrail = new Trail(active.id, active);
   }
 
-  protected override apply(internals: GameInternals): boolean {
-    return internals.trails.replaceActiveTrail(
-      new Trail(this.prevTrail.id, this.prevTrail),
-    );
+  apply(internals: GameInternals): boolean {
+    return internals.trails.replaceActiveTrail(this.prevTrail);
   }
 }
 
 /**
  * An undo action for commands that make multiple changes to marks and trails.
  */
-class RestoreMarksAndTrailsCommand extends RestoreTrailsCommand {
+class RestoreMarksAndTrailsOperation extends RestoreTrailsOperation {
   readonly prevMarks: Marks;
 
   constructor(internals: GameInternals) {
@@ -192,9 +188,9 @@ class RestoreMarksAndTrailsCommand extends RestoreTrailsCommand {
     this.prevMarks = new Marks(internals.marks);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     super.apply(internals);
-    internals.marks = new Marks(this.prevMarks);
+    internals.marks = this.prevMarks;
     return true;
   }
 }
@@ -208,13 +204,13 @@ abstract class TrailCommand extends Command {
     return true;
   }
 
-  protected override makeUndo(internals: GameInternals): Command {
-    return new RestoreTrailsCommand(internals);
+  protected override makeUndo(internals: GameInternals): Operation {
+    return new RestoreTrailsOperation(internals);
   }
 }
 
 export class CreateTrail extends TrailCommand {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     const {trails} = internals;
     const empty = trails.order.find(t => t.isEmpty);
     if (empty) {
@@ -227,58 +223,68 @@ export class CreateTrail extends TrailCommand {
   }
 }
 
-export class ActivateTrail extends TrailCommand {
+abstract class TrailIdCommand extends TrailCommand {
   constructor(readonly trailId: number) {
     super();
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  protected override stateAsString(): string {
+    return String(this.trailId);
+  }
+}
+
+export class ActivateTrail extends TrailIdCommand {
+  constructor(trailId: number) {
+    super(trailId);
+  }
+
+  override apply(internals: GameInternals): boolean {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.activate(trail);
   }
 }
 
-export class ToggleTrailVisibility extends TrailCommand {
-  constructor(readonly trailId: number) {
-    super();
+export class ToggleTrailVisibility extends TrailIdCommand {
+  constructor(trailId: number) {
+    super(trailId);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.toggleVisibility(trail);
   }
 }
 
-export class ArchiveTrail extends TrailCommand {
-  constructor(readonly trailId: number) {
-    super();
+export class ArchiveTrail extends TrailIdCommand {
+  constructor(trailId: number) {
+    super(trailId);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.archive(trail);
   }
 }
 
 export class ToggleTrailsActive extends TrailCommand {
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     return internals.trails.toggleActive();
   }
 }
 
-export class CopyFromTrail extends Command {
-  constructor(readonly trailId: number) {
-    super();
+export class CopyFromTrail extends TrailIdCommand {
+  constructor(trailId: number) {
+    super(trailId);
   }
 
-  protected override makeUndo(internals: GameInternals): Command {
+  protected override makeUndo(internals: GameInternals): Operation {
     if (internals.trails.activeTrail?.id !== this.trailId) {
-      return new RestoreActiveTrailCommand(internals);
+      return new RestoreActiveTrailOperation(internals);
     }
-    return new RestoreMarksAndTrailsCommand(internals);
+    return new RestoreMarksAndTrailsOperation(internals);
   }
 
-  protected override apply(internals: GameInternals): boolean {
+  override apply(internals: GameInternals): boolean {
     const trail = internals.trails.get(this.trailId);
     if (!trail) return false;
     const {marks} = internals;
@@ -286,7 +292,7 @@ export class CopyFromTrail extends Command {
       // This should never happen in real life
       if (trail.get(loc) && marks.getClue(loc)) return false;
     }
-    
+
     let {activeTrail} = internals.trails;
     if (activeTrail === trail) {
       // Whoops, instead of copying it to itself we deactivate the trails, make
