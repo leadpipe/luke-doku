@@ -123,7 +123,7 @@ export class Marks {
       throw new Error('Empty set not allowed, call `clearCell` instead');
     }
     this.cells[loc.index] = new Set(
-      [...nums].sort().map(n => checkIntRange(n, 1, 10)),
+      [...nums].map(n => checkIntRange(n, 1, 10)),
     );
   }
 
@@ -144,4 +144,7 @@ export class Marks {
 }
 
 /** A Marks that you can't modify. */
-export type ReadonlyMarks = Omit<Marks, 'clearCell'|'setClue'|'setNum'|'setNums'>;
+export type ReadonlyMarks = Omit<
+  Marks,
+  'clearCell' | 'setClue' | 'setNum' | 'setNums'
+>;
