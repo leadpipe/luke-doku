@@ -45,7 +45,7 @@ export class SudokuView extends LitElement implements GridContainer {
         -webkit-user-select: none;
 
         --block-border: #111;
-        --hover-loc: #aecbfa;
+        --hover-loc: #bdd4f9;
         --hover-loc-text: #2222;
         --clue-fill: #222;
         --solution-fill: #222;
@@ -120,7 +120,7 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       .solution,
       text.clock-text,
-      text.trail {
+      text.trail:not(.hover-loc) {
         font-weight: 400;
         font-family: 'Prompt';
         fill: var(--solution-fill);
@@ -233,13 +233,14 @@ export class SudokuView extends LitElement implements GridContainer {
             font-size: ${cellSize * 0.3}px;
           }
           text.trail {
-            font-size: ${cellSize * 0.4}px;
+            font-size: ${cellSize * 0.35}px;
           }
-          text.trail-index-0 {
-            transform: translate(-${cellSize * 0.3}px, -${cellSize * 0.3}px);
+          text.trail.trail-index-0 {
+            font-size: ${cellSize * 0.4}px;
+            transform: translate(-${cellSize * 0.3}px, -${cellSize * 0.25}px);
           }
           text.trail-index-1 {
-            transform: translate(${cellSize * 0.3}px, -${cellSize * 0.3}px);
+            transform: translate(${cellSize * 0.3}px, -${cellSize * 0.25}px);
           }
           text.trail-index-2 {
             transform: translate(-${cellSize * 0.3}px, ${cellSize * 0.3}px);
