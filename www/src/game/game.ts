@@ -124,6 +124,20 @@ export class Game {
     return this.writableTrails;
   }
 
+  isBlank(loc: Loc): boolean {
+    const {activeTrail} = this.trails;
+    return activeTrail ? !activeTrail.get(loc) : !this.marks.getNums(loc);
+  }
+
+  getNum(loc: Loc): number | null {
+    const {activeTrail} = this.trails;
+    return activeTrail ? activeTrail.get(loc) : this.marks.getNum(loc);
+  }
+
+  getNums(loc: Loc): ReadonlySet<number> | null {
+    return this.trails.active ? null : this.marks.getNums(loc);
+  }
+
   get state(): GameState {
     return this.gameState;
   }

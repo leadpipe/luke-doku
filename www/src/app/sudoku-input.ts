@@ -35,6 +35,10 @@ const SECTION_RESULT: readonly ClockInputResult[] = [
   'multiple',
   'cancel',
 ];
+/** Where 'multiple' appears on the clock face. */
+const MULTIPLE_INDEX = SECTION_RESULT.indexOf('multiple');
+/** Where 'cancel' appears on the clock face. */
+const CANCEL_INDEX = SECTION_RESULT.indexOf('cancel');
 /** The string to display in each clock section. */
 const INPUT_TEXT = {
   clear: '□',
@@ -93,9 +97,15 @@ export class SudokuInput implements ReactiveController {
               width=${cellSize}
               height=${cellSize}
               />`);
-      if (!game.marks.getNums(hoverLoc) && !this.inputLoc) {
+      if (game.isBlank(hoverLoc) && !this.inputLoc) {
         answer.push(svg`
-          <text x=${x} y=${y} class="hover-loc">
+          <text x=${x} y=${y} class=${
+          game.trails.activeTrail?.isEmpty
+            ? 'hover-loc trail trail-index-0 trailhead'
+            : game.trails.active
+            ? 'hover-loc trail trail-index-0'
+            : 'hover-loc'
+        }>
             ${resultToText(this.defaultResult)}
           </text>`);
       }
@@ -106,6 +116,7 @@ export class SudokuInput implements ReactiveController {
   renderInGrid(): TemplateResult[] | TemplateResult | undefined {
     const {inputLoc, multiInput} = this;
     if (!inputLoc) return;
+    const multipleOk = !this.game.trails.active;
     const [x, y] = this.host.cellCenter(inputLoc);
     const radius = this.host.cellSize * RADIUS_RATIO;
     if (multiInput) {
@@ -133,8 +144,15 @@ export class SudokuInput implements ReactiveController {
       // Note: the arc goes from the midpoints between the clock positions
       // around the current section.  And we're using sin for the x coordinate
       // and -cos for the y, which correctly translates to SVG coordinates.
-      const arcStart = (2 * clockSection - 1) * PI_12;
-      const arcEnd = (2 * clockSection + 1) * PI_12;
+      let arcStart = (2 * clockSection - 1) * PI_12;
+      let arcEnd = (2 * clockSection + 1) * PI_12;
+      if (!multipleOk) {
+        if (clockSection === MULTIPLE_INDEX) {
+          arcEnd = (2 * CANCEL_INDEX + 1) * PI_12;
+        } else if (clockSection === CANCEL_INDEX) {
+          arcStart = (2 * MULTIPLE_INDEX - 1) * PI_12;
+        }
+      }
       answer.push(svg`
         <path
           class="clock-selection"
@@ -149,15 +167,27 @@ export class SudokuInput implements ReactiveController {
     }
     const textRadius = radius * 0.85;
     for (let i = 0; i < 12; ++i) {
-      const angle = 2 * i * PI_12;
-      answer.push(svg`
-        <text
-          class="clock-text"
-          x=${x + sin(angle) * textRadius}
-          y=${y - cos(angle) * textRadius}>
-          ${resultToText(SECTION_RESULT[i])}
-        </text>
+      if (multipleOk || i < MULTIPLE_INDEX) {
+        const angle = 2 * i * PI_12;
+        answer.push(svg`
+          <text
+            class="clock-text"
+            x=${x + sin(angle) * textRadius}
+            y=${y - cos(angle) * textRadius}>
+            ${resultToText(SECTION_RESULT[i])}
+          </text>
       `);
+      } else if (i === CANCEL_INDEX) {
+        const angle = (2 * i - 1) * PI_12;
+        answer.push(svg`
+          <text
+            class="clock-text"
+            x=${x + sin(angle) * textRadius}
+            y=${y - cos(angle) * textRadius}>
+            ${resultToText(SECTION_RESULT[i])}
+          </text>
+      `);
+      }
     }
     const {result, currentNum} = this;
     const previewText =
@@ -350,7 +380,7 @@ export class SudokuInput implements ReactiveController {
 
   private isPossibleInputLoc(loc: Loc): boolean {
     if (this.game.state !== GameState.RUNNING) return false;
-    return this.game.marks.getClue(loc) === null;
+    return this.game.puzzle.get(loc) === null;
   }
 
   private readonly keyHandler = (event: KeyboardEvent) =>
@@ -380,9 +410,16 @@ export class SudokuInput implements ReactiveController {
     }
     const loc = this.convertEventToLoc(event);
     const hoverLoc = loc && this.isPossibleInputLoc(loc) ? loc : undefined;
+    this.fixMultipleDefaultResult();
     if (hoverLoc !== this.hoverLoc) {
       this.hoverLoc = hoverLoc;
       this.host.requestUpdate();
+    }
+  }
+
+  private fixMultipleDefaultResult() {
+    if (this.defaultResult === 'multiple' && this.game.trails.active) {
+      this.defaultResult = 1;
     }
   }
 
@@ -422,14 +459,15 @@ export class SudokuInput implements ReactiveController {
     }
     const {inputLoc, game} = this;
     if (!inputLoc && loc && this.isPossibleInputLoc(loc)) {
+      this.fixMultipleDefaultResult();
       this.inputLoc = loc;
       this.hoverLoc = undefined;
       this.host.setPointerCapture(event.pointerId);
       this.inputCenter = toPoint(event);
-      this.currentNum = game.marks.getNum(loc);
+      this.currentNum = game.getNum(loc);
       this.result =
         this.currentNum ??
-        (game.marks.getNums(loc) ? 'multiple' : this.defaultResult);
+        (game.getNums(loc) ? 'multiple' : this.defaultResult);
       this.clockSection = -1;
       this.host.requestUpdate();
     }
@@ -437,8 +475,8 @@ export class SudokuInput implements ReactiveController {
 
   private handlePointerUp(event: PointerEvent) {
     this.host.releasePointerCapture(event.pointerId);
-    const {multiInput, inputLoc, game} = this;
-    if (multiInput) return;
+    if (this.multiInput) return;
+    const {inputLoc, game} = this;
     if (inputLoc) {
       const {result} = this;
       switch (result) {
@@ -454,7 +492,7 @@ export class SudokuInput implements ReactiveController {
           this.cellModified(inputLoc);
           break;
         default:
-          if (game.marks.getNum(inputLoc) !== result) {
+          if (game.getNum(inputLoc) !== result) {
             game.setNum(inputLoc, result);
             this.cellModified(inputLoc);
             this.checkSolved(game);
@@ -469,7 +507,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   private checkSolved(game: Game) {
-    if (game.marks.asGrid().isSolved()) {
+    if (!game.trails.active && game.marks.asGrid().isSolved()) {
       game.markComplete(CompletionState.SOLVED);
       this.host.dispatchEvent(
         new CustomEvent('puzzle-solved', {
@@ -505,7 +543,7 @@ export class SudokuInput implements ReactiveController {
           }
         }
         // If we're hovering over a set cell, clear it.
-        else if (hoverLoc && game.marks.getNum(hoverLoc)) {
+        else if (hoverLoc && game.getNum(hoverLoc)) {
           game.clearCell(hoverLoc);
           this.cellModified(hoverLoc);
           update = true;
@@ -523,7 +561,8 @@ export class SudokuInput implements ReactiveController {
       case '+':
       case '=':
         // Set the default result to multi-input.  And enter multi-input mode,
-        // if we're hovering over a cell.
+        // if we're hovering over a cell.  But ignore if trails are active.
+        if (game.trails.active) break;
         this.defaultResult = 'multiple';
         if (hoverLoc) {
           this.inputLoc = hoverLoc;
@@ -535,14 +574,14 @@ export class SudokuInput implements ReactiveController {
       default:
         // If it's a numeral, change the default input to it.  If we're hovering
         // over a cell also set the cell to it.  If we're in multi-input mode,
-        // toggle it.
+        // toggle its inclusion.
         if (event.key.length === 1 && event.key >= '1' && event.key <= '9') {
           const num = Number(event.key);
           if (multiInput) {
             this.toggleMultiInput(num);
           } else {
             this.defaultResult = num;
-            if (hoverLoc && !game.marks.getClue(hoverLoc)) {
+            if (hoverLoc && game.isBlank(hoverLoc)) {
               game.setNum(hoverLoc, num);
               this.cellModified(hoverLoc);
               this.checkSolved(game);
@@ -595,6 +634,9 @@ export class SudokuInput implements ReactiveController {
           : PI + acos((y - centerY) / distance);
       this.clockSection = round((6 * radians) / PI) % 12;
       this.result = SECTION_RESULT[this.clockSection];
+      if (this.result === 'multiple' && this.game.trails.active) {
+        this.result = 'cancel';
+      }
     } else {
       // Use the default result, and no clock section (light up the center
       // instead).
