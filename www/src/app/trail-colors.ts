@@ -1,6 +1,7 @@
 import * as wasm from 'luke-doku-rust';
 import {ReadonlyGrid} from '../game/grid';
 import {COLOR_RANGES, mod, OkLCH, randomColorIndex} from './colors';
+import {Theme} from './types';
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A
@@ -11,7 +12,7 @@ export class TrailColors {
   private readonly seed: string;
   private readonly colors: OkLCH[] = [];
 
-  constructor(puzzle: ReadonlyGrid) {
+  constructor(puzzle: ReadonlyGrid, private readonly theme: Theme) {
     this.seed = puzzle.toFlatString();
   }
 
@@ -29,9 +30,9 @@ export class TrailColors {
     try {
       colors.length = 0;
       let index = randomColorIndex(random);
+      const lightnessSlider = this.theme === 'light' ? 0 : 1;
+      const chromaSlider = 1; // Maximum chroma
       for (let i = 0; i < count; ++i) {
-        const lightnessSlider = 0; // Minimum lightness: they are used for text
-        const chromaSlider = 1; // Maximum chroma
         colors.push(
           COLOR_RANGES[index].randomHue(random, lightnessSlider, chromaSlider),
         );

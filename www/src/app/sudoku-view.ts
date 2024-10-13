@@ -139,7 +139,7 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       text.solution,
       text.trail {
-        opacity: 50%;
+        opacity: 70%;
       }
       svg.trail-active text.trail.trail-index-0 {
         opacity: 100%;
@@ -273,11 +273,13 @@ export class SudokuView extends LitElement implements GridContainer {
     if (!game || !trailColors) return;
     const numColors = game.trails.order.length;
     const colors = trailColors.getColors(numColors);
-    return colors.map((c, i) => svg`
+    return colors.map(
+      (c, i) => svg`
         ${`text.trail.trail-${i}`} {
           fill: ${c.toColor()};
         }
-      `);
+      `,
+    );
   }
 
   private renderGrid() {
@@ -469,14 +471,21 @@ export class SudokuView extends LitElement implements GridContainer {
   private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
+    let updateTrailColors = false;
     if (
       changedProperties.has('game') &&
       this.game?.puzzle != this.puzzle // single = on purpose
     ) {
       this.puzzle = this.game ? this.game.puzzle : null;
-      this.trailColors = this.game ? new TrailColors(this.game.puzzle) : null;
+      updateTrailColors = true;
       this.pausePatterns = [];
       this.updateSymmetries();
+    }
+    if (changedProperties.has('theme')) {
+      updateTrailColors = true;
+    }
+    if (updateTrailColors) {
+      this.trailColors = this.game ? new TrailColors(this.game.puzzle, this.theme) : null;
     }
   }
 

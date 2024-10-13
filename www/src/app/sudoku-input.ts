@@ -582,7 +582,7 @@ export class SudokuInput implements ReactiveController {
             this.toggleMultiInput(num);
           } else {
             this.defaultResult = num;
-            if (hoverLoc && game.isBlank(hoverLoc)) {
+            if (hoverLoc && !game.marks.getClue(hoverLoc)) {
               game.setNum(hoverLoc, num);
               this.cellModified(hoverLoc);
               this.checkSolved(game);

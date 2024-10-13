@@ -414,7 +414,8 @@ export class GameView extends LitElement {
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('puzzle')) {
       this.game = this.puzzle ? new Game(this.puzzle) : null;
-      this.trailColors = this.puzzle ? new TrailColors(this.puzzle) : null;
+      // For now at least, the trail list is always dark themed.
+      this.trailColors = this.puzzle ? new TrailColors(this.puzzle, 'dark') : null;
     }
   }
 
