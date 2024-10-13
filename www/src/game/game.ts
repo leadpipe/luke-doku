@@ -98,6 +98,7 @@ export class Game {
         this.internals.pause();
         this.gameState = GameState.COMPLETE;
         this.completionState = completionState;
+        this.writableTrails.hideAllTrails();
         return true;
       },
     };

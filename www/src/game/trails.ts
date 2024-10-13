@@ -169,6 +169,13 @@ export class Trails {
   }
 
   /**
+   * Makes all trails invisible.
+   */
+  hideAllTrails(): void {
+    this._numVisible = 0;
+  }
+
+  /**
    * Moves the given trail the minimum distance within the order to make it
    * archived.  Returns false if the given trail does not belong to this object,
    * or if the trail is already archived.
@@ -256,5 +263,11 @@ export class Trails {
 
 export type ReadonlyTrails = Pick<
   Trails,
-  'order' | 'active' | 'numVisible' | 'numArchived' | 'activeTrail' | 'isArchived' | 'isVisible'
+  | 'order'
+  | 'active'
+  | 'numVisible'
+  | 'numArchived'
+  | 'activeTrail'
+  | 'isArchived'
+  | 'isVisible'
 >;

@@ -8,6 +8,7 @@ import {customElement, property, query, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
+import {CompletionState} from '../game/command';
 import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
 import {ReadonlyTrail} from '../game/trail';
@@ -415,7 +416,9 @@ export class GameView extends LitElement {
     if (changedProperties.has('puzzle')) {
       this.game = this.puzzle ? new Game(this.puzzle) : null;
       // For now at least, the trail list is always dark themed.
-      this.trailColors = this.puzzle ? new TrailColors(this.puzzle, 'dark') : null;
+      this.trailColors = this.puzzle
+        ? new TrailColors(this.puzzle, 'dark')
+        : null;
     }
   }
 
@@ -454,7 +457,8 @@ export class GameView extends LitElement {
   }
 
   private notePuzzleSolved() {
-    this.requestUpdate();
+    this.game?.markComplete(CompletionState.SOLVED);
+    this.gameUpdated();
   }
 
   private noteCellModified() {
@@ -574,6 +578,9 @@ export class GameView extends LitElement {
       game.copyFromTrail(trailForMenu);
       this.hideTrailMenu();
       this.gameUpdated();
+      if (!game.trails.active && game.marks.asGrid().isSolved()) {
+        this.notePuzzleSolved();
+      }
     }
   }
 
