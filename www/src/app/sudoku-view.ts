@@ -10,7 +10,10 @@ import {Game, GameState} from '../game/game';
 import {ReadonlyGrid, SymMatch} from '../game/grid';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
+import {ReadonlyTrails} from '../game/trails';
 import {PausePattern} from './pause-pattern';
+import {SudokuInput} from './sudoku-input';
+import {TrailColors} from './trail-colors';
 import {
   cssPixels,
   DevicePixels,
@@ -19,8 +22,6 @@ import {
   Point,
   Theme,
 } from './types';
-import {SudokuInput} from './sudoku-input';
-import {ReadonlyTrails} from 'src/game/trails';
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -119,12 +120,18 @@ export class SudokuView extends LitElement implements GridContainer {
         fill: var(--clue-fill);
       }
       .solution,
-      text.clock-text,
-      text.trail:not(.hover-loc) {
+      text.clock-text {
         font-weight: 400;
         font-family: 'Prompt';
         fill: var(--solution-fill);
         color: var(--solution-fill);
+      }
+      text.trail {
+        font-weight: 400;
+        font-family: 'Prompt';
+      }
+      text.trail.hover-loc {
+        opacity: 50% !important;
       }
       text.trail.trailhead {
         font-weight: 700;
@@ -249,6 +256,7 @@ export class SudokuView extends LitElement implements GridContainer {
           text.trail-index-3 {
             transform: translate(${cellSize * 0.3}px, ${cellSize * 0.3}px);
           }
+          ${this.renderTrailColors()}
         </style>
         ${pausePattern?.renderBackground() /*   --------------- */}
         ${this.renderGrid()}
@@ -258,6 +266,18 @@ export class SudokuView extends LitElement implements GridContainer {
       </svg>
       ${this.input?.renderMultiInputPopup()}
     `;
+  }
+
+  private renderTrailColors() {
+    const {game, trailColors} = this;
+    if (!game || !trailColors) return;
+    const numColors = game.trails.order.length;
+    const colors = trailColors.getColors(numColors);
+    return colors.map((c, i) => svg`
+        ${`text.trail.trail-${i}`} {
+          fill: ${c.toColor()};
+        }
+      `);
   }
 
   private renderGrid() {
@@ -395,9 +415,10 @@ export class SudokuView extends LitElement implements GridContainer {
   /** The game's state.  Reflects `game.state`. */
   @property({attribute: false}) gameState: GameState = GameState.UNSTARTED;
 
-  /** The game state.  */
+  /** The game.  */
   @property({attribute: false}) game: Game | null = null;
   private puzzle: ReadonlyGrid | null = null;
+  private trailColors: TrailColors | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
@@ -448,9 +469,12 @@ export class SudokuView extends LitElement implements GridContainer {
   private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
-    if (changedProperties.has('game') && this.game?.puzzle != this.puzzle) {
-      // single = on purpose
+    if (
+      changedProperties.has('game') &&
+      this.game?.puzzle != this.puzzle // single = on purpose
+    ) {
       this.puzzle = this.game ? this.game.puzzle : null;
+      this.trailColors = this.game ? new TrailColors(this.game.puzzle) : null;
       this.pausePatterns = [];
       this.updateSymmetries();
     }

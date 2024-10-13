@@ -10,9 +10,10 @@ import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {Game, GameState} from '../game/game';
 import {Grid} from '../game/grid';
+import {ReadonlyTrail} from '../game/trail';
+import {ReadonlyTrails} from '../game/trails';
 import {SudokuView} from './sudoku-view';
-import {ReadonlyTrail} from 'src/game/trail';
-import {ReadonlyTrails} from 'src/game/trails';
+import {TrailColors} from './trail-colors';
 import {setBooleanAttribute} from './utils';
 
 /** Encapsulates the entire game page. */
@@ -158,12 +159,12 @@ export class GameView extends LitElement {
   ];
 
   protected override render() {
-    const {theme, game} = this;
+    const {theme, game, trailColors} = this;
     const gameState = game?.state ?? GameState.UNSTARTED;
     return [
       this.renderTopPanel(theme, game, gameState),
       this.renderBoard(theme, game, gameState),
-      this.renderBottomPanel(theme, game, gameState),
+      this.renderBottomPanel(theme, game, gameState, trailColors),
     ];
   }
 
@@ -245,8 +246,9 @@ export class GameView extends LitElement {
     _theme: Theme,
     game: Game | null,
     gameState: GameState,
+    trailColors: TrailColors | null,
   ) {
-    if (!game) return undefined;
+    if (!game || !trailColors) return undefined;
     const button = this.renderPauseResume(gameState);
     const startOrResumeButton =
       button && gameState !== GameState.RUNNING
@@ -257,6 +259,13 @@ export class GameView extends LitElement {
     return html`
       ${startOrResumeButton}
       <div id="bottom-panel">
+        <style>
+          ${trailColors
+            .getColors(trails.order.length)
+            .map(
+              (c, i) => html` .trail.trail-${i} { color: ${c.toColor()}; } `,
+            )}
+        </style>
         <div id="trail-menu" popover @toggle=${this.trailMenuToggled}>
           <table>
             <tr>
@@ -398,12 +407,14 @@ export class GameView extends LitElement {
 
   @property({reflect: true}) private theme: Theme = 'light';
   @property({attribute: false}) puzzle: Grid | null = null;
-  @state() game: Game | null = null;
+  @state() private game: Game | null = null;
+  private trailColors: TrailColors | null = null;
   @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('puzzle')) {
       this.game = this.puzzle ? new Game(this.puzzle) : null;
+      this.trailColors = this.puzzle ? new TrailColors(this.puzzle) : null;
     }
   }
 

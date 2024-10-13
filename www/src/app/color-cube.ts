@@ -1,6 +1,6 @@
 import {LitElement, css, html, svg} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
-import {COLOR_RANGES, ColorRange} from './pause-pattern';
+import {COLOR_RANGES, ColorRange} from './colors';
 
 enum Axis {
   LIGHTNESS = 0,

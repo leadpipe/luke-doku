@@ -98,12 +98,13 @@ export class SudokuInput implements ReactiveController {
               height=${cellSize}
               />`);
       if (game.isBlank(hoverLoc) && !this.inputLoc) {
+        const {activeTrail} = game.trails;
         answer.push(svg`
           <text x=${x} y=${y} class=${
-          game.trails.activeTrail?.isEmpty
-            ? 'hover-loc trail trail-index-0 trailhead'
-            : game.trails.active
-            ? 'hover-loc trail trail-index-0'
+          activeTrail?.isEmpty
+            ? `hover-loc trail trail-index-0 trail-${activeTrail.id} trailhead`
+            : activeTrail
+            ? `hover-loc trail trail-index-0 trail-${activeTrail.id}`
             : 'hover-loc'
         }>
             ${resultToText(this.defaultResult)}
