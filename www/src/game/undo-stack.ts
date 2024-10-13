@@ -4,7 +4,7 @@ export class UndoStack {
   private readonly commands: UndoableCommand[] = [];
   private next = 0;
 
-  push(undoable: UndoableCommand) {
+  push(undoable: UndoableCommand): void {
     const {commands, next} = this;
     commands.splice(next); // delete everything after the previous item
     const prev = next - 1;
@@ -39,13 +39,12 @@ export class UndoStack {
   undo(internals: GameInternals): boolean {
     if (!this.canUndo()) return false;
     const {commands} = this;
-    while (this.next > 0) {
-      const executedCommand = commands[--this.next];
-      if (!executedCommand.undo.apply(internals)) {
+    do {
+      const undoableCommand = commands[--this.next];
+      if (!undoableCommand.undo.apply(internals)) {
         return false;
       }
-      if (!executedCommand.partialUndoStep) return true;
-    }
+    } while (commands[this.next - 1]?.partialUndoStep);
     return true;
   }
 
