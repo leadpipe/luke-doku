@@ -130,7 +130,8 @@ export class SudokuView extends LitElement implements GridContainer {
         font-weight: 700;
         font-style: italic;
       }
-      text.solution, text.trail {
+      text.solution,
+      text.trail {
         opacity: 50%;
       }
       svg.trail-active text.trail.trail-index-0 {
@@ -463,15 +464,9 @@ export class SudokuView extends LitElement implements GridContainer {
       const matches: [wasm.Sym, SymMatch][] = puzzle.bestSymmetryMatches(
         MAX_NONCONFORMING_LOCS,
       );
-      const seed = puzzle.toFlatString();
-      this.pausePatterns = matches.map(([sym, match]) => {
-        const random = new wasm.JsRandom(seed);
-        try {
-          return new PausePattern(sym, match, puzzle, this, random);
-        } finally {
-          random.free();
-        }
-      });
+      this.pausePatterns = matches.map(
+        ([sym, match]) => new PausePattern(sym, match, puzzle, this),
+      );
       this.overlayIndex = 0;
     }
   }

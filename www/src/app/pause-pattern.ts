@@ -17,32 +17,36 @@ export class PausePattern {
     private readonly match: SymMatch,
     readonly puzzle: ReadonlyGrid,
     readonly gridContainer: GridContainer,
-    random: wasm.JsRandom,
   ) {
-    const orbits = [];
-    this.angle = random.range(0, 360);
-    const cx = random.normal(0.5, 0.15);
-    const cy = random.normal(0.5, 0.15);
-    this.circleCenter = `calc(var(--size) * ${cx}) calc(var(--size) * ${cy})`;
-    const chooseColor =
-      sym === wasm.Sym.None
-        ? newMotleyChooser(random)
-        : newTwoColorChooser(random);
-    const symTransform = SYM_TRANSFORMS[sym];
-    for (const orbit of match.fullOrbits) {
-      orbits.push(
-        new OrbitShape(orbit, symTransform).init(chooseColor(), random),
-      );
+    const random = new wasm.JsRandom(puzzle.toFlatString());
+    try {
+      const orbits = [];
+      this.angle = random.range(0, 360);
+      const cx = random.normal(0.5, 0.15);
+      const cy = random.normal(0.5, 0.15);
+      this.circleCenter = `calc(var(--size) * ${cx}) calc(var(--size) * ${cy})`;
+      const chooseColor =
+        sym === wasm.Sym.None
+          ? newMotleyChooser(random)
+          : newTwoColorChooser(random);
+      const symTransform = SYM_TRANSFORMS[sym];
+      for (const orbit of match.fullOrbits) {
+        orbits.push(
+          new OrbitShape(orbit, symTransform).init(chooseColor(), random),
+        );
+      }
+      for (const orbit of match.partialOrbits) {
+        orbits.push(
+          new PartialOrbitShape(orbit, symTransform, puzzle).init(
+            chooseColor(),
+            random,
+          ),
+        );
+      }
+      this.orbits = orbits;
+    } finally {
+      random.free();
     }
-    for (const orbit of match.partialOrbits) {
-      orbits.push(
-        new PartialOrbitShape(orbit, symTransform, puzzle).init(
-          chooseColor(),
-          random,
-        ),
-      );
-    }
-    this.orbits = orbits;
   }
 
   isBroken(): boolean {
@@ -488,7 +492,10 @@ class OrbitShape {
     this.color = color.toColor();
   }
 
-  render(gridContainer: GridContainer, puzzle: ReadonlyGrid): SVGTemplateResult[] {
+  render(
+    gridContainer: GridContainer,
+    puzzle: ReadonlyGrid,
+  ): SVGTemplateResult[] {
     const {cellCenter, cellSize, theme} = gridContainer;
     const dark = theme === 'dark';
     const answer: SVGTemplateResult[] = [];
