@@ -6,7 +6,7 @@ import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
-import {Game, GameState} from '../game/game';
+import {Game, PlayState} from '../game/game';
 import {ReadonlyGrid, SymMatch} from '../game/grid';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
@@ -79,6 +79,55 @@ export class SudokuView extends LitElement implements GridContainer {
         --ga: #555;
         --g9: #666;
         --g8: #777;
+      }
+
+      #multi-input-popup {
+        display: none;
+      }
+
+      :host([playstate='running']) {
+        #multi-input-popup {
+          display: block;
+          z-index: 100;
+        }
+        #pause {
+          opacity: 0;
+          transition: opacity, 200ms;
+        }
+        #pause-background {
+          opacity: 0;
+          transition: opacity, 500ms;
+        }
+        #clues {
+          opacity: 1;
+          transition: opacity, 100ms;
+        }
+        #solution,
+        #input {
+          opacity: 1;
+          transition: opacity, 300ms;
+        }
+      }
+
+      :host([playstate='unstarted']),
+      :host([playstate='paused']) {
+        #pause {
+          opacity: 1;
+          transition: opacity, 200ms;
+        }
+        #pause-background {
+          opacity: 1;
+          transition: opacity, 500ms;
+        }
+        #clues {
+          opacity: 0;
+          transition: opacity, 100ms;
+        }
+        #solution,
+        #input {
+          opacity: 0;
+          transition: opacity, 300ms;
+        }
       }
 
       .cell-border {
@@ -209,15 +258,11 @@ export class SudokuView extends LitElement implements GridContainer {
   ];
 
   override render() {
-    const {sideSize, cellSize, padding, game, gameState} = this;
+    const {sideSize, cellSize, padding, game, playState} = this;
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
-    const showNumbers =
-      gameState === GameState.RUNNING || gameState === GameState.COMPLETE;
-    const pausePattern = showNumbers
-      ? undefined
-      : this.pausePatterns[this.overlayIndex];
+    const pausePattern = this.pausePatterns[this.overlayIndex];
 
     return html`
       <style>
@@ -258,11 +303,12 @@ export class SudokuView extends LitElement implements GridContainer {
           }
           ${this.renderTrailColors()}
         </style>
-        ${pausePattern?.renderBackground() /*   --------------- */}
-        ${this.renderGrid()}
-        ${pausePattern?.renderPattern() /*      --------------- */}
-        ${game && this.renderGameState(game, showNumbers) /* ------- */}
-        ${this.input?.renderInGrid()}
+        <g id="pause-background">${pausePattern?.renderBackground()}</g>
+        <g id="grid">${this.renderGrid()}</g>
+        <g id="pause">${pausePattern?.renderPattern()}</g>
+        <g id="clues">${game && this.renderClues(game)}</g>
+        <g id="solution">${game && this.renderGameState(game)}</g>
+        <g id="input">${this.input?.renderInGrid()}</g>
       </svg>
       ${this.input?.renderMultiInputPopup()}
     `;
@@ -319,21 +365,10 @@ export class SudokuView extends LitElement implements GridContainer {
     `;
   }
 
-  private renderGameState(game: Game, showNumbers: boolean) {
-    if (!showNumbers) return;
+  private renderClues(game: Game) {
     const brokenLocs = game.marks.asGrid().brokenLocs();
-    const answer = this.input?.renderHoverLoc() ?? [];
-    this.pushClues(game.marks, brokenLocs, answer);
-    this.pushSolutionCells(game.marks, brokenLocs, answer);
-    this.pushTrails(game.trails, answer);
-    return answer;
-  }
-
-  private pushClues(
-    marks: ReadonlyMarks,
-    brokenLocs: Set<Loc>,
-    answer: TemplateResult[],
-  ): void {
+    const answer: TemplateResult[] = [];
+    const {marks} = game;
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
       const clue = marks.getClue(loc);
@@ -345,6 +380,15 @@ export class SudokuView extends LitElement implements GridContainer {
         })}">${clue}</text>`);
       }
     }
+    return answer;
+  }
+
+  private renderGameState(game: Game) {
+    const brokenLocs = game.marks.asGrid().brokenLocs();
+    const answer = this.input?.renderHoverLoc() ?? [];
+    this.pushSolutionCells(game.marks, brokenLocs, answer);
+    this.pushTrails(game.trails, answer);
+    return answer;
   }
 
   private pushSolutionCells(
@@ -414,8 +458,8 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Whether to accept input to the puzzle. */
   @property({type: Boolean}) interactive = false;
 
-  /** The game's state.  Reflects `game.state`. */
-  @property({attribute: false}) gameState: GameState = GameState.UNSTARTED;
+  /** The game's play state.  Reflects `game.playState`. */
+  @property({reflect: true}) playState: PlayState = PlayState.UNSTARTED;
 
   /** The game.  */
   @property({attribute: false}) game: Game | null = null;
@@ -432,7 +476,7 @@ export class SudokuView extends LitElement implements GridContainer {
    * The element that lets you assign more than one possible numeral to a
    * location.
    */
-  @query('#multiInputPopup') multiInputPopup?: SVGElement;
+  @query('#multi-input-popup') multiInputPopup?: SVGElement;
 
   private resizing = false;
   private readonly resizeObserver = new ResizeObserver(async () => {
@@ -485,7 +529,9 @@ export class SudokuView extends LitElement implements GridContainer {
       updateTrailColors = true;
     }
     if (updateTrailColors) {
-      this.trailColors = this.game ? new TrailColors(this.game.puzzle, this.theme) : null;
+      this.trailColors = this.game
+        ? new TrailColors(this.game.puzzle, this.theme)
+        : null;
     }
   }
 

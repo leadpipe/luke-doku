@@ -43,8 +43,8 @@ export class Game {
   /** When the current period started, or 0. */
   private resumedTimestamp = 0;
 
-  private gameState = GameState.UNSTARTED;
-  private completionState?: CompletionState;
+  #playState = PlayState.UNSTARTED;
+  #completionState?: CompletionState;
 
   constructor(
     readonly puzzle: ReadonlyGrid,
@@ -76,28 +76,28 @@ export class Game {
       },
       resume: () => {
         if (
-          this.gameState === GameState.UNSTARTED ||
-          this.gameState === GameState.PAUSED
+          this.playState === PlayState.UNSTARTED ||
+          this.playState === PlayState.PAUSED
         ) {
           this.resumedTimestamp = Date.now();
-          this.gameState = GameState.RUNNING;
+          this.#playState = PlayState.RUNNING;
           return true;
         }
         return false;
       },
       pause: () => {
-        if (this.gameState === GameState.RUNNING) {
+        if (this.playState === PlayState.RUNNING) {
           this.priorElapsedMs = this.elapsedMs;
           this.resumedTimestamp = 0;
-          this.gameState = GameState.PAUSED;
+          this.#playState = PlayState.PAUSED;
           return true;
         }
         return false;
       },
       markComplete: completionState => {
         this.internals.pause();
-        this.gameState = GameState.COMPLETE;
-        this.completionState = completionState;
+        this.#playState = PlayState.COMPLETE;
+        this.#completionState = completionState;
         this.writableTrails.hideAllTrails();
         return true;
       },
@@ -139,12 +139,12 @@ export class Game {
     return this.trails.active ? null : this.marks.getNums(loc);
   }
 
-  get state(): GameState {
-    return this.gameState;
+  get playState(): PlayState {
+    return this.#playState;
   }
 
-  get howCompleted(): CompletionState | undefined {
-    return this.completionState;
+  get completionState(): CompletionState | undefined {
+    return this.#completionState;
   }
 
   /**
@@ -257,28 +257,28 @@ export class Game {
 }
 
 /**
- * The possible states of a Luke-doku puzzle.
+ * The possible states of play of a Luke-doku puzzle.
  */
-export enum GameState {
+export enum PlayState {
   /**
    * The grid of numbers is invisible, and the clock is stopped at 0:00.  No
    * cells have been filled in except the clues.
    */
-  UNSTARTED,
+  UNSTARTED = 'unstarted',
   /**
-   * The number are visible, the clock is ticking, and the cells can be filled
+   * The numbers are visible, the clock is ticking, and the cells can be filled
    * in.
    */
-  RUNNING,
+  RUNNING = 'running',
   /**
    * The numbers are invisible, like UNSTARTED, but the clock is stopped at some
-   * non-zero time.
+   * (probably) non-zero time.
    */
-  PAUSED,
+  PAUSED = 'paused',
   /**
    * The game is over, either because the grid has been completely filled in and
    * satisfies the Sudoku conditions, or the user has given up. The clock has
    * the total time spent on the puzzle.
    */
-  COMPLETE,
+  COMPLETE = 'complete',
 }

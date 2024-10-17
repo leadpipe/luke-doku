@@ -1,7 +1,7 @@
 import {html, LitElement, ReactiveController, svg, TemplateResult} from 'lit';
 import {classMap} from 'lit/directives/class-map.js';
 import {map} from 'lit/directives/map.js';
-import {Game, GameState} from '../game/game';
+import {Game, PlayState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
 import {
@@ -254,7 +254,7 @@ export class SudokuInput implements ReactiveController {
     this.halfCentersGap = devicePixels(halfCentersGap);
     return html`
       <svg
-        id="multiInputPopup"
+        id="multi-input-popup"
         viewBox="${-svgPadding} 0 ${toDevice(gridWidth)} ${popupHeight}"
         width=""
         height=""
@@ -379,7 +379,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   private isPossibleInputLoc(loc: Loc): boolean {
-    if (this.game.state !== GameState.RUNNING) return false;
+    if (this.game.playState !== PlayState.RUNNING) return false;
     return this.game.puzzle.get(loc) === null;
   }
 

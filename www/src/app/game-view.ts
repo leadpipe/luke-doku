@@ -9,7 +9,7 @@ import {repeat} from 'lit/directives/repeat.js';
 import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {CompletionState} from '../game/command';
-import {Game, GameState} from '../game/game';
+import {Game, PlayState} from '../game/game';
 import {Grid} from '../game/grid';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
@@ -161,18 +161,18 @@ export class GameView extends LitElement {
 
   protected override render() {
     const {theme, game, trailColors} = this;
-    const gameState = game?.state ?? GameState.UNSTARTED;
+    const playState = game?.playState ?? PlayState.UNSTARTED;
     return [
-      this.renderTopPanel(theme, game, gameState),
-      this.renderBoard(theme, game, gameState),
-      this.renderBottomPanel(theme, game, gameState, trailColors),
+      this.renderTopPanel(theme, game, playState),
+      this.renderBoard(theme, game, playState),
+      this.renderBottomPanel(theme, game, playState, trailColors),
     ];
   }
 
   private renderTopPanel(
     theme: Theme,
     game: Game | null,
-    gameState: GameState,
+    playState: PlayState,
   ) {
     const newTheme =
       theme === getCurrentSystemTheme()
@@ -192,7 +192,7 @@ export class GameView extends LitElement {
             label="${newThemeName} theme"
             data-theme=${newTheme}
           ></icon-button>
-          ${gameState === GameState.RUNNING
+          ${playState === PlayState.RUNNING
             ? html`
                 <icon-button
                   @click=${this.undoToStart}
@@ -229,12 +229,12 @@ export class GameView extends LitElement {
     `;
   }
 
-  private renderBoard(theme: Theme, game: Game | null, gameState: GameState) {
+  private renderBoard(theme: Theme, game: Game | null, playState: PlayState) {
     return html`
       <sudoku-view
         theme=${theme}
         .game=${game}
-        .gameState=${gameState}
+        .playState=${playState}
         .padding=${cssPixels(10)}
         interactive
         @cell-modified=${this.noteCellModified}
@@ -246,16 +246,16 @@ export class GameView extends LitElement {
   private renderBottomPanel(
     _theme: Theme,
     game: Game | null,
-    gameState: GameState,
+    playState: PlayState,
     trailColors: TrailColors | null,
   ) {
     if (!game || !trailColors) return undefined;
-    const button = this.renderPauseResume(gameState);
+    const button = this.renderPauseResume(playState);
     const startOrResumeButton =
-      button && gameState !== GameState.RUNNING
+      button && playState !== PlayState.RUNNING
         ? html`<div id="resume-button">${button}</div>`
         : undefined;
-    const pauseButton = gameState === GameState.RUNNING ? button : undefined;
+    const pauseButton = playState === PlayState.RUNNING ? button : undefined;
     const {trails} = game;
     return html`
       ${startOrResumeButton}
@@ -327,7 +327,7 @@ export class GameView extends LitElement {
             : ''}
           <game-clock
             .game=${game}
-            ?running=${gameState === GameState.RUNNING}
+            ?running=${playState === PlayState.RUNNING}
             @clock-ticked=${this.saveGame}
           ></game-clock>
         </div>
@@ -335,9 +335,9 @@ export class GameView extends LitElement {
     `;
   }
 
-  private renderPauseResume(gameState: GameState) {
-    switch (gameState) {
-      case GameState.UNSTARTED:
+  private renderPauseResume(playState: PlayState) {
+    switch (playState) {
+      case PlayState.UNSTARTED:
         return html`
           <icon-button
             @click=${this.resumePlay}
@@ -346,7 +346,7 @@ export class GameView extends LitElement {
             label="Start"
           ></icon-button>
         `;
-      case GameState.RUNNING:
+      case PlayState.RUNNING:
         return html`
           <icon-button
             @click=${this.pausePlay}
@@ -355,7 +355,7 @@ export class GameView extends LitElement {
             label="Pause"
           ></icon-button>
         `;
-      case GameState.PAUSED:
+      case PlayState.PAUSED:
         return html`
           <icon-button
             @click=${this.resumePlay}
