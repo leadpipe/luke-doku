@@ -11,7 +11,8 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  MarkComplete,
+  GuessSolutionCount,
+  MarkCompleted,
   Pause,
   Redo,
   RedoToEnd,
@@ -45,6 +46,7 @@ export class Game {
 
   #playState = PlayState.UNSTARTED;
   #completionState?: CompletionState;
+  #solutionCountGuess?: 1 | 2 | 3;
 
   constructor(
     readonly puzzle: ReadonlyGrid,
@@ -94,12 +96,23 @@ export class Game {
         }
         return false;
       },
-      markComplete: completionState => {
+      markCompleted: completionState => {
         this.internals.pause();
-        this.#playState = PlayState.COMPLETE;
+        this.#playState = PlayState.COMPLETED;
         this.#completionState = completionState;
         this.writableTrails.hideAllTrails();
         return true;
+      },
+      guessSolutionCount: guess => {
+        switch (guess) {
+          case 1:
+          case 2:
+          case 3:
+            this.#solutionCountGuess = guess;
+            return true;
+          default:
+            return false;
+        }
       },
     };
     // Restore historical state.
@@ -143,8 +156,14 @@ export class Game {
     return this.#playState;
   }
 
+  /** Undefined before `markCompleted` is called. */
   get completionState(): CompletionState | undefined {
     return this.#completionState;
+  }
+
+  /** Undefined before `guessSolutionCount` is called. */
+  get solutionCountGuess(): 1 | 2 | 3 | undefined {
+    return this.#solutionCountGuess;
   }
 
   /**
@@ -175,10 +194,14 @@ export class Game {
   }
 
   /**
-   * Marks this game as solved.
+   * Marks this game as completed: solved or quit.
    */
-  markComplete(completionState: CompletionState) {
-    this.execute(new MarkComplete(completionState));
+  markCompleted(completionState: CompletionState) {
+    this.execute(new MarkCompleted(completionState));
+  }
+
+  guessSolutionCount(guess: 1 | 2 | 3) {
+    this.execute(new GuessSolutionCount(guess));
   }
 
   clearCell(loc: Loc): boolean {
@@ -280,5 +303,5 @@ export enum PlayState {
    * satisfies the Sudoku conditions, or the user has given up. The clock has
    * the total time spent on the puzzle.
    */
-  COMPLETE = 'complete',
+  COMPLETED = 'completed',
 }

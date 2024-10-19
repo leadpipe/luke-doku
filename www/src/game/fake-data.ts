@@ -9,13 +9,14 @@ import {
   UndoToStart,
   RedoToEnd,
   ClearCell,
-  MarkComplete,
+  MarkCompleted,
   CreateTrail,
   ActivateTrail,
   ToggleTrailVisibility,
   ArchiveTrail,
   ToggleTrailsActive,
   CopyFromTrail,
+  GuessSolutionCount,
 } from './commands';
 import {Loc} from './loc';
 
@@ -39,30 +40,32 @@ export const FAKE_HISTORY: RecordedCommand[] = [
   {command: new ArchiveTrail(1), elapsedTimestamp: 13000},
   {command: new ToggleTrailsActive(), elapsedTimestamp: 14000},
   {command: new CopyFromTrail(1), elapsedTimestamp: 15000},
-  {command: new MarkComplete(CompletionState.QUIT), elapsedTimestamp: 16000},
+  {command: new MarkCompleted(CompletionState.QUIT), elapsedTimestamp: 16000},
+  {command: new GuessSolutionCount(2), elapsedTimestamp: 16000},
 ];
 
 // prettier-ignore
 export const FAKE_HISTORY_SERIALIZED: number[] = [
   0,                // version
   0, 123, 0,        // resume
-  4, 0, 1, 1000,    // setNum
-  5, 1, 423, 1000,  // setNums
-  6, 1000,          // undo
+  5, 0, 1, 1000,    // setNum
+  6, 1, 423, 1000,  // setNums
+  7, 1000,          // undo
   1, 1,             // pause
   0, 10123, 0,      // resume
-  7, 999,           // redo
-  8, 1000,          // undoToStart
-  9, 1000,          // redoToEnd
-  3, 0, 1000,       // clearCell
-  10, 1000,         // createTrail
-  4, 1, 4, 1000,    // setNum
-  10, 1000,         // createTrail
-  15, 0, 0,         // copyFromTrail
-  11, 0, 1000,      // activateTrail
-  12, 1, 1000,      // toggleTrailVisibility
-  13, 1, 1000,      // archiveTrail
-  14, 1000,         // toggleTrailsActive
-  15, 1, 1000,      // copyFromTrail
-  2, 1, 1000,       // markComplete (QUIT)
+  8, 999,           // redo
+  9, 1000,          // undoToStart
+  10, 1000,         // redoToEnd
+  4, 0, 1000,       // clearCell
+  11, 1000,         // createTrail
+  5, 1, 4, 1000,    // setNum
+  11, 1000,         // createTrail
+  16, 0, 0,         // copyFromTrail
+  12, 0, 1000,      // activateTrail
+  13, 1, 1000,      // toggleTrailVisibility
+  14, 1, 1000,      // archiveTrail
+  15, 1000,         // toggleTrailsActive
+  16, 1, 1000,      // copyFromTrail
+  2, 1, 1000,       // markCompleted (QUIT)
+  3, 2, 0,          // guessSolutionCount (2)
 ];

@@ -135,8 +135,6 @@ export enum CompletionState {
   SOLVED,
   /** You quit before you'd solved it. */
   QUIT,
-  /** You solved it but then guessed wrong about how many solutions there were. */
-  SOLVED_OOPS,
 }
 
 /**
@@ -149,5 +147,6 @@ export interface GameInternals {
   trails: Trails;
   resume(): boolean;
   pause(): boolean;
-  markComplete(completionState: CompletionState): boolean;
+  markCompleted(completionState: CompletionState): boolean;
+  guessSolutionCount(guess: number): boolean;
 }

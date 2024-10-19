@@ -9,7 +9,8 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  MarkComplete,
+  GuessSolutionCount,
+  MarkCompleted,
   Pause,
   Redo,
   RedoToEnd,
@@ -126,9 +127,9 @@ const pause: Serializer<typeof Pause> = {
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const markComplete: Serializer<typeof MarkComplete> = {
+const markCompleted: Serializer<typeof MarkCompleted> = {
   tag: 2,
-  ctor: MarkComplete,
+  ctor: MarkCompleted,
   serializeArgs(command, sink) {
     sink(command.completionState);
   },
@@ -136,8 +137,18 @@ const markComplete: Serializer<typeof MarkComplete> = {
     return [source()];
   },
 };
-const clearCell: Serializer<typeof ClearCell> = {
+const guessSolutionCount: Serializer<typeof GuessSolutionCount> = {
   tag: 3,
+  ctor: GuessSolutionCount,
+  serializeArgs(command, sink) {
+    sink(command.guess);
+  },
+  deserializeArgs(source) {
+    return [source()];
+  },
+};
+const clearCell: Serializer<typeof ClearCell> = {
+  tag: 4,
   ctor: ClearCell,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -147,7 +158,7 @@ const clearCell: Serializer<typeof ClearCell> = {
   },
 };
 const setNum: Serializer<typeof SetNum> = {
-  tag: 4,
+  tag: 5,
   ctor: SetNum,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -158,7 +169,7 @@ const setNum: Serializer<typeof SetNum> = {
   },
 };
 const setNums: Serializer<typeof SetNums> = {
-  tag: 5,
+  tag: 6,
   ctor: SetNums,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -169,61 +180,61 @@ const setNums: Serializer<typeof SetNums> = {
   },
 };
 const undo: Serializer<typeof Undo> = {
-  tag: 6,
+  tag: 7,
   ctor: Undo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const redo: Serializer<typeof Redo> = {
-  tag: 7,
+  tag: 8,
   ctor: Redo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const undoToStart: Serializer<typeof UndoToStart> = {
-  tag: 8,
+  tag: 9,
   ctor: UndoToStart,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const redoToEnd: Serializer<typeof RedoToEnd> = {
-  tag: 9,
+  tag: 10,
   ctor: RedoToEnd,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const createTrail: Serializer<typeof CreateTrail> = {
-  tag: 10,
+  tag: 11,
   ctor: CreateTrail,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const activateTrail: Serializer<typeof ActivateTrail> = {
-  tag: 11,
+  tag: 12,
   ctor: ActivateTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const toggleTrailVisibility: Serializer<typeof ToggleTrailVisibility> = {
-  tag: 12,
+  tag: 13,
   ctor: ToggleTrailVisibility,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const archiveTrail: Serializer<typeof ArchiveTrail> = {
-  tag: 13,
+  tag: 14,
   ctor: ArchiveTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 const toggleTrailsActive: Serializer<typeof ToggleTrailsActive> = {
-  tag: 14,
+  tag: 15,
   ctor: ToggleTrailsActive,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
 const copyFromTrail: Serializer<typeof CopyFromTrail> = {
-  tag: 15,
+  tag: 16,
   ctor: CopyFromTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
@@ -232,7 +243,8 @@ const copyFromTrail: Serializer<typeof CopyFromTrail> = {
 const serializersByTag: ReadonlyArray<Serializer<any>> = [
   resume,
   pause,
-  markComplete,
+  markCompleted,
+  guessSolutionCount,
   clearCell,
   setNum,
   setNums,

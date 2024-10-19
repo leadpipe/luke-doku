@@ -55,7 +55,10 @@ describe(`UndoStack`, () => {
       pause() {
         return true;
       },
-      markComplete(_completionState) {
+      markCompleted(_completionState) {
+        return true;
+      },
+      guessSolutionCount(_guess) {
         return true;
       },
     };
@@ -87,7 +90,10 @@ describe(`UndoStack`, () => {
 
   it(`undoes all partial undo steps that preceded the last command`, () => {
     const partialCommand = new FakeCommand(true);
-    const partial = partialCommand.execute(state.internals, 0) as UndoableCommand;
+    const partial = partialCommand.execute(
+      state.internals,
+      0,
+    ) as UndoableCommand;
     state.undoStack.push(state.undoable);
     state.undoStack.push(partial);
     state.undoStack.push(state.undoable);
@@ -108,7 +114,10 @@ describe(`UndoStack`, () => {
 
   it(`redoes all partial undo steps that precede the next full command`, () => {
     const partialCommand = new FakeCommand(true);
-    const partial = partialCommand.execute(state.internals, 0) as UndoableCommand;
+    const partial = partialCommand.execute(
+      state.internals,
+      0,
+    ) as UndoableCommand;
     state.undoStack.push(state.undoable);
     state.undoStack.push(partial);
     state.undoStack.push(state.undoable);

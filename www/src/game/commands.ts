@@ -20,13 +20,23 @@ export class Pause extends Command {
   }
 }
 
-export class MarkComplete extends Command {
+export class MarkCompleted extends Command {
   constructor(readonly completionState: CompletionState) {
     super();
   }
 
   override apply(internals: GameInternals): boolean {
-    return internals.markComplete(this.completionState);
+    return internals.markCompleted(this.completionState);
+  }
+}
+
+export class GuessSolutionCount extends Command {
+  constructor(readonly guess: number) {
+    super();
+  }
+
+  override apply(internals: GameInternals): boolean {
+    return internals.guessSolutionCount(this.guess);
   }
 }
 

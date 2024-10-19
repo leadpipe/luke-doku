@@ -457,7 +457,7 @@ export class GameView extends LitElement {
   }
 
   private notePuzzleSolved() {
-    this.game?.markComplete(CompletionState.SOLVED);
+    this.game?.markCompleted(CompletionState.SOLVED);
     this.gameUpdated();
   }
 
