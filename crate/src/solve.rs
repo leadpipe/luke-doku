@@ -9,7 +9,7 @@ mod masks;
 use ledger::*;
 
 pub struct SolutionSummary {
-  pub puzzle: Grid,
+  pub clues: Grid,
 
   /// Whether there were more solutions than the maximum number we would allow.
   /// When this is true, the `solutions` vector will have one more solution than
@@ -23,11 +23,11 @@ pub struct SolutionSummary {
 }
 
 /// Solves the given puzzle.
-pub fn solve(puzzle: &Grid, max_solutions: i32, helper: &mut dyn SearchHelper) -> SolutionSummary {
-  let factory = SearcherFactory::new(puzzle);
+pub fn solve(clues: &Grid, max_solutions: i32, helper: &mut dyn SearchHelper) -> SolutionSummary {
+  let factory = SearcherFactory::new(clues);
   let mut searcher = factory.new_searcher(helper);
   let mut summary = SolutionSummary {
-    puzzle: *puzzle,
+    clues: *clues,
     too_many_solutions: false,
     solutions: searcher.found.map_or_else(|| Vec::new(), |s| vec![s]),
   };
@@ -140,8 +140,8 @@ pub struct SearcherFactory {
 }
 
 impl SearcherFactory {
-  pub fn new(puzzle: &Grid) -> Self {
-    let result = Ledger::new(puzzle);
+  pub fn new(clues: &Grid) -> Self {
+    let result = Ledger::new(clues);
     if let Ok(mut ledger) = result {
       let result = ledger.apply_implications();
       if let Ok(twos) = result {
@@ -319,24 +319,24 @@ mod tests {
   const MAX_SOLUTIONS: i32 = 12;
 
   macro_rules! solve_test {
-    ($name:ident, $puzzle:expr, $count:expr) => {
+    ($name:ident, $clues:expr, $count:expr) => {
       paste! {
           #[test]
           fn [<test_solve_ $name>]() {
-              let puzzle = Grid::from_str($puzzle).unwrap();
-              match puzzle.state() {
+              let clues = Grid::from_str($clues).unwrap();
+              match clues.state() {
                   GridState::Broken(_) => assert!($count < 0),
                   GridState::Incomplete => assert!($count >= 0),
                   GridState::Solved(_) => panic!("unreachable"),
               }
               let mut helper = DefaultHelper();
-              let summary = solve(&puzzle, MAX_SOLUTIONS, &mut helper);
+              let summary = solve(&clues, MAX_SOLUTIONS, &mut helper);
               assert_eq!(max(0, $count), summary.solutions.len() as i32);
               assert_eq!(summary.too_many_solutions, $count > MAX_SOLUTIONS);
               for s in summary.solutions {
                 let mut s = s.grid();
-                s.intersect(&puzzle);
-                assert_eq!(s, puzzle);
+                s.intersect(&clues);
+                assert_eq!(s, clues);
               }
           }
       }

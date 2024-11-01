@@ -30,13 +30,13 @@ export class LukeDoku extends LitElement {
   override render() {
     return html`
       <gen-puzzle @puzzle-selected=${this.selectPuzzle}></gen-puzzle>
-      <game-view theme=${this.theme} .puzzle=${this.puzzle}></game-view>
+      <game-view theme=${this.theme} .clues=${this.clues}></game-view>
     `;
   }
 
   @property({reflect: true}) private theme: Theme = getCurrentTheme();
 
-  @state() private puzzle: Grid | null = null;
+  @state() private clues: Grid | null = null;
 
   private readonly themeHandler = (event: CustomEvent<Theme>) => {
     this.theme = event.detail;
@@ -53,7 +53,7 @@ export class LukeDoku extends LitElement {
   }
 
   private selectPuzzle(event: CustomEvent<Grid>) {
-    this.puzzle = event.detail;
+    this.clues = event.detail;
   }
 }
 

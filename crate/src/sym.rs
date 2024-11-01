@@ -82,13 +82,13 @@ pub enum ExplicitSym {
 }
 
 #[wasm_bindgen(js_name = "evaluateSymmetry")]
-pub fn evaluate_symmetry(sym: ExplicitSym, puzzle: &Grid) -> JsValue {
-  serde_wasm_bindgen::to_value(&Sym::from_explicit(sym).evaluate(puzzle)).unwrap()
+pub fn evaluate_symmetry(sym: ExplicitSym, clues: &Grid) -> JsValue {
+  serde_wasm_bindgen::to_value(&Sym::from_explicit(sym).evaluate(clues)).unwrap()
 }
 
 #[wasm_bindgen(js_name = "bestSymmetryMatches")]
-pub fn best_matches(puzzle: &Grid, max_nonconforming_locs: usize) -> JsValue {
-  let matches: Vec<(i32, SymMatch)> = Sym::best_matches(puzzle, max_nonconforming_locs)
+pub fn best_matches(clues: &Grid, max_nonconforming_locs: usize) -> JsValue {
+  let matches: Vec<(i32, SymMatch)> = Sym::best_matches(clues, max_nonconforming_locs)
     .into_iter()
     .map(|(s, m)| (s.explicit() as i32, m))
     .collect();
@@ -210,12 +210,12 @@ impl Sym {
   }
 
   /// Calculates how well the given puzzle matches this symmetry.
-  pub fn evaluate(self, puzzle: &Grid) -> SymMatch {
+  pub fn evaluate(self, clues: &Grid) -> SymMatch {
     let mut full_orbits = vec![];
     let mut num_nonconforming_locs = 0;
     let mut partial_orbits = vec![];
     for orbit in self.orbits() {
-      let filled_count = filled_count(orbit, puzzle);
+      let filled_count = filled_count(orbit, clues);
       num_nonconforming_locs += min(filled_count, orbit.len() - filled_count);
       if filled_count > 0 {
         if filled_count < orbit.len() {
@@ -235,10 +235,10 @@ impl Sym {
   /// Finds the symmetries that best match the given puzzle grid,
   /// disqualifying any symmetries that match with more than the given number
   /// of nonconforming locations.
-  pub fn best_matches(puzzle: &Grid, max_nonconforming_locs: usize) -> Vec<(Sym, SymMatch)> {
+  pub fn best_matches(clues: &Grid, max_nonconforming_locs: usize) -> Vec<(Sym, SymMatch)> {
     let mut answer: Vec<(Sym, SymMatch)> = vec![];
     for sym in SYMS {
-      let m = sym.evaluate(puzzle);
+      let m = sym.evaluate(clues);
       if m.num_nonconforming_locs > max_nonconforming_locs {
         // Ignore symmetries that are too far from describing this puzzle.
         continue;
@@ -265,8 +265,8 @@ impl SymMatch {
   }
 }
 
-fn filled_count(orbit: &[Loc], puzzle: &Grid) -> usize {
-  orbit.iter().filter(|loc| puzzle[**loc].is_some()).count()
+fn filled_count(orbit: &[Loc], clues: &Grid) -> usize {
+  orbit.iter().filter(|loc| clues[**loc].is_some()).count()
 }
 
 impl PartialOrd for Sym {
@@ -515,7 +515,7 @@ mod tests {
 
   #[test]
   fn best_matches() {
-    let puzzle = Grid::from_str(
+    let clues = Grid::from_str(
       r"
             . . 2 | 6 . . | . . .
             1 6 . | . 5 . | 9 . .
@@ -531,7 +531,7 @@ mod tests {
     )
     .unwrap();
 
-    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&puzzle, 8)
+    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&clues, 8)
       .iter()
       .map(|(sym, m)| (*sym, m.num_nonconforming_locs))
       .collect();
@@ -543,7 +543,7 @@ mod tests {
       ]
     );
 
-    let puzzle = Grid::from_str(
+    let clues = Grid::from_str(
       r"
             . 7 2 | . 8 . | 6 4 .
             6 1 4 | 2 . 3 | 8 5 9
@@ -559,13 +559,13 @@ mod tests {
     )
     .unwrap();
 
-    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&puzzle, 8)
+    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&clues, 8)
       .iter()
       .map(|(sym, m)| (*sym, m.num_nonconforming_locs))
       .collect();
     assert_eq!(sym_counts, &[(Sym::FullyReflective, 0)]);
 
-    let puzzle = Grid::from_str(
+    let clues = Grid::from_str(
       r"
             . 7 2 | . 8 . | 6 4 .
             6 . 4 | 2 . 3 | 8 5 9
@@ -581,7 +581,7 @@ mod tests {
     )
     .unwrap();
 
-    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&puzzle, 8)
+    let sym_counts: Vec<(Sym, usize)> = Sym::best_matches(&clues, 8)
       .iter()
       .map(|(sym, m)| (*sym, m.num_nonconforming_locs))
       .collect();

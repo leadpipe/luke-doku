@@ -538,7 +538,7 @@ export class SudokuView extends LitElement implements GridContainer {
 
   /** The game.  */
   @property({attribute: false}) game: Game | null = null;
-  private puzzle: ReadonlyGrid | null = null;
+  private clues: ReadonlyGrid | null = null;
   private trailColors: TrailColors | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
@@ -593,9 +593,9 @@ export class SudokuView extends LitElement implements GridContainer {
     let updateTrailColors = false;
     if (
       changedProperties.has('game') &&
-      this.game?.puzzle != this.puzzle // single = on purpose
+      this.game?.clues != this.clues // single = on purpose
     ) {
-      this.puzzle = this.game ? this.game.puzzle : null;
+      this.clues = this.game ? this.game.clues : null;
       updateTrailColors = true;
       this.pausePatterns = [];
       this.updateSymmetries();
@@ -605,7 +605,7 @@ export class SudokuView extends LitElement implements GridContainer {
     }
     if (updateTrailColors) {
       this.trailColors = this.game
-        ? new TrailColors(this.game.puzzle, this.theme)
+        ? new TrailColors(this.game.clues, this.theme)
         : null;
     }
   }
@@ -614,12 +614,12 @@ export class SudokuView extends LitElement implements GridContainer {
     const {game, interactive} = this;
     if (game && !this.pausePatterns.length) {
       this.input = interactive ? new SudokuInput(this, game) : undefined;
-      const {puzzle} = game;
-      const matches: [wasm.Sym, SymMatch][] = puzzle.bestSymmetryMatches(
+      const {clues} = game;
+      const matches: [wasm.Sym, SymMatch][] = clues.bestSymmetryMatches(
         MAX_NONCONFORMING_LOCS,
       );
       this.pausePatterns = matches.map(
-        ([sym, match]) => new PausePattern(sym, match, puzzle, this),
+        ([sym, match]) => new PausePattern(sym, match, clues, this),
       );
       this.overlayIndex = 0;
     }

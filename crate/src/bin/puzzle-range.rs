@@ -24,10 +24,10 @@ fn main() {
   let (min, max) = find_puzzle_range(date, i32::from(count));
   println!(
     "Smallest number of clues ({}):\n{:?}",
-    min.puzzle.len(),
+    min.clues.len(),
     min
   );
-  println!("Largest number of clues ({}):\n{:?}", max.puzzle.len(), max);
+  println!("Largest number of clues ({}):\n{:?}", max.clues.len(), max);
 }
 
 /// Finds smallest and largest Sudokus by number of clues among the first
@@ -38,7 +38,7 @@ fn find_puzzle_range(date: NaiveDate, count: i32) -> (PuzzleDesc, PuzzleDesc) {
   let mut largest = None;
   for i in 1..=count {
     let desc = ds.gen(i);
-    let len = desc.puzzle.len();
+    let len = desc.clues.len();
     let mut replace = true;
     if let Some((prev_len, _)) = smallest {
       replace = len < prev_len;

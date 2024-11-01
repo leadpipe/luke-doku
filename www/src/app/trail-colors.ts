@@ -12,8 +12,8 @@ export class TrailColors {
   private readonly seed: string;
   private readonly colors: OkLCH[] = [];
 
-  constructor(puzzle: ReadonlyGrid, private readonly theme: Theme) {
-    this.seed = puzzle.toFlatString();
+  constructor(clues: ReadonlyGrid, private readonly theme: Theme) {
+    this.seed = clues.toFlatString();
   }
 
   getColors(numTrails: number): readonly OkLCH[] {

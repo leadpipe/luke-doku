@@ -45,7 +45,7 @@ export class GenPuzzle extends LitElement {
           ? html`
               <tr>
                 <th>clues</th>
-                <td>${this.puzzleDesc.puzzle.len()}</td>
+                <td>${this.puzzleDesc.clues.len()}</td>
               </tr>
               <tr>
                 <th>solutions</th>
@@ -123,7 +123,7 @@ export class GenPuzzle extends LitElement {
       this.puzzleDesc = puzzleDesc;
       this.dispatchEvent(
         new CustomEvent('puzzle-selected', {
-          detail: new Grid(this.puzzleDesc.puzzle),
+          detail: new Grid(this.puzzleDesc.clues),
         }),
       );
     }

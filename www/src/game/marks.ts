@@ -15,7 +15,7 @@ export class Marks {
   private cells: Array<number | ReadonlySet<number> | null>;
 
   /** Bootstraps a Marks from a puzzle grid. */
-  constructor(puzzle: ReadonlyGrid);
+  constructor(clues: ReadonlyGrid);
 
   /** Clones another Marks. */
   constructor(marks: Marks);
@@ -23,16 +23,16 @@ export class Marks {
   /** Makes an empty Marks. */
   constructor();
 
-  constructor(marksOrPuzzle?: Marks | ReadonlyGrid) {
-    if (marksOrPuzzle instanceof Marks) {
-      this.cells = Array.from(marksOrPuzzle.cells);
+  constructor(marksOrClues?: Marks | ReadonlyGrid) {
+    if (marksOrClues instanceof Marks) {
+      this.cells = Array.from(marksOrClues.cells);
     } else {
       const cells = Array.from<number | null>({length: 81});
       this.cells = cells;
-      if (marksOrPuzzle) {
-        const puzzleBytes = marksOrPuzzle.bytes;
+      if (marksOrClues) {
+        const cluesBytes = marksOrClues.bytes;
         for (let loc = 0; loc < 81; ++loc) {
-          cells[loc] = puzzleBytes[loc] || null;
+          cells[loc] = cluesBytes[loc] || null;
         }
       } else {
         cells.fill(null);

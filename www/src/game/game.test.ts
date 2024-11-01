@@ -8,16 +8,16 @@ const {objectContaining} = expect;
 
 describe('Game', () => {
   it('restores a game from compatible history', () => {
-    const puzzle = new Grid(); // a blank grid
-    const game = new Game(puzzle, FAKE_HISTORY);
+    const clues = new Grid(); // a blank grid
+    const game = new Game(clues, FAKE_HISTORY);
     expect(game.marks.getNum(Loc.of(1))).toEqual(4);
     expect(game.history).toEqual(FAKE_HISTORY.map(e => objectContaining(e)));
   });
 
   it('fails to restore a game from incompatible history', () => {
-    const puzzle = new Grid();
-    puzzle.set(Loc.of(1), 9);
-    expect(() => new Game(puzzle, FAKE_HISTORY)).toThrow(
+    const clues = new Grid();
+    clues.set(Loc.of(1), 9);
+    expect(() => new Game(clues, FAKE_HISTORY)).toThrow(
       /failed to execute SetNums/,
     );
   });

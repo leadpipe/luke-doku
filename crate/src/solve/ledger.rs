@@ -21,13 +21,13 @@ impl Ledger {
   /// Makes a preliminary Ledger with the given puzzle's assignments set but
   /// all other possibilities still open.  Returns `Err(Invalid)` if the
   /// puzzle's clues are inconsistent with the rules of Sudoku.
-  pub fn new(puzzle: &Grid) -> Result<Ledger, Invalid> {
+  pub fn new(clues: &Grid) -> Result<Ledger, Invalid> {
     let mut answer = Ledger {
       asgmts: AsgmtSet::all(),
       old_asgmts: AsgmtSet::all(),
       unset: LocSet::all(),
     };
-    for asgmt in puzzle.iter() {
+    for asgmt in clues.iter() {
       if !answer.assign_from_new(asgmt) {
         return Err(Invalid);
       }

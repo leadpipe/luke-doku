@@ -49,10 +49,10 @@ export class Game {
   #solutionCountGuess?: 1 | 2 | 3;
 
   constructor(
-    readonly puzzle: ReadonlyGrid,
+    readonly clues: ReadonlyGrid,
     history: readonly RecordedCommand[] = [],
   ) {
-    this.writableMarks = new Marks(puzzle);
+    this.writableMarks = new Marks(clues);
     this.writableTrails = new Trails();
     const game = this;
     const getMarks = () => this.writableMarks;

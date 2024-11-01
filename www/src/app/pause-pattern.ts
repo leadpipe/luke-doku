@@ -22,10 +22,10 @@ export class PausePattern {
   constructor(
     readonly sym: wasm.Sym,
     private readonly match: SymMatch,
-    readonly puzzle: ReadonlyGrid,
+    readonly clues: ReadonlyGrid,
     readonly gridContainer: GridContainer,
   ) {
-    const random = new wasm.JsRandom(puzzle.toFlatString());
+    const random = new wasm.JsRandom(clues.toFlatString());
     try {
       const orbits = [];
       this.angle = random.range(0, 360);
@@ -44,7 +44,7 @@ export class PausePattern {
       }
       for (const orbit of match.partialOrbits) {
         orbits.push(
-          new PartialOrbitShape(orbit, symTransform, puzzle).init(
+          new PartialOrbitShape(orbit, symTransform, clues).init(
             chooseColor(),
             random,
           ),
@@ -82,10 +82,10 @@ export class PausePattern {
   }
 
   renderPattern() {
-    const {gridContainer, puzzle} = this;
+    const {gridContainer, clues} = this;
     const answer = [];
     for (const orbit of this.orbits) {
-      answer.push(orbit.render(gridContainer, puzzle));
+      answer.push(orbit.render(gridContainer, clues));
     }
     return answer;
   }
@@ -360,13 +360,13 @@ class OrbitShape {
 
   render(
     gridContainer: GridContainer,
-    puzzle: ReadonlyGrid,
+    clues: ReadonlyGrid,
   ): SVGTemplateResult[] {
     const {cellCenter, cellSize, theme} = gridContainer;
     const dark = theme === 'dark';
     const answer: SVGTemplateResult[] = [];
     for (const loc of this.orbit) {
-      const hasClue = puzzle.get(loc) != null;
+      const hasClue = clues.get(loc) != null;
       const [dx, dy] = cellCenter(loc);
       const scale = cellSize / 2;
       // Sets the origin at the center of the cell, and scales the axes so the
@@ -427,12 +427,12 @@ class PartialOrbitShape extends OrbitShape {
   constructor(
     orbit: readonly Loc[],
     symTransform: SymTransform,
-    puzzle: ReadonlyGrid,
+    clues: ReadonlyGrid,
   ) {
     super(orbit, symTransform);
     let numMissing = 0;
     for (const loc of orbit) {
-      if (puzzle.get(loc) == null) {
+      if (clues.get(loc) == null) {
         ++numMissing;
       }
     }
