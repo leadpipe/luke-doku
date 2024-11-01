@@ -53,7 +53,7 @@ const baseConfig = {
               .toString()
               .replaceAll(
                 '$debugMode',
-                debugMode ? `{'debug_mode': 'true'}` : '{}'
+                debugMode ? `{'debug_mode': 'true'}` : '{}',
               );
           },
         },
