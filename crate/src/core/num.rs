@@ -8,7 +8,6 @@ use seq_macro::seq;
 use std::num::NonZeroI8;
 use wasm_bindgen::convert::{FromWasmAbi, IntoWasmAbi, OptionFromWasmAbi, OptionIntoWasmAbi};
 use wasm_bindgen::describe::{inform, WasmDescribe, I8};
-use wasm_bindgen::prelude::wasm_bindgen;
 
 /// Identifies one of the 9 numerals that can can occupy a location of a
 /// Sudoku grid.
@@ -158,7 +157,6 @@ impl OptionIntoWasmAbi for Num {
 
 /// A set of `Num`s.
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[wasm_bindgen]
 pub struct NumSet(pub Bits9);
 
 impl NumSet {
