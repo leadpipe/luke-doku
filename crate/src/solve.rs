@@ -11,20 +11,15 @@ use ledger::*;
 pub struct SolutionSummary {
   pub puzzle: Grid,
 
-  /// The largest number of solutions we looked for.
-  pub max_solutions: i32,
+  /// Whether there were more solutions than the maximum number we would allow.
+  /// When this is true, the `solutions` vector will have one more solution than
+  /// the maximum number we specified.
+  pub too_many_solutions: bool,
 
-  /// The number of solutions, or `1 + max_solutions` if there are more than
-  /// that many solutions.
-  pub num_solutions: i32,
-
-  /// When `num_solutions == 1`, this has the single solution.
-  pub solution: Option<SolvedGrid>,
-
-  /// A grid with all assignments shared across all solutions, when there is
-  /// at least one solution. Sames as `solution` when `num_solutions ==
-  /// 1`.
-  pub intersection: Option<Grid>,
+  /// The possible solutions to the puzzle.  When `too_many_solutions` is true,
+  /// this may be a subset of the puzzle's solutions; when it is false, this is
+  /// the complete set of solutions.
+  pub solutions: Vec<SolvedGrid>,
 }
 
 /// Solves the given puzzle.
@@ -33,28 +28,34 @@ pub fn solve(puzzle: &Grid, max_solutions: i32, helper: &mut dyn SearchHelper) -
   let mut searcher = factory.new_searcher(helper);
   let mut summary = SolutionSummary {
     puzzle: *puzzle,
-    max_solutions,
-    num_solutions: searcher.found.iter().count() as _,
-    solution: searcher.found,
-    intersection: searcher.found.map(|sg| sg.grid()),
+    too_many_solutions: false,
+    solutions: searcher.found.map_or_else(|| Vec::new(), |s| vec![s]),
   };
-  while summary.num_solutions <= max_solutions {
+  let max = 0.max(max_solutions) as usize;
+  while summary.solutions.len() <= max {
     searcher.run(None);
     if let Some(solution) = searcher.found {
-      summary.num_solutions += 1;
-      let mut intersection = solution.grid();
-      if summary.num_solutions == 1 {
-        summary.solution = Some(solution);
-      } else {
-        summary.solution = None;
-        intersection.intersect(&summary.intersection.unwrap());
-      }
-      summary.intersection = Some(intersection);
+      summary.solutions.push(solution)
     } else {
       break;
     }
   }
+  summary.too_many_solutions = summary.solutions.len() > max;
   summary
+}
+
+impl SolutionSummary {
+  /// Counts the number of holes in the intersection of all of the solutions.
+  pub fn num_holes(&self) -> i32 {
+    if self.solutions.len() < 2 {
+      return 0
+    }
+    let mut intersection = self.solutions[0].grid();
+    for s in self.solutions.iter().skip(1) {
+      intersection.intersect(&s.grid());
+    }
+    81 - intersection.len() as i32
+  }
 }
 
 /// Callbacks for searching the Sudoku solution space.
@@ -330,20 +331,12 @@ mod tests {
               }
               let mut helper = DefaultHelper();
               let summary = solve(&puzzle, MAX_SOLUTIONS, &mut helper);
-              assert_eq!(MAX_SOLUTIONS, summary.max_solutions);
-              assert_eq!(max(0, $count), summary.num_solutions);
-              if $count == 1 {
-                  let solution = summary.solution.unwrap();
-                  let intersection = summary.intersection.unwrap();
-                  assert_eq!(solution.grid(), intersection);
-                  assert_eq!(GridState::Solved(&intersection), intersection.state());
-                  assert_eq!(summary.solution, intersection.solved_grid());
-              } else if $count > 1 {
-                  assert_eq!(None, summary.solution);
-                  assert_eq!(GridState::Incomplete, summary.intersection.unwrap().state());
-              } else {
-                  assert_eq!(None, summary.solution);
-                  assert_eq!(None, summary.intersection);
+              assert_eq!(max(0, $count), summary.solutions.len() as i32);
+              assert_eq!(summary.too_many_solutions, $count > MAX_SOLUTIONS);
+              for s in summary.solutions {
+                let mut s = s.grid();
+                s.intersect(&puzzle);
+                assert_eq!(s, puzzle);
               }
           }
       }
