@@ -49,7 +49,7 @@ export class GenPuzzle extends LitElement {
               </tr>
               <tr>
                 <th>solutions</th>
-                <td>${this.puzzleDesc.num_solutions}</td>
+                <td>${this.puzzleDesc.solutions.length}</td>
               </tr>
               ${this.puzzleDesc.gen_opts
                 ? html`
