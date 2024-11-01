@@ -130,6 +130,81 @@ export class SudokuView extends LitElement implements GridContainer {
         }
       }
 
+      :host([playstate='completed']) {
+        #clues {
+          animation: 10s infinite alternate completed-clues;
+        }
+        #solution {
+          animation: 10s infinite alternate completed-solution;
+        }
+        #pause {
+          animation: 10s infinite alternate completed-pause;
+        }
+        #pause-background {
+          animation: 10s infinite alternate completed-pause-background;
+        }
+      }
+
+      @keyframes completed-clues {
+        0% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        80% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes completed-solution {
+        0% {
+          opacity: 1;
+        }
+        15% {
+          opacity: 1;
+        }
+        45% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes completed-pause {
+        0% {
+          opacity: 0;
+        }
+        50% {
+          opacity: 0;
+        }
+        75% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes completed-pause-background {
+        0% {
+          opacity: 0;
+        }
+        10% {
+          opacity: 0;
+        }
+        60% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
       .cell-border {
         stroke: #808080;
         stroke-width: 1;
