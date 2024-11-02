@@ -118,8 +118,9 @@ export class GameView extends LitElement {
         opacity: 50%;
       }
 
-      .trail.archived > span {
-        opacity: 50%;
+      div.trail.archived {
+        opacity: 60%;
+        color: gray;
       }
 
       .trailhead {
