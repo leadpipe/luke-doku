@@ -32,7 +32,7 @@ fn main() {
 
 /// Finds smallest and largest Sudokus by number of clues among the first
 /// `count` puzzles for `date`.
-fn find_puzzle_range(date: NaiveDate, count: i32) -> (PuzzleDesc, PuzzleDesc) {
+fn find_puzzle_range(date: NaiveDate, count: i32) -> (Puzzle, Puzzle) {
   let ds = daily_solution(LogicalDate::from(date));
   let mut smallest = None;
   let mut largest = None;

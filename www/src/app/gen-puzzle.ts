@@ -89,7 +89,7 @@ export class GenPuzzle extends LitElement {
   @property({type: Number}) counter = 1;
 
   @state() private dailySolution?: wasm.DailySolution;
-  @state() private puzzleDesc?: wasm.PuzzleDesc;
+  @state() private puzzleDesc?: wasm.Puzzle;
 
   changeDate(event: Event) {
     this.dateString = (event.target as HTMLInputElement).value;
@@ -97,9 +97,7 @@ export class GenPuzzle extends LitElement {
   }
 
   private updateDailySolution() {
-    if (this.dailySolution) {
-      this.dailySolution.free();
-    }
+    this.dailySolution?.free();
     try {
       const date = wasm.LogicalDate.fromString(this.dateString);
       this.dailySolution = wasm.dailySolution(date);
