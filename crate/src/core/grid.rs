@@ -36,6 +36,12 @@ impl Grid {
     }
   }
 
+  /// Constructs a Grid from a string, or throws.
+  #[wasm_bindgen(js_name = "newFromString")]
+  pub fn new_from_string(s: &str) -> Result<Grid, String> {
+    Grid::from_str(s)
+  }
+
   /// Converts the grid to a Uint8Array.
   pub fn bytes(&self) -> Box<[u8]> {
     unsafe {
@@ -295,6 +301,11 @@ impl SolvedGrid {
       let p = (&self.0).as_ptr() as *const [Option<Num>; 81];
       Grid(*p)
     }
+  }
+
+  /// Converts to a Uint8Array.
+  pub fn bytes(&self) -> Box<[u8]> {
+    self.grid().bytes()
   }
 
   /// Index wrapper for wasm.

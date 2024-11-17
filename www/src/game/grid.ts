@@ -14,8 +14,16 @@ export class Grid {
   constructor(grid: wasm.Grid);
   /** Duplicates a grid, or constructs an empty grid if no grid is supplied. */
   constructor(grid?: ReadonlyGrid);
+  /**
+   * Constructs a grid from a string, such as one produced by `toString` or
+   * `toFlatString`.
+   */
+  constructor(grid: string);
 
-  constructor(grid?: wasm.Grid | ReadonlyGrid) {
+  constructor(grid?: wasm.Grid | ReadonlyGrid | string) {
+    if (typeof grid === 'string') {
+      grid = wasm.Grid.newFromString(grid);
+    }
     this.array =
       grid instanceof wasm.Grid
         ? grid.bytes()
@@ -69,12 +77,9 @@ export class Grid {
 
   /** Returns an 81-character representation of this grid, with dots for blanks. */
   toFlatString(): string {
-    const grid = this.toWasm();
-    try {
-      return grid.toFlatString();
-    } finally {
-      grid.free();
-    }
+    return Array.prototype.map
+      .call(this.array, n => n?.toString() ?? '.')
+      .join('');
   }
 
   /**
