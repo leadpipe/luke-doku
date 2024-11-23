@@ -1,11 +1,8 @@
 import {Loc} from '../game/loc';
+import {Branded} from '../game/types';
 
 export type Theme = 'dark' | 'light';
 export type ThemeOrAuto = Theme | 'auto';
-
-declare const brandKey: unique symbol;
-type Brand<B> = {[brandKey]: B};
-export type Branded<T, B> = T & Brand<B>;
 
 export type DevicePixels = Branded<number, 'DevicePixels'>;
 export type CssPixels = Branded<number, 'CssPixels'>;
