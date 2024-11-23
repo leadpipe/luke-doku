@@ -510,7 +510,8 @@ export class SudokuInput implements ReactiveController {
   private checkSolved(game: Game) {
     if (!game.trails.active && game.marks.asGrid().isSolved()) {
       this.host.dispatchEvent(
-        new CustomEvent('puzzle-solved', {
+        customEvent('puzzle-solved', {
+          detail: undefined,
           bubbles: true,
           composed: true,
         }),

@@ -10,7 +10,7 @@ import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {CompletionState} from '../game/command';
 import {Game, PlayState} from '../game/game';
-import {Grid} from '../game/grid';
+import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {SudokuView} from './sudoku-view';
@@ -408,17 +408,17 @@ export class GameView extends LitElement {
   }
 
   @property({reflect: true}) private theme: Theme = 'light';
-  @property({attribute: false}) clues: Grid | null = null;
+  @property({attribute: false}) sudoku: Sudoku | null = null;
   @state() private game: Game | null = null;
   private trailColors: TrailColors | null = null;
   @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
-    if (changedProperties.has('clues')) {
-      this.game = this.clues ? new Game(this.clues) : null;
+    if (changedProperties.has('sudoku')) {
+      this.game = this.sudoku ? new Game(this.sudoku.clues) : null;
       // For now at least, the trail list is always dark themed.
-      this.trailColors = this.clues
-        ? new TrailColors(this.clues, 'dark')
+      this.trailColors = this.sudoku
+        ? new TrailColors(this.sudoku.clues, 'dark')
         : null;
     }
   }

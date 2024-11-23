@@ -3,7 +3,8 @@ import './events';
 import {css, html, LitElement, PropertyValues} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
-import {Grid} from '../game/grid';
+import {Sudoku} from '../game/sudoku';
+import {customEvent} from './events';
 
 @customElement('gen-puzzle')
 export class GenPuzzle extends LitElement {
@@ -78,6 +79,9 @@ export class GenPuzzle extends LitElement {
             `
           : html` (illegal date or counter) `}
       </table>
+      ${this.puzzleDesc
+        ? html` <button @click=${this.selectPuzzle}>Select puzzle</button> `
+        : html``}
     `;
   }
 
@@ -119,9 +123,17 @@ export class GenPuzzle extends LitElement {
         this.puzzleDesc.free();
       }
       this.puzzleDesc = puzzleDesc;
+    }
+  }
+
+  selectPuzzle(event_: Event) {
+    const {puzzleDesc} = this;
+    if (puzzleDesc) {
       this.dispatchEvent(
-        new CustomEvent('puzzle-selected', {
-          detail: new Grid(this.puzzleDesc.clues),
+        customEvent('puzzle-selected', {
+          detail: Sudoku.fromWasm(puzzleDesc),
+          bubbles: true,
+          composed: true,
         }),
       );
     }

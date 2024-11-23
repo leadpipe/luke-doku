@@ -1,10 +1,10 @@
-import { Loc } from 'src/game/loc';
-import {Grid} from '../game/grid';
+import {Loc} from '../game/loc';
+import {Sudoku} from '../game/sudoku';
 import {Theme} from './types';
 
 declare global {
   interface HTMLElementEventMap {
-    'puzzle-selected': CustomEvent<Grid>;
+    'puzzle-selected': CustomEvent<Sudoku>;
     /**
      * Sent by game-clock when another second has passed.  The event detail
      * tells whether the clock was being shown.
@@ -13,7 +13,7 @@ declare global {
     /**
      * Sent by sudoku-view (via sudoku-input) when the puzzle has been solved.
      */
-    'puzzle-solved': CustomEvent;
+    'puzzle-solved': CustomEvent<void>;
     /**
      * Sent by sudoku-view (via sudoku-input) when the user has changed the
      * contents of a cell. The event detail says which cell.
