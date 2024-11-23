@@ -12,6 +12,8 @@ export class Grid {
 
   /** Constructs a grid from the contents of a Rust grid. */
   constructor(grid: wasm.Grid);
+  /** Constructs a grid from the contents of a Rust solved grid. */
+  constructor(grid: wasm.SolvedGrid);
   /** Duplicates a grid, or constructs an empty grid if no grid is supplied. */
   constructor(grid?: ReadonlyGrid);
   /**
@@ -20,12 +22,12 @@ export class Grid {
    */
   constructor(grid: string);
 
-  constructor(grid?: wasm.Grid | ReadonlyGrid | string) {
+  constructor(grid?: wasm.Grid | wasm.SolvedGrid | ReadonlyGrid | string) {
     if (typeof grid === 'string') {
       grid = wasm.Grid.newFromString(grid);
     }
     this.array =
-      grid instanceof wasm.Grid
+      grid instanceof wasm.Grid || grid instanceof wasm.SolvedGrid
         ? grid.bytes()
         : grid
         ? new Uint8Array(grid.bytes)
