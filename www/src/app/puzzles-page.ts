@@ -6,9 +6,14 @@ import * as wasm from 'luke-doku-rust';
 import {Sudoku} from '../game/sudoku';
 import {customEvent} from './events';
 
-@customElement('gen-puzzle')
-export class GenPuzzle extends LitElement {
+@customElement('puzzles-page')
+export class PuzzlesPage extends LitElement {
   static override styles = css`
+    :host {
+      display: flex;
+      flex-direction: column;
+      margin: auto;
+    }
     table {
       margin: auto;
     }
@@ -142,6 +147,6 @@ export class GenPuzzle extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'gen-puzzle': GenPuzzle;
+    'puzzles-page': PuzzlesPage;
   }
 }

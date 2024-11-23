@@ -1,6 +1,6 @@
 import './events';
-import './game-view';
-import './gen-puzzle';
+import './puzzles-page';
+import './solve-page';
 import './sudoku-view';
 
 import {css, html, LitElement, TemplateResult} from 'lit';
@@ -20,12 +20,12 @@ export class LukeDoku extends LitElement {
       display: block;
     }
 
-    gen-puzzle {
+    puzzles-page {
       width: 300px;
       margin-top: 32px;
     }
 
-    game-view {
+    solve-page {
       margin: auto;
     }
   `;
@@ -38,11 +38,11 @@ export class LukeDoku extends LitElement {
     switch (this.page) {
       case 'solve':
         return html`
-          <game-view theme=${this.theme} .sudoku=${this.sudoku}></game-view>
+          <solve-page theme=${this.theme} .sudoku=${this.sudoku}></solve-page>
         `;
       case 'puzzles':
         return html`
-          <gen-puzzle @puzzle-selected=${this.selectPuzzle}></gen-puzzle>
+          <puzzles-page @puzzle-selected=${this.selectPuzzle}></puzzles-page>
         `;
       default:
         ensureExhaustiveSwitch(this.page);

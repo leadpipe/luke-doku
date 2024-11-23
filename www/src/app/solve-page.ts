@@ -18,8 +18,8 @@ import {TrailColors} from './trail-colors';
 import {setBooleanAttribute} from './utils';
 
 /** Encapsulates the entire game page. */
-@customElement('game-view')
-export class GameView extends LitElement {
+@customElement('solve-page')
+export class SolvePage extends LitElement {
   static override styles = [
     css`
       :host {
@@ -53,7 +53,6 @@ export class GameView extends LitElement {
 
       #bottom-panel {
         flex: 1 0 auto;
-        width: 100%;
         display: grid;
         grid-template-columns: 3fr 1fr;
         justify-content: space-between;
@@ -650,6 +649,6 @@ export class GameView extends LitElement {
 
 declare global {
   interface HTMLElementTagNameMap {
-    'game-view': GameView;
+    'solve-page': SolvePage;
   }
 }
