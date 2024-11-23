@@ -22,6 +22,17 @@ declare global {
   }
 }
 
+type CustomEventPayload<T> = T extends CustomEvent<infer U> ? U : never;
+export function customEvent<
+  EventName extends keyof HTMLElementEventMap,
+  Payload extends CustomEventPayload<HTMLElementEventMap[EventName]>,
+>(
+  eventName: EventName,
+  payload: Omit<CustomEventInit<Payload>, 'detail'> & {detail: Payload},
+): CustomEvent<Payload> {
+  return new CustomEvent(eventName, payload);
+}
+
 /**
  * The custom events sent by the preferences module.
  */
@@ -31,6 +42,16 @@ export interface PrefsEventMap {
 
   /** Sent by prefs when the showClock pref changes. */
   'show-clock': CustomEvent<boolean>;
+}
+
+export function prefsEvent<
+  EventName extends keyof PrefsEventMap,
+  Payload extends CustomEventPayload<PrefsEventMap[EventName]>,
+>(
+  eventName: EventName,
+  payload: Omit<CustomEventInit<Payload>, 'detail'> & {detail: Payload},
+): CustomEvent<Payload> {
+  return new CustomEvent(eventName, payload);
 }
 
 export class PrefsEventTarget extends EventTarget {

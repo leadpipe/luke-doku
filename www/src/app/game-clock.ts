@@ -5,6 +5,7 @@ import './mat-icon';
 import {css, html, LitElement, PropertyValues} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 import {Game} from '../game/game';
+import {customEvent} from './events';
 import {getShowClock, setShowClock} from './prefs';
 
 /**
@@ -71,7 +72,7 @@ export class GameClock extends LitElement {
   private clockTicked() {
     this.requestUpdate();
     this.dispatchEvent(
-      new CustomEvent('clock-ticked', {
+      customEvent('clock-ticked', {
         detail: getShowClock(),
         bubbles: true,
         composed: true,

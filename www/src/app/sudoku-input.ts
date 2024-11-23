@@ -4,6 +4,7 @@ import {map} from 'lit/directives/map.js';
 import {Game, PlayState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
+import {customEvent} from './events';
 import {
   cssPixels,
   devicePixels,
@@ -519,7 +520,7 @@ export class SudokuInput implements ReactiveController {
 
   private cellModified(loc: Loc) {
     this.host.dispatchEvent(
-      new CustomEvent('cell-modified', {
+      customEvent('cell-modified', {
         detail: loc,
         bubbles: true,
         composed: true,
