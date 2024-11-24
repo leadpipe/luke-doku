@@ -334,7 +334,7 @@ export class SudokuView extends LitElement implements GridContainer {
   ];
 
   override render() {
-    const {sideSize, cellSize, padding, game, playState} = this;
+    const {sideSize, cellSize, padding, game} = this;
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;

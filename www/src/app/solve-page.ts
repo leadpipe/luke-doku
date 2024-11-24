@@ -6,17 +6,17 @@ import './sudoku-view';
 import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
-import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
-import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {CompletionState} from '../game/command';
 import {Game, PlayState} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
+import {customEvent} from './events';
+import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
-import {setBooleanAttribute} from './utils';
-import {customEvent} from './events';
+import {Theme, ThemeOrAuto, cssPixels} from './types';
+import {findDataString, setBooleanAttribute} from './utils';
 
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
@@ -519,13 +519,8 @@ export class SolvePage extends LitElement {
   }
 
   private getTrailIndex(event: Event): number | null {
-    const target = event.target as HTMLElement;
-    for (let el: HTMLElement | null = target; el; el = el.parentElement) {
-      if (el.dataset.index != null) {
-        return Number(el.dataset.index);
-      }
-    }
-    return null;
+    const string = findDataString(event, 'index');
+    return string != null ? Number(string) : null;
   }
 
   private toggleTrailVisibility(event: Event) {

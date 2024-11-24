@@ -6,9 +6,9 @@ import './sudoku-view';
 import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {Sudoku} from '../game/sudoku';
+import {ensureExhaustiveSwitch} from '../game/utils';
 import {getCurrentTheme, prefsTarget} from './prefs';
 import {Theme} from './types';
-import {ensureExhaustiveSwitch} from './utils';
 
 type Page = 'solve' | 'puzzles';
 
@@ -18,11 +18,6 @@ export class LukeDoku extends LitElement {
   static override styles = css`
     :host {
       display: block;
-    }
-
-    puzzles-page {
-      width: 300px;
-      margin-top: 32px;
     }
 
     solve-page {
@@ -41,9 +36,7 @@ export class LukeDoku extends LitElement {
           <solve-page theme=${this.theme} .sudoku=${this.sudoku}></solve-page>
         `;
       case 'puzzles':
-        return html`
-          <puzzles-page></puzzles-page>
-        `;
+        return html` <puzzles-page></puzzles-page> `;
       default:
         ensureExhaustiveSwitch(page);
     }
