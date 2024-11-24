@@ -22,3 +22,10 @@ export function dateString(date: wasm.LogicalDate | Date): DateString {
   date.free();
   return answer;
 }
+
+/**
+ * The canonical representation of a Sudoku puzzle as the flat string
+ * representation of its clues: a row-major list of each location, with either
+ * the numeral in the location or a period meaning the location is empty.
+ */
+export type CluesString = Branded<string, 'Clues'>;

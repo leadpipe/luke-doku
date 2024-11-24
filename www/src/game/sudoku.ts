@@ -1,6 +1,6 @@
 import * as wasm from 'luke-doku-rust';
 import {Grid, ReadonlyGrid} from './grid';
-import {dateString, DateString} from './types';
+import {CluesString, dateString, DateString} from './types';
 
 /**
  * Describes a Sudoku puzzle.
@@ -15,6 +15,10 @@ export class Sudoku {
     /** If it's a puzzle imported from elsewhere, a description of where it comes from. */
     readonly source?: string,
   ) {}
+
+  cluesString(): CluesString {
+    return this.clues.toFlatString();
+  }
 
   static fromWasm(puzzle: wasm.Puzzle, source?: string): Sudoku {
     return new Sudoku(
