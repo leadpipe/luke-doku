@@ -17,11 +17,18 @@ export function setBooleanAttribute(
 }
 
 /**
- * Gets the compiler to ensure that a value being switched on (or tested using
- * if statements) has had all possible values eliminated.  So if you change your
- * code to allow another value, your call to this function will stop compiling.
- * @param value The value being exhaustively switched on.
+ * Searches up the DOM tree, starting from the target of the given event, for a
+ * data item with the given name.
+ * @param event The event whose target lives within an element containing a data
+ * item
+ * @param name The name of the data item
+ * @returns The value of the named data item, or null if it is not found
  */
-export function ensureExhaustiveSwitch(value: never): never {
-  throw new Error(value);
+export function findDataString(event: Event, name: string): string | null {
+  const target = event.target as HTMLElement;
+  for (let el: HTMLElement | null = target; el; el = el.parentElement) {
+    const answer = el.dataset[name];
+    if (answer != null) return answer;
+  }
+  return null;
 }
