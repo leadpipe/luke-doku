@@ -81,7 +81,7 @@ export class Grid {
   /** Returns an 81-character representation of this grid, with dots for blanks. */
   toFlatString(): CluesString {
     return Array.prototype.map
-      .call(this.array, n => n?.toString() ?? '.')
+      .call(this.array, n => n ? n.toString() : '.')
       .join('') as CluesString;
   }
 
