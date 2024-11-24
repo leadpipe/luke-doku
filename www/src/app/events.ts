@@ -4,7 +4,10 @@ import {Theme} from './types';
 
 declare global {
   interface HTMLElementEventMap {
-    'puzzle-selected': CustomEvent<Sudoku>;
+    /**
+     * Sent to switch to the solve page showing the given Sudoku.
+     */
+    'play-puzzle': CustomEvent<Sudoku>;
     /**
      * Sent by game-clock when another second has passed.  The event detail
      * tells whether the clock was being shown.
@@ -19,6 +22,10 @@ declare global {
      * contents of a cell. The event detail says which cell.
      */
     'cell-modified': CustomEvent<Loc>;
+    /**
+     * Sent to return to the puzzles page.
+     */
+    'show-puzzles-page': CustomEvent<void>;
   }
 }
 

@@ -135,7 +135,7 @@ export class PuzzlesPage extends LitElement {
     const {puzzleDesc} = this;
     if (puzzleDesc) {
       this.dispatchEvent(
-        customEvent('puzzle-selected', {
+        customEvent('play-puzzle', {
           detail: Sudoku.fromWasm(puzzleDesc),
           bubbles: true,
           composed: true,

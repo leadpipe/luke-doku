@@ -31,21 +31,21 @@ export class LukeDoku extends LitElement {
   `;
 
   override render() {
-    return this.renderPage();
+    return this.renderPage(this.page);
   }
 
-  private renderPage(): TemplateResult {
-    switch (this.page) {
+  private renderPage(page: Page): TemplateResult {
+    switch (page) {
       case 'solve':
         return html`
           <solve-page theme=${this.theme} .sudoku=${this.sudoku}></solve-page>
         `;
       case 'puzzles':
         return html`
-          <puzzles-page @puzzle-selected=${this.selectPuzzle}></puzzles-page>
+          <puzzles-page></puzzles-page>
         `;
       default:
-        ensureExhaustiveSwitch(this.page);
+        ensureExhaustiveSwitch(page);
     }
   }
 
@@ -53,6 +53,12 @@ export class LukeDoku extends LitElement {
 
   @state() private sudoku: Sudoku | null = null;
   @state() page: Page = 'puzzles';
+
+  constructor() {
+    super();
+    this.addEventListener('play-puzzle', e => this.selectPuzzle(e));
+    this.addEventListener('show-puzzles-page', () => this.showPuzzlesPage());
+  }
 
   private readonly themeHandler = (event: CustomEvent<Theme>) => {
     this.theme = event.detail;
@@ -71,6 +77,10 @@ export class LukeDoku extends LitElement {
   private selectPuzzle(event: CustomEvent<Sudoku>) {
     this.sudoku = event.detail;
     this.page = 'solve';
+  }
+
+  private showPuzzlesPage() {
+    this.page = 'puzzles';
   }
 }
 
