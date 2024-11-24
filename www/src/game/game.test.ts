@@ -3,13 +3,15 @@ import {FAKE_HISTORY} from './fake-data';
 import {Game} from './game';
 import {Grid} from './grid';
 import {Loc} from './loc';
+import { Sudoku } from './sudoku';
 
 const {objectContaining} = expect;
 
 describe('Game', () => {
   it('restores a game from compatible history', () => {
     const clues = new Grid(); // a blank grid
-    const game = new Game(clues, FAKE_HISTORY);
+    const sudoku = new Sudoku(clues, []);
+    const game = new Game(sudoku, FAKE_HISTORY);
     expect(game.marks.getNum(Loc.of(1))).toEqual(4);
     expect(game.history).toEqual(FAKE_HISTORY.map(e => objectContaining(e)));
   });
@@ -17,13 +19,14 @@ describe('Game', () => {
   it('fails to restore a game from incompatible history', () => {
     const clues = new Grid();
     clues.set(Loc.of(1), 9);
-    expect(() => new Game(clues, FAKE_HISTORY)).toThrow(
+    const sudoku = new Sudoku(clues, []);
+    expect(() => new Game(sudoku, FAKE_HISTORY)).toThrow(
       /failed to execute SetNums/,
     );
   });
 
   it(`handles repeated undos of creating a trail`, () => {
-    const game = new Game(new Grid());
+    const game = new Game(new Sudoku(new Grid(), []));
     game.createTrail();
     expect(game.trails.order.length).toBe(1);
     game.undo();
@@ -41,7 +44,7 @@ describe('Game', () => {
   });
 
   it(`preserves the trailhead when copying a trail to an empty trail`, () => {
-    const game = new Game(new Grid());
+    const game = new Game(new Sudoku(new Grid(), []));
     game.createTrail();
     game.setNum(Loc.of(1), 2);
     game.setNum(Loc.of(0), 1);

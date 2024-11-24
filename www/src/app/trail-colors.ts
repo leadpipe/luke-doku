@@ -1,5 +1,5 @@
 import * as wasm from 'luke-doku-rust';
-import {ReadonlyGrid} from '../game/grid';
+import {CluesString} from '../game/types';
 import {COLOR_RANGES, mod, OkLCH, randomColorIndex} from './colors';
 import {Theme} from './types';
 
@@ -9,12 +9,12 @@ import {Theme} from './types';
  * the list of trails.
  */
 export class TrailColors {
-  private readonly seed: string;
   private readonly colors: OkLCH[] = [];
 
-  constructor(clues: ReadonlyGrid, private readonly theme: Theme) {
-    this.seed = clues.toFlatString();
-  }
+  constructor(
+    private readonly seed: CluesString,
+    private readonly theme: Theme,
+  ) {}
 
   getColors(numTrails: number): readonly OkLCH[] {
     if (numTrails > this.colors.length) {

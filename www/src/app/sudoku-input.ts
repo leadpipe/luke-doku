@@ -381,7 +381,7 @@ export class SudokuInput implements ReactiveController {
 
   private isPossibleInputLoc(loc: Loc): boolean {
     if (this.game.playState !== PlayState.RUNNING) return false;
-    return this.game.clues.get(loc) === null;
+    return this.game.sudoku.clues.get(loc) === null;
   }
 
   private readonly keyHandler = (event: KeyboardEvent) =>

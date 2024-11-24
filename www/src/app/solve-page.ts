@@ -16,6 +16,7 @@ import {ReadonlyTrails} from '../game/trails';
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {setBooleanAttribute} from './utils';
+import {customEvent} from './events';
 
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
@@ -185,6 +186,12 @@ export class SolvePage extends LitElement {
     return html`
       <div id="top-panel">
         <div>
+          <icon-button
+            @click=${this.showPuzzlesPage}
+            iconName="arrow_back"
+            title="Show the puzzles page"
+            label="Puzzles"
+          ></icon-button>
           <icon-button
             @click=${this.setTheme}
             iconName=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
@@ -414,10 +421,10 @@ export class SolvePage extends LitElement {
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('sudoku')) {
-      this.game = this.sudoku ? new Game(this.sudoku.clues) : null;
+      this.game = this.sudoku ? new Game(this.sudoku) : null;
       // For now at least, the trail list is always dark themed.
       this.trailColors = this.sudoku
-        ? new TrailColors(this.sudoku.clues, 'dark')
+        ? new TrailColors(this.sudoku.cluesString(), 'dark')
         : null;
     }
   }
@@ -425,6 +432,16 @@ export class SolvePage extends LitElement {
   private setTheme(event: Event) {
     const theme = (event.target as HTMLElement).dataset.theme;
     setPreferredTheme(theme as ThemeOrAuto);
+  }
+
+  private showPuzzlesPage(event_: Event) {
+    this.dispatchEvent(
+      customEvent('show-puzzles-page', {
+        composed: true,
+        bubbles: true,
+        detail: undefined,
+      }),
+    );
   }
 
   private gameUpdated() {

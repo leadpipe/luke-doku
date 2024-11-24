@@ -24,9 +24,9 @@ import {
   Undo,
   UndoToStart,
 } from './commands';
-import {ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {Marks, ReadonlyMarks} from './marks';
+import {Sudoku} from './sudoku';
 import {ReadonlyTrail} from './trail';
 import {ReadonlyTrails, Trails} from './trails';
 import {UndoStack} from './undo-stack';
@@ -49,10 +49,10 @@ export class Game {
   #solutionCountGuess?: 1 | 2 | 3;
 
   constructor(
-    readonly clues: ReadonlyGrid,
+    readonly sudoku: Sudoku,
     history: readonly RecordedCommand[] = [],
   ) {
-    this.writableMarks = new Marks(clues);
+    this.writableMarks = new Marks(sudoku.clues);
     this.writableTrails = new Trails();
     const game = this;
     const getMarks = () => this.writableMarks;

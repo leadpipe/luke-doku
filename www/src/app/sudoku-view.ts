@@ -7,9 +7,10 @@ import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
 import * as wasm from 'luke-doku-rust';
 import {Game, PlayState} from '../game/game';
-import {ReadonlyGrid, SymMatch} from '../game/grid';
+import {SymMatch} from '../game/grid';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
+import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrails} from '../game/trails';
 import {PausePattern} from './pause-pattern';
 import {SudokuInput} from './sudoku-input';
@@ -538,7 +539,7 @@ export class SudokuView extends LitElement implements GridContainer {
 
   /** The game.  */
   @property({attribute: false}) game: Game | null = null;
-  private clues: ReadonlyGrid | null = null;
+  private sudoku: Sudoku | null = null;
   private trailColors: TrailColors | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
@@ -593,9 +594,9 @@ export class SudokuView extends LitElement implements GridContainer {
     let updateTrailColors = false;
     if (
       changedProperties.has('game') &&
-      this.game?.clues != this.clues // single = on purpose
+      this.game?.sudoku != this.sudoku // single = on purpose
     ) {
-      this.clues = this.game ? this.game.clues : null;
+      this.sudoku = this.game ? this.game.sudoku : null;
       updateTrailColors = true;
       this.pausePatterns = [];
       this.updateSymmetries();
@@ -605,7 +606,7 @@ export class SudokuView extends LitElement implements GridContainer {
     }
     if (updateTrailColors) {
       this.trailColors = this.game
-        ? new TrailColors(this.game.clues, this.theme)
+        ? new TrailColors(this.game.sudoku.cluesString(), this.theme)
         : null;
     }
   }
@@ -614,7 +615,7 @@ export class SudokuView extends LitElement implements GridContainer {
     const {game, interactive} = this;
     if (game && !this.pausePatterns.length) {
       this.input = interactive ? new SudokuInput(this, game) : undefined;
-      const {clues} = game;
+      const {clues} = game.sudoku;
       const matches: [wasm.Sym, SymMatch][] = clues.bestSymmetryMatches(
         MAX_NONCONFORMING_LOCS,
       );
