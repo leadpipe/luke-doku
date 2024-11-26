@@ -36,7 +36,7 @@ export class Grid {
   }
 
   /** Creates a Rust Grid from the contents of this object. */
-  private toWasm(): wasm.Grid {
+  toWasm(): wasm.Grid {
     // Note: the fallback to .new() below should never happen in real life
     return wasm.Grid.newFromBytes(this.array) ?? wasm.Grid.new();
   }
@@ -116,53 +116,7 @@ export class Grid {
       grid.free();
     }
   }
-
-  /** Returns an array of symmetry matches for this grid. */
-  bestSymmetryMatches(
-    maxNonconformingLocs: number,
-  ): Array<[wasm.Sym, SymMatch]> {
-    const grid = this.toWasm();
-    try {
-      return wasm
-        .bestSymmetryMatches(grid, maxNonconformingLocs)
-        .map(([sym, match]: [wasm.Sym, WasmSymMatch]) => {
-          return [
-            sym,
-            {
-              fullOrbits: match.full_orbits.map(orbitToLocs),
-              numNonconformingLocs: match.num_nonconforming_locs,
-              partialOrbits: match.partial_orbits.map(orbitToLocs),
-            },
-          ];
-        });
-    } finally {
-      grid.free();
-    }
-  }
 }
 
 /** A Grid that you can't modify. */
 export type ReadonlyGrid = Omit<Grid, 'set'>;
-
-/**
- * The wasm code matches the possible symmetries of the Sudoku board against the
- * clues of a given puzzle to produce one or more of these objects.
- */
-export declare interface SymMatch {
-  fullOrbits: Loc[][];
-  numNonconformingLocs: number;
-  partialOrbits: Loc[][];
-}
-
-/**
- * This is the interface of the match objects returned from Rust.
- */
-declare interface WasmSymMatch {
-  full_orbits: number[][];
-  num_nonconforming_locs: number;
-  partial_orbits: number[][];
-}
-
-function orbitToLocs(orbit: number[]): Loc[] {
-  return orbit.map(loc => Loc.of(loc));
-}

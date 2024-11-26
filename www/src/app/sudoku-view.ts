@@ -5,9 +5,7 @@ import {css, html, LitElement, PropertyValues, svg, TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
-import * as wasm from 'luke-doku-rust';
 import {Game, PlayState} from '../game/game';
-import {SymMatch} from '../game/grid';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
 import {Sudoku} from '../game/sudoku';
@@ -23,12 +21,6 @@ import {
   Point,
   Theme,
 } from './types';
-
-/**
- * The largest number of puzzle locations that don't conform to a symmetry
- * we'll still count as matching it.
- */
-const MAX_NONCONFORMING_LOCS = 8;
 
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
@@ -615,12 +607,8 @@ export class SudokuView extends LitElement implements GridContainer {
     const {game, interactive} = this;
     if (game && !this.pausePatterns.length) {
       this.input = interactive ? new SudokuInput(this, game) : undefined;
-      const {clues} = game.sudoku;
-      const matches: [wasm.Sym, SymMatch][] = clues.bestSymmetryMatches(
-        MAX_NONCONFORMING_LOCS,
-      );
-      this.pausePatterns = matches.map(
-        ([sym, match]) => new PausePattern(sym, match, clues, this),
+      this.pausePatterns = game.sudoku.symmetryMatches.map(
+        symMatch => new PausePattern(symMatch, game.sudoku.clues, this),
       );
       this.overlayIndex = 0;
     }

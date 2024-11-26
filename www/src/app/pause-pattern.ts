@@ -1,7 +1,8 @@
 import {svg, SVGTemplateResult} from 'lit';
 import * as wasm from 'luke-doku-rust';
+import {ReadonlyGrid} from '../game/grid';
 import {Loc} from '../game/loc';
-import {ReadonlyGrid, SymMatch} from '../game/grid';
+import {SymMatch} from '../game/sudoku';
 import {GridContainer} from './types';
 import {
   COLOR_RANGES,
@@ -20,10 +21,9 @@ export class PausePattern {
   private readonly circleCenter: string;
 
   constructor(
-    readonly sym: wasm.Sym,
-    private readonly match: SymMatch,
-    readonly clues: ReadonlyGrid,
-    readonly gridContainer: GridContainer,
+    private readonly symMatch: SymMatch,
+    private readonly clues: ReadonlyGrid,
+    private readonly gridContainer: GridContainer,
   ) {
     const random = new wasm.JsRandom(clues.toFlatString());
     try {
@@ -33,16 +33,16 @@ export class PausePattern {
       const cy = random.normal(0.5, 0.15);
       this.circleCenter = `calc(var(--size) * ${cx}) calc(var(--size) * ${cy})`;
       const chooseColor =
-        sym === wasm.Sym.None
+        symMatch.sym === wasm.Sym.None
           ? newMotleyChooser(random)
           : newTwoColorChooser(random);
-      const symTransform = SYM_TRANSFORMS[sym];
-      for (const orbit of match.fullOrbits) {
+      const symTransform = SYM_TRANSFORMS[symMatch.sym];
+      for (const orbit of symMatch.fullOrbits) {
         orbits.push(
           new OrbitShape(orbit, symTransform).init(chooseColor(), random),
         );
       }
-      for (const orbit of match.partialOrbits) {
+      for (const orbit of symMatch.partialOrbits) {
         orbits.push(
           new PartialOrbitShape(orbit, symTransform, clues).init(
             chooseColor(),
@@ -57,7 +57,7 @@ export class PausePattern {
   }
 
   isBroken(): boolean {
-    return this.match.numNonconformingLocs > 0;
+    return this.symMatch.numNonconformingLocs > 0;
   }
 
   renderBackground() {
@@ -91,7 +91,7 @@ export class PausePattern {
   }
 
   private renderBgClass() {
-    switch (this.sym) {
+    switch (this.symMatch.sym) {
       case wasm.Sym.Rotation180:
         return svg`
           --angle: ${this.angle}deg;
