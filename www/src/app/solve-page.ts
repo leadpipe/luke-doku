@@ -12,7 +12,12 @@ import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {customEvent} from './events';
-import {getCurrentSystemTheme, setPreferredTheme} from './prefs';
+import {
+  getCurrentSystemTheme,
+  getCurrentTheme,
+  prefsTarget,
+  setPreferredTheme,
+} from './prefs';
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
@@ -161,28 +166,24 @@ export class SolvePage extends LitElement {
   ];
 
   protected override render() {
-    const {theme, game, trailColors} = this;
+    const {game, trailColors} = this;
     const playState = game?.playState ?? PlayState.UNSTARTED;
     return [
-      this.renderTopPanel(theme, game, playState),
-      this.renderBoard(theme, game, playState),
-      this.renderBottomPanel(theme, game, playState, trailColors),
+      this.renderTopPanel(game, playState),
+      this.renderBoard(game, playState),
+      this.renderBottomPanel(game, playState, trailColors),
     ];
   }
 
-  private renderTopPanel(
-    theme: Theme,
-    game: Game | null,
-    playState: PlayState,
-  ) {
+  private renderTopPanel(game: Game | null, playState: PlayState) {
+    const theme = getCurrentTheme();
     const newTheme =
       theme === getCurrentSystemTheme()
         ? theme === 'light'
           ? 'dark'
           : 'light'
         : 'auto';
-    const newThemeName =
-      newTheme === 'auto' ? 'System' : newTheme === 'dark' ? 'Dark' : 'Light';
+    const newThemeName = newTheme.charAt(0).toUpperCase() + newTheme.slice(1);
     return html`
       <div id="top-panel">
         <div>
@@ -196,7 +197,7 @@ export class SolvePage extends LitElement {
             @click=${this.setTheme}
             iconName=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
             title="Switch to ${newThemeName} theme"
-            label="${newThemeName} theme"
+            label="${newThemeName}"
             data-theme=${newTheme}
           ></icon-button>
           ${playState === PlayState.RUNNING
@@ -236,10 +237,9 @@ export class SolvePage extends LitElement {
     `;
   }
 
-  private renderBoard(theme: Theme, game: Game | null, playState: PlayState) {
+  private renderBoard(game: Game | null, playState: PlayState) {
     return html`
       <sudoku-view
-        theme=${theme}
         .game=${game}
         .playState=${playState}
         .padding=${cssPixels(10)}
@@ -251,7 +251,6 @@ export class SolvePage extends LitElement {
   }
 
   private renderBottomPanel(
-    _theme: Theme,
     game: Game | null,
     playState: PlayState,
     trailColors: TrailColors | null,
@@ -413,20 +412,36 @@ export class SolvePage extends LitElement {
     `;
   }
 
-  @property({reflect: true}) private theme: Theme = 'light';
   @property({attribute: false}) sudoku: Sudoku | null = null;
   @state() private game: Game | null = null;
-  private trailColors: TrailColors | null = null;
+  @state() private trailColors: TrailColors | null = null;
   @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('sudoku')) {
       this.game = this.sudoku ? new Game(this.sudoku) : null;
-      // For now at least, the trail list is always dark themed.
-      this.trailColors = this.sudoku
-        ? new TrailColors(this.sudoku.cluesString(), 'dark')
-        : null;
+      this.updateTrailColors();
     }
+  }
+
+  private readonly themeHandler = () => {
+    this.updateTrailColors();
+  };
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    prefsTarget.addEventListener('current-theme', this.themeHandler);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    prefsTarget.removeEventListener('current-theme', this.themeHandler);
+  }
+
+  private updateTrailColors() {
+    this.trailColors = this.sudoku
+      ? new TrailColors(this.sudoku.cluesString())
+      : null;
   }
 
   private setTheme(event: Event) {

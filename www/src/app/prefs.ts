@@ -34,7 +34,11 @@ export function getPreferredTheme(): ThemeOrAuto {
   return preferredTheme;
 }
 
+// The meta tag defining the app's color scheme.
+const colorScheme = document.querySelector('meta[name="color-scheme"]');
+
 export function setPreferredTheme(theme: ThemeOrAuto) {
+  colorScheme?.setAttribute('content', theme === 'auto' ? 'light dark' : theme);
   if (theme !== preferredTheme) {
     const prev = getCurrentTheme();
     preferredTheme = theme;

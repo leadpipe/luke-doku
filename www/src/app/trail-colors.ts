@@ -1,7 +1,7 @@
 import * as wasm from 'luke-doku-rust';
 import {CluesString} from '../game/types';
 import {COLOR_RANGES, mod, OkLCH, randomColorIndex} from './colors';
-import {Theme} from './types';
+import { getCurrentTheme } from './prefs';
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A
@@ -13,7 +13,6 @@ export class TrailColors {
 
   constructor(
     private readonly seed: CluesString,
-    private readonly theme: Theme,
   ) {}
 
   getColors(numTrails: number): readonly OkLCH[] {
@@ -30,7 +29,7 @@ export class TrailColors {
     try {
       colors.length = 0;
       let index = randomColorIndex(random);
-      const lightnessSlider = this.theme === 'light' ? 0 : 1;
+      const lightnessSlider = getCurrentTheme() === 'light' ? 0 : 1;
       const chromaSlider = 1; // Maximum chroma
       for (let i = 0; i < count; ++i) {
         colors.push(

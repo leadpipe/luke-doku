@@ -69,6 +69,11 @@ export class PausePattern {
             height: 100%;
             ${this.renderBgClass()}
           }
+          .x {
+            fill: none;
+            stroke: light-dark('#5f5f5f4c', '#a0a0a04c');
+            stroke-width: 0.2;
+          }
         </style>
         <foreignObject
           x="0"
@@ -362,8 +367,7 @@ class OrbitShape {
     gridContainer: GridContainer,
     clues: ReadonlyGrid,
   ): SVGTemplateResult[] {
-    const {cellCenter, cellSize, theme} = gridContainer;
-    const dark = theme === 'dark';
+    const {cellCenter, cellSize} = gridContainer;
     const answer: SVGTemplateResult[] = [];
     for (const loc of this.orbit) {
       const hasClue = clues.get(loc) != null;
@@ -373,7 +377,7 @@ class OrbitShape {
       // cell borders are at ±1.
       answer.push(svg`
         <g transform="translate(${dx} ${dy}) scale(${scale})">
-          ${this.renderShape(loc.row, loc.col, hasClue, dark)}
+          ${this.renderShape(loc.row, loc.col, hasClue)}
         </g>`);
     }
     return answer;
@@ -383,7 +387,6 @@ class OrbitShape {
     row: number,
     col: number,
     hasClue: boolean,
-    _dark: boolean,
   ): SVGTemplateResult[] {
     const renderedParts = [];
     for (const op of this.symTransform(row, col)) {
@@ -450,7 +453,6 @@ class PartialOrbitShape extends OrbitShape {
     row: number,
     col: number,
     hasClue: boolean,
-    dark: boolean,
   ): SVGTemplateResult[] {
     let drawX;
     let renderedParts: SVGTemplateResult[];
@@ -458,14 +460,12 @@ class PartialOrbitShape extends OrbitShape {
       drawX = hasClue;
       renderedParts = [];
     } else {
-      renderedParts = super.renderShape(row, col, hasClue, dark);
+      renderedParts = super.renderShape(row, col, hasClue);
       drawX = !hasClue;
     }
     if (drawX) {
       renderedParts.push(
-        svg`<path fill="none"
-                  stroke=${dark ? '#5f5f5f4c' : '#a0a0a04c'}
-                  stroke-width="0.2"
+        svg`<path class="x"
                   d="
                     M -0.75,-0.75
                     L +0.75,+0.75

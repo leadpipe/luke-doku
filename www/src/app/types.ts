@@ -51,6 +51,4 @@ export interface GridContainer {
    * are both between 0 and 8 inclusive.
    */
   cellCenter(loc: Loc): Point;
-
-  readonly theme: Theme;
 }

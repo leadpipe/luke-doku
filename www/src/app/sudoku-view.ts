@@ -21,6 +21,7 @@ import {
   Point,
   Theme,
 } from './types';
+import {prefsTarget} from './prefs';
 
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
@@ -38,40 +39,22 @@ export class SudokuView extends LitElement implements GridContainer {
         user-select: none;
         -webkit-user-select: none;
 
-        --block-border: #111;
-        --hover-loc: #bdd4f9;
-        --hover-loc-text: #2222;
-        --clue-fill: #222;
-        --solution-fill: #222;
-        --clock-fill: #f0f0f0e0;
-        --target-fill: #e0e0e040;
-        --selection-fill: #bdfe;
-        --broken-fill: #f00;
+        --block-border: light-dark(#111, #eee);
+        --hover-loc: light-dark(#bdd4f9, #339);
+        --hover-loc-text: light-dark(#2222, #aaac);
+        --clue-fill: light-dark(#222, #eee);
+        --solution-fill: light-dark(#222, #ccc);
+        --clock-fill: light-dark(#f0f0f0e0, #202020e0);
+        --target-fill: light-dark(#e0e0e040, #30303040);
+        --selection-fill: light-dark(#bdfe, #337e);
+        --broken-fill: light-dark(#f00, #337e);
 
-        --gf: #fff;
-        --gd: #ddd;
-        --gc: #ccc;
-        --ga: #aaa;
-        --g9: #999;
-        --g8: #888;
-      }
-
-      :host([theme='dark']) {
-        --block-border: #eee;
-        --hover-loc: #339;
-        --hover-loc-text: #aaac;
-        --clue-fill: #eee;
-        --solution-fill: #ccc;
-        --clock-fill: #202020e0;
-        --target-fill: #30303040;
-        --selection-fill: #337e;
-
-        --gf: #000;
-        --gd: #222;
-        --gc: #333;
-        --ga: #555;
-        --g9: #666;
-        --g8: #777;
+        --gf: light-dark(#fff, #000);
+        --gd: light-dark(#ddd, #222);
+        --gc: light-dark(#ccc, #333);
+        --ga: light-dark(#aaa, #555);
+        --g9: light-dark(#999, #666);
+        --g8: light-dark(#888, #777);
       }
 
       #multi-input-popup {
@@ -517,9 +500,6 @@ export class SudokuView extends LitElement implements GridContainer {
     }
   }
 
-  /** Light or dark mode. */
-  @property({reflect: true}) theme: Theme = 'light';
-
   /** Padding on all 4 sides of the Sudoku grid. */
   @property({converter: Number}) padding = cssPixels(0);
 
@@ -532,7 +512,7 @@ export class SudokuView extends LitElement implements GridContainer {
   /** The game.  */
   @property({attribute: false}) game: Game | null = null;
   private sudoku: Sudoku | null = null;
-  private trailColors: TrailColors | null = null;
+  @state() private trailColors: TrailColors | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
@@ -556,14 +536,20 @@ export class SudokuView extends LitElement implements GridContainer {
     }, 20);
   });
 
+  private readonly themeHandler = () => {
+    this.updateTrailColors();
+  };
+
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
+    prefsTarget.addEventListener('current-theme', this.themeHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.resizeObserver.unobserve(this);
+    prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
   // From the GridContainer interface.
@@ -583,23 +569,14 @@ export class SudokuView extends LitElement implements GridContainer {
   private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
-    let updateTrailColors = false;
     if (
       changedProperties.has('game') &&
       this.game?.sudoku != this.sudoku // single = on purpose
     ) {
       this.sudoku = this.game ? this.game.sudoku : null;
-      updateTrailColors = true;
       this.pausePatterns = [];
       this.updateSymmetries();
-    }
-    if (changedProperties.has('theme')) {
-      updateTrailColors = true;
-    }
-    if (updateTrailColors) {
-      this.trailColors = this.game
-        ? new TrailColors(this.game.sudoku.cluesString(), this.theme)
-        : null;
+      this.updateTrailColors();
     }
   }
 
@@ -612,6 +589,12 @@ export class SudokuView extends LitElement implements GridContainer {
       );
       this.overlayIndex = 0;
     }
+  }
+
+  private updateTrailColors() {
+    this.trailColors = this.game
+      ? new TrailColors(this.game.sudoku.cluesString())
+      : null;
   }
 
   /** The number of device pixels in the thick grid lines. */

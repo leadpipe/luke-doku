@@ -7,8 +7,6 @@ import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {Sudoku} from '../game/sudoku';
 import {ensureExhaustiveSwitch} from '../game/utils';
-import {getCurrentTheme, prefsTarget} from './prefs';
-import {Theme} from './types';
 
 type Page = 'solve' | 'puzzles';
 
@@ -32,17 +30,13 @@ export class LukeDoku extends LitElement {
   private renderPage(page: Page): TemplateResult {
     switch (page) {
       case 'solve':
-        return html`
-          <solve-page theme=${this.theme} .sudoku=${this.sudoku}></solve-page>
-        `;
+        return html` <solve-page .sudoku=${this.sudoku}></solve-page> `;
       case 'puzzles':
         return html` <puzzles-page></puzzles-page> `;
       default:
         ensureExhaustiveSwitch(page);
     }
   }
-
-  @property({reflect: true}) private theme: Theme = getCurrentTheme();
 
   @state() private sudoku: Sudoku | null = null;
   @state() page: Page = 'puzzles';
@@ -51,20 +45,6 @@ export class LukeDoku extends LitElement {
     super();
     this.addEventListener('play-puzzle', e => this.selectPuzzle(e));
     this.addEventListener('show-puzzles-page', () => this.showPuzzlesPage());
-  }
-
-  private readonly themeHandler = (event: CustomEvent<Theme>) => {
-    this.theme = event.detail;
-  };
-
-  override connectedCallback(): void {
-    super.connectedCallback();
-    prefsTarget.addEventListener('current-theme', this.themeHandler);
-  }
-
-  override disconnectedCallback(): void {
-    super.disconnectedCallback();
-    prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
   private selectPuzzle(event: CustomEvent<Sudoku>) {
