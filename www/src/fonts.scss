@@ -1,19 +1,34 @@
-@use "@fontsource/material-icons/scss/mixins" as MaterialIcons;
-@use "@fontsource/merriweather-sans/scss/mixins" as MerriweatherSans;
-@use "@fontsource/prompt/scss/mixins" as Prompt;
+@use '@fontsource/lumanosimo/scss/mixins' as Lumanosimo;
+@use '@fontsource/material-icons/scss/mixins' as MaterialIcons;
+@use '@fontsource/merriweather-sans/scss/mixins' as MerriweatherSans;
+@use '@fontsource/prompt/scss/mixins' as Prompt;
 
-@include MaterialIcons.faces(
-  $weights: (400),
+@include Lumanosimo.faces(
+  $weights: (
+    400,
+  ),
   $display: block,
-  $formats: woff2,
+  $formats: woff2
+);
+@include MaterialIcons.faces(
+  $weights: (
+    400,
+  ),
+  $display: block,
+  $formats: woff2
 );
 @include MerriweatherSans.faces(
-  $weights: (800),
+  $weights: (
+    400,
+  ),
   $display: block,
-  $formats: woff2,
+  $formats: woff2
 );
 @include Prompt.faces(
-  $weights: (400, 700),
+  $weights: (
+    400,
+    700,
+  ),
   $display: block,
-  $formats: woff2,
+  $formats: woff2
 );

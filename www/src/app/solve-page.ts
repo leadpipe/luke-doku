@@ -29,7 +29,7 @@ export class SolvePage extends LitElement {
   static override styles = [
     css`
       :host {
-        padding-top: var(--page-grid-gap);
+        height: 100vh;
         display: flex;
         flex-direction: column;
         align-items: center;
@@ -39,6 +39,7 @@ export class SolvePage extends LitElement {
       }
 
       #top-panel {
+        margin-top: var(--page-grid-gap);
         margin-bottom: 16px;
         display: flex;
         justify-content: center;
@@ -178,11 +179,11 @@ export class SolvePage extends LitElement {
   private renderTopPanel(game: Game | null, playState: PlayState) {
     const {theme} = this;
     const newTheme =
-      theme === getCurrentSystemTheme()
-        ? theme === 'light'
-          ? 'dark'
-          : 'light'
-        : 'auto';
+      theme === getCurrentSystemTheme() ?
+        theme === 'light' ?
+          'dark'
+        : 'light'
+      : 'auto';
     const newThemeName = newTheme.charAt(0).toUpperCase() + newTheme.slice(1);
     return html`
       <div id="top-panel">
@@ -200,38 +201,38 @@ export class SolvePage extends LitElement {
             label="${newThemeName}"
             data-theme=${newTheme}
           ></icon-button>
-          ${playState === PlayState.RUNNING
-            ? html`
-                <icon-button
-                  @click=${this.undoToStart}
-                  iconName="first_page"
-                  ?disabled=${!game?.canUndo()}
-                  title="Undo to start"
-                  label="Undo all"
-                ></icon-button>
-                <icon-button
-                  @click=${this.undo}
-                  iconName="undo"
-                  ?disabled=${!game?.canUndo()}
-                  title="Undo"
-                  label="Undo"
-                ></icon-button>
-                <icon-button
-                  @click=${this.redo}
-                  iconName="redo"
-                  ?disabled=${!game?.canRedo()}
-                  title="Redo"
-                  label="Redo"
-                ></icon-button>
-                <icon-button
-                  @click=${this.redoToEnd}
-                  iconName="last_page"
-                  ?disabled=${!game?.canRedo()}
-                  title="Redo to end"
-                  label="Redo all"
-                ></icon-button>
-              `
-            : ''}
+          ${playState === PlayState.RUNNING ?
+            html`
+              <icon-button
+                @click=${this.undoToStart}
+                iconName="first_page"
+                ?disabled=${!game?.canUndo()}
+                title="Undo to start"
+                label="Undo all"
+              ></icon-button>
+              <icon-button
+                @click=${this.undo}
+                iconName="undo"
+                ?disabled=${!game?.canUndo()}
+                title="Undo"
+                label="Undo"
+              ></icon-button>
+              <icon-button
+                @click=${this.redo}
+                iconName="redo"
+                ?disabled=${!game?.canRedo()}
+                title="Redo"
+                label="Redo"
+              ></icon-button>
+              <icon-button
+                @click=${this.redoToEnd}
+                iconName="last_page"
+                ?disabled=${!game?.canRedo()}
+                title="Redo to end"
+                label="Redo all"
+              ></icon-button>
+            `
+          : ''}
         </div>
       </div>
     `;
@@ -258,9 +259,9 @@ export class SolvePage extends LitElement {
     if (!game || !trailColors) return undefined;
     const button = this.renderPauseResume(playState);
     const startOrResumeButton =
-      button && playState !== PlayState.RUNNING
-        ? html`<div id="resume-button">${button}</div>`
-        : undefined;
+      button && playState !== PlayState.RUNNING ?
+        html`<div id="resume-button">${button}</div>`
+      : undefined;
     const pauseButton = playState === PlayState.RUNNING ? button : undefined;
     const {trails} = game;
     return html`
@@ -301,34 +302,34 @@ export class SolvePage extends LitElement {
           </table>
         </div>
         <div id="trails">
-          ${pauseButton
-            ? repeat(
-                trails.order,
-                t => t.id,
-                (t, i) => this.renderTrailItem(trails, t, i),
-              )
-            : ''}
+          ${pauseButton ?
+            repeat(
+              trails.order,
+              t => t.id,
+              (t, i) => this.renderTrailItem(trails, t, i),
+            )
+          : ''}
         </div>
         <div id="bottom-controls">
-          ${pauseButton
-            ? html`
-                <div id="global-trail-controls">
-                  <icon-button
-                    @click=${this.toggleTrailsActive}
-                    iconName=${trails.active ? 'toggle_on' : 'toggle_off'}
-                    label=${trails.active ? 'Active' : 'Inactive'}
-                    ?disabled=${trails.order.length === 0}
-                  ></icon-button>
-                  <icon-button
-                    @click=${this.createTrail}
-                    iconName="hiking"
-                    label="New trail"
-                    ?disabled=${trails.activeTrail?.isEmpty}
-                  ></icon-button>
-                </div>
-                <div id="pause-button">${pauseButton}</div>
-              `
-            : ''}
+          ${pauseButton ?
+            html`
+              <div id="global-trail-controls">
+                <icon-button
+                  @click=${this.toggleTrailsActive}
+                  iconName=${trails.active ? 'toggle_on' : 'toggle_off'}
+                  label=${trails.active ? 'Active' : 'Inactive'}
+                  ?disabled=${trails.order.length === 0}
+                ></icon-button>
+                <icon-button
+                  @click=${this.createTrail}
+                  iconName="hiking"
+                  label="New trail"
+                  ?disabled=${trails.activeTrail?.isEmpty}
+                ></icon-button>
+              </div>
+              <div id="pause-button">${pauseButton}</div>
+            `
+          : ''}
           <game-clock
             .game=${game}
             ?running=${playState === PlayState.RUNNING}
@@ -389,12 +390,12 @@ export class SolvePage extends LitElement {
         >
           <span class="trail-number">${1 + trail.id}:</span>
           <span class="trail-assignment">
-            ${trailhead
-              ? html`
-                  <span class="trailhead">${trail.get(trailhead)}</span> ➔
-                  ${trailhead}
-                `
-              : '—'}
+            ${trailhead ?
+              html`
+                <span class="trailhead">${trail.get(trailhead)}</span> ➔
+                ${trailhead}
+              `
+            : '—'}
           </span>
           <span class="trail-length">${trail.getAssignedCount()}</span>
         </span>
@@ -419,9 +420,8 @@ export class SolvePage extends LitElement {
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('sudoku')) {
       this.game = this.sudoku ? new Game(this.sudoku) : null;
-      this.trailColors = this.sudoku
-        ? new TrailColors(this.sudoku.cluesString())
-        : null;
+      this.trailColors =
+        this.sudoku ? new TrailColors(this.sudoku.cluesString()) : null;
     }
   }
 

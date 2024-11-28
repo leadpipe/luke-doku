@@ -11,6 +11,7 @@ import {ReadonlyMarks} from '../game/marks';
 import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrails} from '../game/trails';
 import {PausePattern} from './pause-pattern';
+import {CLUES_FONT, SOLUTION_FONT} from './styles';
 import {SudokuInput} from './sudoku-input';
 import {TrailColors} from './trail-colors';
 import {
@@ -19,9 +20,7 @@ import {
   devicePixels,
   GridContainer,
   Point,
-  Theme,
 } from './types';
-import {prefsTarget} from './prefs';
 
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
@@ -211,24 +210,24 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       text.hover-loc {
         font-weight: 400;
-        font-family: 'Prompt';
+        font-family: ${SOLUTION_FONT};
         fill: var(--hover-loc-text);
       }
       text.clue {
         font-weight: 700;
-        font-family: 'Merriweather Sans';
+        font-family: ${CLUES_FONT};
         fill: var(--clue-fill);
       }
       .solution,
       text.clock-text {
         font-weight: 400;
-        font-family: 'Prompt';
+        font-family: ${SOLUTION_FONT};
         fill: var(--solution-fill);
         color: var(--solution-fill);
       }
       text.trail {
         font-weight: 400;
-        font-family: 'Prompt';
+        font-family: ${SOLUTION_FONT};
       }
       text.trail.hover-loc {
         opacity: 50% !important;
@@ -427,8 +426,8 @@ export class SudokuView extends LitElement implements GridContainer {
         const [x, y] = cellCenter(loc);
         answer.push(svg`
           <text x=${x} y=${y} class="clue ${classMap({
-          broken: brokenLocs.has(loc),
-        })}">${clue}</text>`);
+            broken: brokenLocs.has(loc),
+          })}">${clue}</text>`);
       }
     }
     return answer;
@@ -456,18 +455,15 @@ export class SudokuView extends LitElement implements GridContainer {
       if (size === 1) {
         answer.push(svg`
           <text x=${x} y=${y} class="solution ${classMap({
-          broken: brokenLocs.has(loc),
-        })}">${nums.values().next().value}</text>`);
+            broken: brokenLocs.has(loc),
+          })}">${nums.values().next().value}</text>`);
       } else {
         const {cellSize} = this;
         const cls =
-          size > 5
-            ? 'xsmall'
-            : size > 3
-            ? 'small'
-            : size > 2
-            ? 'medium'
-            : 'large';
+          size > 5 ? 'xsmall'
+          : size > 3 ? 'small'
+          : size > 2 ? 'medium'
+          : 'large';
         answer.push(svg`
           <foreignObject
             x=${x - cellSize / 2} y=${y - cellSize / 2}
@@ -570,9 +566,8 @@ export class SudokuView extends LitElement implements GridContainer {
       this.sudoku = this.game ? this.game.sudoku : null;
       this.pausePatterns = [];
       this.updateSymmetries();
-      this.trailColors = this.game
-        ? new TrailColors(this.game.sudoku.cluesString())
-        : null;
+      this.trailColors =
+        this.game ? new TrailColors(this.game.sudoku.cluesString()) : null;
     }
   }
 
@@ -622,7 +617,9 @@ export class SudokuView extends LitElement implements GridContainer {
     size -= 2 * this.padding;
     let sideSize = devicePixelRatio * size;
     const blockBorderWidth = (this.blockBorderWidth =
-      sideSize < 150 ? 1 : sideSize < 200 ? 2 : 3);
+      sideSize < 150 ? 1
+      : sideSize < 200 ? 2
+      : 3);
     const cellSize = (this._cellSize = devicePixels(
       Math.floor((sideSize - 4 * blockBorderWidth - 6 * 1) / 9),
     ));

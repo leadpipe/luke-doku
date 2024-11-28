@@ -4,7 +4,7 @@ import './solve-page';
 import './sudoku-view';
 
 import {css, html, LitElement, TemplateResult} from 'lit';
-import {customElement, property, state} from 'lit/decorators.js';
+import {customElement, state} from 'lit/decorators.js';
 import {Sudoku} from '../game/sudoku';
 import {ensureExhaustiveSwitch} from '../game/utils';
 
@@ -16,10 +16,6 @@ export class LukeDoku extends LitElement {
   static override styles = css`
     :host {
       display: block;
-    }
-
-    solve-page {
-      margin: auto;
     }
   `;
 

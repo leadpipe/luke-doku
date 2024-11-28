@@ -5,9 +5,10 @@ import {customElement} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
 import {Game} from '../game/game';
 import {Sudoku} from '../game/sudoku';
+import {CluesString} from '../game/types';
 import {customEvent} from './events';
-import {CluesString} from 'src/game/types';
-import { findDataString } from './utils';
+import {LOGO_FONT} from './styles';
+import {findDataString} from './utils';
 
 @customElement('puzzles-page')
 export class PuzzlesPage extends LitElement {
@@ -15,6 +16,10 @@ export class PuzzlesPage extends LitElement {
     :host {
       display: block;
       margin: 0 20px;
+    }
+    h1 {
+      font-family: ${LOGO_FONT};
+      font-size: 48px;
     }
     .puzzle-list {
       display: flex;
