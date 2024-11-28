@@ -1,11 +1,15 @@
+'use strict';
+
 const WasmPackPlugin = require('@wasm-tool/wasm-pack-plugin');
 const {CleanWebpackPlugin} = require('clean-webpack-plugin');
 const CopyPlugin = require('copy-webpack-plugin');
+const ESLintPlugin = require('eslint-webpack-plugin');
 const ForkTsCheckerWebpackPlugin = require('fork-ts-checker-webpack-plugin');
 const path = require('path');
 const FontPreloadPlugin = require('webpack-font-preload-plugin');
 const WorkboxPlugin = require('workbox-webpack-plugin');
 
+var __dirname;
 let debugMode = true;
 const baseConfig = {
   entry: './src/bootstrap.js',
@@ -39,6 +43,11 @@ const baseConfig = {
   },
   plugins: [
     new CleanWebpackPlugin(),
+    new ESLintPlugin({
+      configType: 'flat',
+      failOnWarning: true,
+      files: 'src/**/*.ts',
+    }),
     new WasmPackPlugin({
       crateDirectory: path.resolve(__dirname, '../crate'),
       outName: 'luke_doku',

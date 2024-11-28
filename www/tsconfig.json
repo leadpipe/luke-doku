@@ -19,6 +19,7 @@
   },
   "include": [
     "./src",
-    "node_modules/lit-scss-loader/types.d.ts"
+    "node_modules/lit-scss-loader/types.d.ts",
+    "eslint.config.cjs"
   ]
 }
