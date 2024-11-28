@@ -28,7 +28,7 @@ export class TrailColors {
       let index = randomColorIndex(random);
       const chromaSlider = 1; // Maximum chroma
       const darkSlider = 1; // Maximum lightness for dark mode
-      const lightSlider = 0.5; // Half lightness for light mode
+      const lightSlider = 0; // Minimum lightness for light mode
       for (let i = 0; i < count; ++i) {
         const range = COLOR_RANGES[index];
         const dark = range.randomHue(random, darkSlider, chromaSlider);
