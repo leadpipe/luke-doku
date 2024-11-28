@@ -1,6 +1,5 @@
 import * as wasm from 'luke-doku-rust';
 
-
 /**
  * A color in the okLCH space.
  */
@@ -32,6 +31,10 @@ export function minmax(x: number, min: number, max: number): number {
   return x < min ? min : x > max ? max : x;
 }
 
+function interpolate(lo: number, hi: number, slider: number): number {
+  return lo + slider * (hi - lo);
+}
+
 export class ColorRange {
   constructor(readonly name: string, readonly lo: OkLCH, readonly hi: OkLCH) {}
 
@@ -51,9 +54,8 @@ export class ColorRange {
     chromaSlider: number,
   ): OkLCH {
     return new OkLCH(
-      this.lo.lightness +
-        lightnessSlider * (this.hi.lightness - this.lo.lightness),
-      this.lo.chroma + chromaSlider * (this.hi.chroma - this.lo.chroma),
+      interpolate(this.lo.lightness, this.hi.lightness, lightnessSlider),
+      interpolate(this.lo.chroma, this.hi.chroma, chromaSlider),
       random.range(this.lo.hue, this.hi.hue),
     );
   }
@@ -105,10 +107,23 @@ export class ColorRange {
     hueSlider: number,
   ): OkLCH {
     return new OkLCH(
-      this.lo.lightness +
-        lightnessSlider * (this.hi.lightness - this.lo.lightness),
-      this.lo.chroma + chromaSlider * (this.hi.chroma - this.lo.chroma),
-      this.lo.hue + hueSlider * (this.hi.hue - this.lo.hue),
+      interpolate(this.lo.lightness, this.hi.lightness, lightnessSlider),
+      interpolate(this.lo.chroma, this.hi.chroma, chromaSlider),
+      interpolate(this.lo.hue, this.hi.hue, hueSlider),
+    );
+  }
+
+  /**
+   * Varies a color by manipulating its lightness.
+   * @param color Color to vary
+   * @param lightnessSlider Different lightness value, from 0 to 1
+   * @returns The original color but with a different lightness
+   */
+  varyLightness(color: OkLCH, lightnessSlider: number): OkLCH {
+    return new OkLCH(
+      interpolate(this.lo.lightness, this.hi.lightness, lightnessSlider),
+      color.chroma,
+      color.hue,
     );
   }
 }

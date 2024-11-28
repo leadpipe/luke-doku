@@ -373,7 +373,7 @@ export class SudokuView extends LitElement implements GridContainer {
     return colors.map(
       (c, i) => svg`
         ${`text.trail.trail-${i}`} {
-          fill: ${c.toColor()};
+          fill: ${c};
         }
       `,
     );
@@ -512,7 +512,7 @@ export class SudokuView extends LitElement implements GridContainer {
   /** The game.  */
   @property({attribute: false}) game: Game | null = null;
   private sudoku: Sudoku | null = null;
-  @state() private trailColors: TrailColors | null = null;
+  private trailColors: TrailColors | null = null;
 
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
@@ -536,20 +536,14 @@ export class SudokuView extends LitElement implements GridContainer {
     }, 20);
   });
 
-  private readonly themeHandler = () => {
-    this.updateTrailColors();
-  };
-
   override connectedCallback(): void {
     super.connectedCallback();
     this.resizeObserver.observe(this);
-    prefsTarget.addEventListener('current-theme', this.themeHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     this.resizeObserver.unobserve(this);
-    prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
   // From the GridContainer interface.
@@ -576,7 +570,9 @@ export class SudokuView extends LitElement implements GridContainer {
       this.sudoku = this.game ? this.game.sudoku : null;
       this.pausePatterns = [];
       this.updateSymmetries();
-      this.updateTrailColors();
+      this.trailColors = this.game
+        ? new TrailColors(this.game.sudoku.cluesString())
+        : null;
     }
   }
 
@@ -589,12 +585,6 @@ export class SudokuView extends LitElement implements GridContainer {
       );
       this.overlayIndex = 0;
     }
-  }
-
-  private updateTrailColors() {
-    this.trailColors = this.game
-      ? new TrailColors(this.game.sudoku.cluesString())
-      : null;
   }
 
   /** The number of device pixels in the thick grid lines. */

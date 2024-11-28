@@ -176,7 +176,7 @@ export class SolvePage extends LitElement {
   }
 
   private renderTopPanel(game: Game | null, playState: PlayState) {
-    const theme = getCurrentTheme();
+    const {theme} = this;
     const newTheme =
       theme === getCurrentSystemTheme()
         ? theme === 'light'
@@ -269,9 +269,7 @@ export class SolvePage extends LitElement {
         <style>
           ${trailColors
             .getColors(trails.order.length)
-            .map(
-              (c, i) => html` .trail.trail-${i} { color: ${c.toColor()}; } `,
-            )}
+            .map((c, i) => html` .trail.trail-${i} { color: ${c}; } `)}
         </style>
         <div id="trail-menu" popover @toggle=${this.trailMenuToggled}>
           <table>
@@ -414,18 +412,21 @@ export class SolvePage extends LitElement {
 
   @property({attribute: false}) sudoku: Sudoku | null = null;
   @state() private game: Game | null = null;
-  @state() private trailColors: TrailColors | null = null;
+  private trailColors: TrailColors | null = null;
+  @state() private theme = getCurrentTheme();
   @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('sudoku')) {
       this.game = this.sudoku ? new Game(this.sudoku) : null;
-      this.updateTrailColors();
+      this.trailColors = this.sudoku
+        ? new TrailColors(this.sudoku.cluesString())
+        : null;
     }
   }
 
-  private readonly themeHandler = () => {
-    this.updateTrailColors();
+  private readonly themeHandler = (event: CustomEvent<Theme>) => {
+    this.theme = event.detail;
   };
 
   override connectedCallback(): void {
@@ -436,12 +437,6 @@ export class SolvePage extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     prefsTarget.removeEventListener('current-theme', this.themeHandler);
-  }
-
-  private updateTrailColors() {
-    this.trailColors = this.sudoku
-      ? new TrailColors(this.sudoku.cluesString())
-      : null;
   }
 
   private setTheme(event: Event) {

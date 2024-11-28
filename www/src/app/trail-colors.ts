@@ -1,7 +1,6 @@
 import * as wasm from 'luke-doku-rust';
 import {CluesString} from '../game/types';
 import {COLOR_RANGES, mod, OkLCH, randomColorIndex} from './colors';
-import { getCurrentTheme } from './prefs';
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A
@@ -9,13 +8,11 @@ import { getCurrentTheme } from './prefs';
  * the list of trails.
  */
 export class TrailColors {
-  private readonly colors: OkLCH[] = [];
+  private readonly colors: string[] = [];
 
-  constructor(
-    private readonly seed: CluesString,
-  ) {}
+  constructor(private readonly seed: CluesString) {}
 
-  getColors(numTrails: number): readonly OkLCH[] {
+  getColors(numTrails: number): readonly string[] {
     if (numTrails > this.colors.length) {
       this.generateColors(numTrails);
     }
@@ -29,12 +26,14 @@ export class TrailColors {
     try {
       colors.length = 0;
       let index = randomColorIndex(random);
-      const lightnessSlider = getCurrentTheme() === 'light' ? 0 : 1;
       const chromaSlider = 1; // Maximum chroma
+      const darkSlider = 1; // Maximum lightness for dark mode
+      const lightSlider = 0.5; // Half lightness for light mode
       for (let i = 0; i < count; ++i) {
-        colors.push(
-          COLOR_RANGES[index].randomHue(random, lightnessSlider, chromaSlider),
-        );
+        const range = COLOR_RANGES[index];
+        const dark = range.randomHue(random, darkSlider, chromaSlider);
+        const light = range.varyLightness(dark, lightSlider);
+        colors.push(`light-dark(${light.toColor()}, ${dark.toColor()})`);
         index = mod(
           index + Math.floor(random.range(1, COLOR_RANGES.length)),
           COLOR_RANGES.length,
