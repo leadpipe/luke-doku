@@ -67,6 +67,11 @@ function handleDarkModeChange(evt: {matches: boolean}) {
 handleDarkModeChange(darkModeQuery);
 darkModeQuery.addEventListener('change', handleDarkModeChange);
 
+if (getCurrentTheme() !== getCurrentSystemTheme()) {
+  // Updates the meta tag with the user's saved preference, at startup time.
+  setPreferredTheme(preferredTheme);
+}
+
 let showClock = true;
 {
   const stored = window.localStorage.getItem('showClock');
