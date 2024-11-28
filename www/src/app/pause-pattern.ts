@@ -71,7 +71,7 @@ export class PausePattern {
           }
           .x {
             fill: none;
-            stroke: light-dark('#5f5f5f4c', '#a0a0a04c');
+            stroke: light-dark(#5f5f5f4c, #a0a0a04c);
             stroke-width: 0.2;
           }
         </style>
