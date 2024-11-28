@@ -11,7 +11,10 @@ export class Trail extends Grid {
   /**
    * Duplicates a trail, or creates an empty one.
    */
-  constructor(readonly id: number, trail?: ReadonlyTrail) {
+  constructor(
+    readonly id: number,
+    trail?: ReadonlyTrail,
+  ) {
     super(trail);
     if (trail) this.trailheadState = trail.trailhead;
   }

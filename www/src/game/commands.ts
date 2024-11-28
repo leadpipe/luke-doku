@@ -88,7 +88,10 @@ abstract class Assign extends Move {
 }
 
 export class SetNum extends Assign {
-  constructor(loc: Loc, readonly num: number) {
+  constructor(
+    loc: Loc,
+    readonly num: number,
+  ) {
     super(loc);
   }
 
@@ -107,7 +110,10 @@ export class SetNum extends Assign {
 }
 
 export class SetNums extends Assign {
-  constructor(loc: Loc, readonly nums: ReadonlySet<number>) {
+  constructor(
+    loc: Loc,
+    readonly nums: ReadonlySet<number>,
+  ) {
     super(loc);
   }
 

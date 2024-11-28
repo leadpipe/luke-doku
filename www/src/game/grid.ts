@@ -28,11 +28,10 @@ export class Grid {
       grid = wasm.Grid.newFromString(grid);
     }
     this.array =
-      grid instanceof wasm.Grid || grid instanceof wasm.SolvedGrid
-        ? grid.bytes()
-        : grid
-        ? new Uint8Array(grid.bytes)
-        : new Uint8Array(81);
+      grid instanceof wasm.Grid || grid instanceof wasm.SolvedGrid ?
+        grid.bytes()
+      : grid ? new Uint8Array(grid.bytes)
+      : new Uint8Array(81);
   }
 
   /** Creates a Rust Grid from the contents of this object. */

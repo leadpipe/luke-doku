@@ -64,8 +64,8 @@ export class GameClock extends LitElement {
     const hrs = Math.floor(elapsedMin / 60);
     const sec = elapsedSec % 60;
     const min = elapsedMin % 60;
-    return hrs
-      ? `${hrs}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    return hrs ?
+        `${hrs}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
       : `${min}:${String(sec).padStart(2, '0')}`;
   }
 

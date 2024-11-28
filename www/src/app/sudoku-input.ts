@@ -101,12 +101,12 @@ export class SudokuInput implements ReactiveController {
         const {activeTrail} = game.trails;
         answer.push(svg`
           <text x=${x} y=${y} class=${
-          activeTrail?.isEmpty
-            ? `hover-loc trail trail-index-0 trail-${activeTrail.id} trailhead`
-            : activeTrail
-            ? `hover-loc trail trail-index-0 trail-${activeTrail.id}`
+            activeTrail?.isEmpty ?
+              `hover-loc trail trail-index-0 trail-${activeTrail.id} trailhead`
+            : activeTrail ?
+              `hover-loc trail trail-index-0 trail-${activeTrail.id}`
             : 'hover-loc'
-        }>
+          }>
             ${resultToText(this.defaultResult)}
           </text>`);
       }
@@ -192,7 +192,9 @@ export class SudokuInput implements ReactiveController {
     }
     const {result, currentNum} = this;
     const previewText =
-      result === 'cancel' ? currentNum?.toString() ?? '' : resultToText(result);
+      result === 'cancel' ?
+        (currentNum?.toString() ?? '')
+      : resultToText(result);
     answer.push(svg`
       <text class="solution" x=${x} y=${y}>${previewText}</text>
     `);
@@ -291,9 +293,9 @@ export class SudokuInput implements ReactiveController {
             'hover-loc': multiHover === num,
           };
           const x =
-            i < 5
-              ? sideCenter + (i - 2) * centersGap
-              : sideCenter + halfCentersGap + (i - 7) * centersGap;
+            i < 5 ?
+              sideCenter + (i - 2) * centersGap
+            : sideCenter + halfCentersGap + (i - 7) * centersGap;
           const y = i < 5 ? centerLine1 : centerLine2;
           return svg`
             <circle
@@ -630,9 +632,9 @@ export class SudokuInput implements ReactiveController {
     if (distance > host.cellSize / 2) {
       // Figure out which clock section to light up.
       const radians =
-        x >= centerX
-          ? acos((centerY - y) / distance)
-          : PI + acos((y - centerY) / distance);
+        x >= centerX ?
+          acos((centerY - y) / distance)
+        : PI + acos((y - centerY) / distance);
       this.clockSection = round((6 * radians) / PI) % 12;
       this.result = SECTION_RESULT[this.clockSection];
       if (this.result === 'multiple' && this.game.trails.active) {

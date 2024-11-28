@@ -3,7 +3,6 @@ import * as wasm from 'luke-doku-rust';
 import {ReadonlyGrid} from '../game/grid';
 import {Loc} from '../game/loc';
 import {SymMatch} from '../game/sudoku';
-import {GridContainer} from './types';
 import {
   COLOR_RANGES,
   mod,
@@ -11,6 +10,7 @@ import {
   randomColorIndex,
   randomColorRange,
 } from './colors';
+import {GridContainer} from './types';
 
 /**
  * Renders the pause overlay for a given board symmetry of a given puzzle.
@@ -33,9 +33,9 @@ export class PausePattern {
       const cy = random.normal(0.5, 0.15);
       this.circleCenter = `calc(var(--size) * ${cx}) calc(var(--size) * ${cy})`;
       const chooseColor =
-        symMatch.sym === wasm.Sym.None
-          ? newMotleyChooser(random)
-          : newTwoColorChooser(random);
+        symMatch.sym === wasm.Sym.None ?
+          newMotleyChooser(random)
+        : newTwoColorChooser(random);
       const symTransform = SYM_TRANSFORMS[symMatch.sym];
       for (const orbit of symMatch.fullOrbits) {
         orbits.push(

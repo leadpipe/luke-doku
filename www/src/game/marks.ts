@@ -1,6 +1,6 @@
+import {Grid, ReadonlyGrid} from './grid';
 import {checkIntRange} from './ints';
 import {Loc} from './loc';
-import {Grid, ReadonlyGrid} from './grid';
 
 /**
  * Represents a partial solution to a Sudoku in the form of the pencil marks
@@ -81,8 +81,8 @@ export class Marks {
    */
   getNum(loc: Loc): number | null {
     const set = this.cells[loc.index];
-    return set instanceof Set && set.size === 1
-      ? set.values().next().value
+    return set instanceof Set && set.size === 1 ?
+        set.values().next().value
       : null;
   }
 

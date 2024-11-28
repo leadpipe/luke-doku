@@ -1,22 +1,22 @@
-import {RecordedCommand, CompletionState} from './command';
+import {CompletionState, RecordedCommand} from './command';
 import {
+  ActivateTrail,
+  ArchiveTrail,
+  ClearCell,
+  CopyFromTrail,
+  CreateTrail,
+  GuessSolutionCount,
+  MarkCompleted,
+  Pause,
+  Redo,
+  RedoToEnd,
   Resume,
   SetNum,
   SetNums,
-  Undo,
-  Pause,
-  Redo,
-  UndoToStart,
-  RedoToEnd,
-  ClearCell,
-  MarkCompleted,
-  CreateTrail,
-  ActivateTrail,
-  ToggleTrailVisibility,
-  ArchiveTrail,
   ToggleTrailsActive,
-  CopyFromTrail,
-  GuessSolutionCount,
+  ToggleTrailVisibility,
+  Undo,
+  UndoToStart,
 } from './commands';
 import {Loc} from './loc';
 

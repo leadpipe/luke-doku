@@ -1,6 +1,6 @@
 import * as wasm from 'luke-doku-rust';
 import {CluesString} from '../game/types';
-import {COLOR_RANGES, mod, OkLCH, randomColorIndex} from './colors';
+import {COLOR_RANGES, mod, randomColorIndex} from './colors';
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A

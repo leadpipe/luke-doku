@@ -11,7 +11,7 @@ import {checkInt} from './ints';
  * @param n The exclusive upper bound.
  * @throws Error if `n` is not an integer.
  */
-export function * iotaGenerator(n: number) {
+export function* iotaGenerator(n: number) {
   checkInt(n);
   for (let i = 0; i < n; ++i) {
     yield i;

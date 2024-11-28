@@ -1,7 +1,7 @@
 import * as wasm from 'luke-doku-rust';
 import {Grid, ReadonlyGrid} from './grid';
-import {CluesString, dateString, DateString} from './types';
 import {Loc} from './loc';
+import {CluesString, dateString, DateString} from './types';
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -56,7 +56,10 @@ export class Sudoku {
  * Identifies a Luke-doku generated puzzle.
  */
 export class PuzzleId {
-  constructor(readonly date: DateString, readonly counter: number) {}
+  constructor(
+    readonly date: DateString,
+    readonly counter: number,
+  ) {}
 
   static fromGenOpts(genOpts?: wasm.GenOpts): PuzzleId | undefined {
     return (

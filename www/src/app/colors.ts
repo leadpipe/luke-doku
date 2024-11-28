@@ -28,7 +28,11 @@ export function mod(x: number, y: number): number {
 }
 
 export function minmax(x: number, min: number, max: number): number {
-  return x < min ? min : x > max ? max : x;
+  return (
+    x < min ? min
+    : x > max ? max
+    : x
+  );
 }
 
 function interpolate(lo: number, hi: number, slider: number): number {
@@ -36,7 +40,11 @@ function interpolate(lo: number, hi: number, slider: number): number {
 }
 
 export class ColorRange {
-  constructor(readonly name: string, readonly lo: OkLCH, readonly hi: OkLCH) {}
+  constructor(
+    readonly name: string,
+    readonly lo: OkLCH,
+    readonly hi: OkLCH,
+  ) {}
 
   /**
    * Makes a new OkLCH color based on this range.  Chooses a hue uniformly from
