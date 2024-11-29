@@ -24,8 +24,8 @@ export function dateString(date: wasm.LogicalDate | Date): DateString {
 }
 
 /**
- * The canonical representation of a Sudoku puzzle as the flat string
- * representation of its clues: a row-major list of each location, with either
- * the numeral in the location or a period meaning the location is empty.
+ * The canonical representation of the state of a Sudoku grid as the flat string
+ * representation of its assignments: a row-major list of each location, with
+ * either the numeral in the location or a period meaning the location is empty.
  */
-export type CluesString = Branded<string, 'Clues'>;
+export type GridString = Branded<string, 'Grid'>;

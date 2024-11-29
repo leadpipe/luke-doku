@@ -5,7 +5,7 @@ import {customElement} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
 import {Game} from '../game/game';
 import {Sudoku} from '../game/sudoku';
-import {CluesString} from '../game/types';
+import {GridString} from '../game/types';
 import {customEvent} from './events';
 import {LOGO_FONT} from './styles';
 import {findDataString} from './utils';
@@ -59,14 +59,14 @@ export class PuzzlesPage extends LitElement {
   }
 
   private readonly puzzles: Sudoku[];
-  private readonly puzzlesByCluesString: Map<CluesString, Sudoku>;
+  private readonly puzzlesByCluesString: Map<GridString, Sudoku>;
 
   constructor() {
     super();
     const date = wasm.LogicalDate.fromDate(new Date());
     const dailySolution = wasm.dailySolution(date);
     const puzzles: Sudoku[] = [];
-    const puzzlesByCluesString = new Map<CluesString, Sudoku>();
+    const puzzlesByCluesString = new Map<GridString, Sudoku>();
     for (let counter = 1; counter <= 10; ++counter) {
       const sudoku = Sudoku.fromWasm(dailySolution.gen(counter));
       puzzles.push(sudoku);
@@ -78,7 +78,7 @@ export class PuzzlesPage extends LitElement {
 
   private selectPuzzle(event: Event) {
     const {puzzlesByCluesString} = this;
-    const cluesString = findDataString(event, 'clues') as CluesString;
+    const cluesString = findDataString(event, 'clues') as GridString;
     const puzzle = puzzlesByCluesString.get(cluesString);
     if (puzzle) {
       this.dispatchEvent(

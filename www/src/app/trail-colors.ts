@@ -1,5 +1,5 @@
 import * as wasm from 'luke-doku-rust';
-import {CluesString} from '../game/types';
+import {GridString} from '../game/types';
 import {COLOR_RANGES, mod, randomColorIndex} from './colors';
 
 /**
@@ -10,7 +10,7 @@ import {COLOR_RANGES, mod, randomColorIndex} from './colors';
 export class TrailColors {
   private readonly colors: string[] = [];
 
-  constructor(private readonly seed: CluesString) {}
+  constructor(private readonly seed: GridString) {}
 
   getColors(numTrails: number): readonly string[] {
     if (numTrails > this.colors.length) {

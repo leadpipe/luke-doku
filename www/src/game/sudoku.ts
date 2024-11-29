@@ -1,7 +1,7 @@
 import * as wasm from 'luke-doku-rust';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
-import {CluesString, dateString, DateString} from './types';
+import {dateString, DateString, GridString} from './types';
 
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
@@ -25,7 +25,7 @@ export class Sudoku {
     readonly source?: string,
   ) {}
 
-  cluesString(): CluesString {
+  cluesString(): GridString {
     return this.clues.toFlatString();
   }
 

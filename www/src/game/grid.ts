@@ -1,7 +1,7 @@
 import * as wasm from 'luke-doku-rust';
 import {checkIntRange} from './ints';
 import {Loc} from './loc';
-import {CluesString} from './types';
+import {GridString} from './types';
 
 /**
  * A TypeScript counterpart to the Rust `wasm.Grid` struct.  Equivalent to a 9x9
@@ -78,10 +78,10 @@ export class Grid {
   }
 
   /** Returns an 81-character representation of this grid, with dots for blanks. */
-  toFlatString(): CluesString {
+  toFlatString(): GridString {
     return Array.prototype.map
       .call(this.array, n => (n ? n.toString() : '.'))
-      .join('') as CluesString;
+      .join('') as GridString;
   }
 
   /**
