@@ -11,7 +11,13 @@ import {ReadonlyMarks} from '../game/marks';
 import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrails} from '../game/trails';
 import {PausePattern} from './pause-pattern';
-import {CLUES_FONT, SOLUTION_FONT} from './styles';
+import {
+  CLUES_FONT,
+  SOLUTION_FONT_FAMILY,
+  SOLUTION_FONT_WEIGHT,
+  TRAILHEAD_FONT_STYLE,
+  TRAILHEAD_FONT_WEIGHT,
+} from './styles';
 import {SudokuInput} from './sudoku-input';
 import {TrailColors} from './trail-colors';
 import {
@@ -209,32 +215,31 @@ export class SudokuView extends LitElement implements GridContainer {
         -webkit-user-select: none;
       }
       text.hover-loc {
-        font-weight: 400;
-        font-family: ${SOLUTION_FONT};
+        font-family: ${SOLUTION_FONT_FAMILY};
+        font-weight: ${SOLUTION_FONT_WEIGHT};
         fill: var(--hover-loc-text);
       }
       text.clue {
-        font-weight: 700;
-        font-family: ${CLUES_FONT};
+        font: ${CLUES_FONT};
         fill: var(--clue-fill);
       }
       .solution,
       text.clock-text {
-        font-weight: 400;
-        font-family: ${SOLUTION_FONT};
+        font-family: ${SOLUTION_FONT_FAMILY};
+        font-weight: ${SOLUTION_FONT_WEIGHT};
         fill: var(--solution-fill);
         color: var(--solution-fill);
       }
       text.trail {
-        font-weight: 400;
-        font-family: ${SOLUTION_FONT};
+        font-family: ${SOLUTION_FONT_FAMILY};
+        font-weight: ${SOLUTION_FONT_WEIGHT};
       }
       text.trail.hover-loc {
         opacity: 50% !important;
       }
       text.trail.trailhead {
-        font-weight: 700;
-        font-style: italic;
+        font-weight: ${TRAILHEAD_FONT_WEIGHT};
+        font-style: ${TRAILHEAD_FONT_STYLE};
       }
       text.solution,
       text.trail {

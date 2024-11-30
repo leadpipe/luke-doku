@@ -18,7 +18,7 @@ import {
   prefsTarget,
   setPreferredTheme,
 } from './prefs';
-import {SOLUTION_FONT} from './styles';
+import {TRAILHEAD_FONT_STYLE, TRAILHEAD_FONT_WEIGHT} from './styles';
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
@@ -131,9 +131,8 @@ export class SolvePage extends LitElement {
       }
 
       .trailhead {
-        font-weight: 700;
-        font-style: italic;
-        font-family: ${SOLUTION_FONT};
+        font-style: ${TRAILHEAD_FONT_STYLE};
+        font-weight: ${TRAILHEAD_FONT_WEIGHT};
         min-width: 1em;
         text-align: right;
       }

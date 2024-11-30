@@ -18,7 +18,7 @@ export class PuzzlesPage extends LitElement {
       margin: 0 20px;
     }
     h1 {
-      font-family: ${LOGO_FONT};
+      font: ${LOGO_FONT};
       font-size: 48px;
     }
     .puzzle-list {
