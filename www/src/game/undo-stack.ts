@@ -8,8 +8,8 @@ export class UndoStack {
     const {commands, next} = this;
     commands.splice(next); // delete everything after the previous item
     const prev = next - 1;
-    // Check for the previous item being superceded by the new one.
-    if (prev >= 0 && undoable.command.supercedes(commands[prev].command)) {
+    // Check for the previous item being superseded by the new one.
+    if (prev >= 0 && undoable.command.supersedes(commands[prev].command)) {
       commands[prev] = {...undoable, undo: commands[prev].undo};
     } else {
       commands.push(undoable);

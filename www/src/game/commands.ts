@@ -80,8 +80,8 @@ export class ClearCell extends Move {
 }
 
 abstract class Assign extends Move {
-  override supercedes(prevCommand: Command): boolean {
-    // A subsequent assignment to the same location in the grid supercedes the
+  override supersedes(prevCommand: Command): boolean {
+    // A subsequent assignment to the same location in the grid supersedes the
     // previous one in the undo stack.
     return prevCommand instanceof Assign && prevCommand.loc === this.loc;
   }

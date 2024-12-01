@@ -40,7 +40,7 @@ export abstract class Command extends Object implements Operation {
    * Tells whether this command should replace the given previous command on the
    * undo stack.  Defaults to false.
    */
-  supercedes(_prevCommand: Command): boolean {
+  supersedes(_prevCommand: Command): boolean {
     return false;
   }
 
