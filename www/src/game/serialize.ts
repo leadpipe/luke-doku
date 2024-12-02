@@ -165,8 +165,12 @@ const resume: Serializer<typeof Resume> = {
 const pause: Serializer<typeof Pause> = {
   tag: 1,
   ctor: Pause,
-  serializeArgs: noSerialize,
-  deserializeArgs: noDeserialize,
+  serializeArgs(command, sink) {
+    sink(command.reason);
+  },
+  deserializeArgs(source) {
+    return [readBase128(source)];
+  },
 };
 const markCompleted: Serializer<typeof MarkCompleted> = {
   tag: 2,

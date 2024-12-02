@@ -14,6 +14,7 @@ import {
   GuessSolutionCount,
   MarkCompleted,
   Pause,
+  PauseReason,
   Redo,
   RedoToEnd,
   Resume,
@@ -189,8 +190,8 @@ export class Game {
   /**
    * Stops the clock for this game, if it was previously running.
    */
-  pause() {
-    this.execute(new Pause());
+  pause(reason = PauseReason.MANUAL) {
+    this.execute(new Pause(reason));
   }
 
   /**

@@ -8,6 +8,7 @@ import {
   GuessSolutionCount,
   MarkCompleted,
   Pause,
+  PauseReason,
   Redo,
   RedoToEnd,
   Resume,
@@ -27,7 +28,7 @@ export const FAKE_HISTORY: RecordedCommand[] = [
   {command: new SetNum(Loc.of(0), 1), elapsedTimestamp: 1000},
   {command: new SetNums(Loc.of(1), new Set([4, 2, 3])), elapsedTimestamp: 2000},
   {command: new Undo(), elapsedTimestamp: 3000},
-  {command: new Pause(), elapsedTimestamp: 3001},
+  {command: new Pause(PauseReason.AUTO), elapsedTimestamp: 3001},
   {command: new Resume(FAKE_TIMESTAMP + 10000), elapsedTimestamp: 3001},
   {command: new Redo(), elapsedTimestamp: 4000},
   {command: new UndoToStart(), elapsedTimestamp: 5000},
@@ -55,7 +56,7 @@ export const FAKE_HISTORY_SERIALIZED: Int8Array = new Int8Array([
   5, 0, 1, -24,7,      // setNum     -- -24,7 === 1000
   6, 1, -89,3, -24,7,  // setNums    -- -89,3 === 423
   7, -24,7,            // undo
-  1, 1,                // pause
+  1, 1, 1,             // pause
   0, 
     -112,-50,-128,-128,16,           // FAKE_TIMESTAMP + 10000
           0,           // resume

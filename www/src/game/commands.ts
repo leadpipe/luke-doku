@@ -14,7 +14,24 @@ export class Resume extends Command {
   }
 }
 
+/** How a game can be paused. */
+export enum PauseReason {
+  /** The user clicked the pause button. */
+  MANUAL,
+  /** The user switched away from the app. */
+  AUTO,
+  /**
+   * The app shut down without letting us pause, and we synthesized a pause
+   * from other saved state.
+   */
+  INFERRED,
+}
+
 export class Pause extends Command {
+  constructor(readonly reason: PauseReason) {
+    super();
+  }
+
   override apply(internals: GameInternals): boolean {
     return internals.pause();
   }
