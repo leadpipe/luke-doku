@@ -7,7 +7,7 @@ import {Game} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
 import {customEvent} from './events';
-import {LOGO_FONT} from './styles';
+import {LOGO_FONT_FAMILY} from './styles';
 import {findDataString} from './utils';
 
 @customElement('puzzles-page')
@@ -18,7 +18,7 @@ export class PuzzlesPage extends LitElement {
       margin: 0 20px;
     }
     h1 {
-      font: ${LOGO_FONT};
+      font-family: ${LOGO_FONT_FAMILY};
       font-size: 48px;
     }
     .puzzle-list {
