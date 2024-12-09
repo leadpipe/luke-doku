@@ -26,30 +26,28 @@ export class Sudoku {
     readonly source?: string,
   ) {}
 
-  cluesString(): GridString {
-    return this.clues.toFlatString();
-  }
-
   static fromWasm(puzzle: wasm.Puzzle, source?: string): Sudoku {
     return new Sudoku(
       new Grid(puzzle.clues),
       puzzle.solutions.map(s => new Grid(s)),
-      Sudoku.bestSymmetryMatches(puzzle.clues),
+      bestSymmetryMatches(puzzle.clues),
       PuzzleId.fromGenOpts(puzzle.gen_opts),
       source,
     );
   }
 
-  /** Returns an array of symmetry matches for this grid. */
-  private static bestSymmetryMatches(clues: wasm.Grid): SymMatch[] {
-    return wasm
-      .bestSymmetryMatches(clues, MAX_NONCONFORMING_LOCS)
-      .map(([sym, match]: [wasm.Sym, WasmSymMatch]) => ({
-        sym,
-        fullOrbits: match.full_orbits.map(orbitToLocs),
-        numNonconformingLocs: match.num_nonconforming_locs,
-        partialOrbits: match.partial_orbits.map(orbitToLocs),
-      }));
+  static fromDatabaseRecord(record: PuzzleRecord): Sudoku {
+    return new Sudoku(
+      new Grid(wasm.Grid.newFromString(record.clues)),
+      record.solutions.map(s => new Grid(wasm.Grid.newFromString(s))),
+      record.symmetryMatches.map(symMatchFromDb),
+      PuzzleId.fromString(record.puzzleId),
+      record.source,
+    );
+  }
+
+  cluesString(): GridString {
+    return this.clues.toFlatString();
   }
 
   toDatabaseRecord(): PuzzleRecord {
@@ -89,6 +87,21 @@ export class PuzzleId {
     );
   }
 
+  static fromString(s?: string): PuzzleId | undefined {
+    if (s) {
+      const parts = s.split(':');
+      if (parts.length === 2) {
+        try {
+          const date = wasm.LogicalDate.fromString(parts[0]);
+          const counter = Number(parts[1]);
+          if (!isNaN(counter)) {
+            return new PuzzleId(dateString(date), counter);
+          }
+        } catch (e: unknown) {}
+      }
+    }
+  }
+
   toString(): string {
     return `${this.date}:${this.counter}`;
   }
@@ -105,6 +118,18 @@ export declare interface SymMatch {
   readonly partialOrbits: Loc[][];
 }
 
+/** Returns an array of symmetry matches for this grid. */
+function bestSymmetryMatches(clues: wasm.Grid): SymMatch[] {
+  return wasm
+    .bestSymmetryMatches(clues, MAX_NONCONFORMING_LOCS)
+    .map(([sym, match]: [wasm.Sym, WasmSymMatch]) => ({
+      sym,
+      fullOrbits: match.full_orbits.map(orbitToLocs),
+      numNonconformingLocs: match.num_nonconforming_locs,
+      partialOrbits: match.partial_orbits.map(orbitToLocs),
+    }));
+}
+
 /**
  * This is the interface of the match objects returned from Rust.
  */
@@ -114,8 +139,17 @@ declare interface WasmSymMatch {
   partial_orbits: number[][];
 }
 
-function orbitToLocs(orbit: number[]): Loc[] {
-  return orbit.map(loc => Loc.of(loc));
+function orbitToLocs(orbit: number[] | Int8Array): Loc[] {
+  return Array.prototype.map.call(orbit, index => Loc.of(index)) as Loc[];
+}
+
+function symMatchFromDb(match: DbSymMatch): SymMatch {
+  return {
+    sym: match.sym,
+    fullOrbits: match.fullOrbits.map(orbitToLocs),
+    numNonconformingLocs: match.numNonconformingLocs,
+    partialOrbits: match.partialOrbits.map(orbitToLocs),
+  };
 }
 
 // We convert all matches together so that all the Int8Arrays can share the same

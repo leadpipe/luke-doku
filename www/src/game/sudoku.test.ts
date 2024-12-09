@@ -1,6 +1,6 @@
 import {advanceTo} from 'jest-date-mock';
 import * as wasm from 'luke-doku-rust';
-import {Sudoku} from './sudoku';
+import {PuzzleId, Sudoku} from './sudoku';
 
 describe('Sudoku', () => {
   const now = new Date(2024, 11, 7, 19, 47);
@@ -83,4 +83,20 @@ describe('Sudoku', () => {
       expect(allBuffers).toEqual([buffers(14 + 1), buffers(5 + 8)]);
     });
   });
+
+  describe('fromDatabaseRecord', () => {
+    it('undoes toDatabaseRecord', () => {
+      expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(sudoku);
+    })
+  })
 });
+
+describe('PuzzleId', () => {
+  describe('fromString', () => {
+    it('ignores bad data', () => {
+      expect(PuzzleId.fromString('asfd:123')).toBeUndefined();
+      expect(PuzzleId.fromString('2024-12-08:asdf')).toBeUndefined();
+      expect(PuzzleId.fromString('2024-12-08:1:huzzah')).toBeUndefined();
+    })
+  })
+})
