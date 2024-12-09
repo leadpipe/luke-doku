@@ -1,4 +1,5 @@
 import * as wasm from 'luke-doku-rust';
+import {AttemptState, type DbSymMatch, type PuzzleRecord} from './database';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {dateString, DateString, GridString} from './types';
@@ -50,6 +51,26 @@ export class Sudoku {
         partialOrbits: match.partial_orbits.map(orbitToLocs),
       }));
   }
+
+  toDatabaseRecord(): PuzzleRecord {
+    const clues = this.cluesString() as string;
+    const solutions = this.solutions.map(g => g.toFlatString() as string);
+    const symmetryMatches = symMatchesToDb(this.symmetryMatches);
+    const record: PuzzleRecord = {
+      clues,
+      solutions,
+      symmetryMatches,
+      attemptState: AttemptState.UNSTARTED,
+      lastUpdated: new Date(),
+    };
+    if (this.id) {
+      record.puzzleId = this.id.toString();
+    }
+    if (this.source) {
+      record.source = this.source;
+    }
+    return record;
+  }
 }
 
 /**
@@ -66,6 +87,10 @@ export class PuzzleId {
       genOpts &&
       new PuzzleId(dateString(genOpts.daily_solution.date), genOpts.counter)
     );
+  }
+
+  toString(): string {
+    return `${this.date}:${this.counter}`;
   }
 }
 
@@ -91,4 +116,53 @@ declare interface WasmSymMatch {
 
 function orbitToLocs(orbit: number[]): Loc[] {
   return orbit.map(loc => Loc.of(loc));
+}
+
+// We convert all matches together so that all the Int8Arrays can share the same
+// underlying buffer.
+function symMatchesToDb(matches: readonly SymMatch[]): DbSymMatch[] {
+  const bytesInput: number[] = [];
+  for (const match of matches) {
+    appendBytes(match.fullOrbits, bytesInput);
+    appendBytes(match.partialOrbits, bytesInput);
+  }
+  // This array has all the orbits of all the matches.
+  const bytes = new Int8Array(bytesInput);
+  let offset = 0;
+  const answer: DbSymMatch[] = [];
+  for (const match of matches) {
+    const dbMatch: DbSymMatch = {
+      sym: match.sym,
+      fullOrbits: [],
+      numNonconformingLocs: match.numNonconformingLocs,
+      partialOrbits: [],
+    };
+    offset = appendOrbits(bytes, offset, match.fullOrbits, dbMatch.fullOrbits);
+    offset = appendOrbits(
+      bytes,
+      offset,
+      match.partialOrbits,
+      dbMatch.partialOrbits,
+    );
+    answer.push(dbMatch);
+  }
+  return answer;
+}
+
+function appendBytes(orbits: Loc[][], array: number[]) {
+  for (const orbit of orbits) {
+    array.push(...orbit.map(loc => loc.index));
+  }
+}
+
+function appendOrbits(
+  bytes: Int8Array,
+  offset: number,
+  orbits: Loc[][],
+  array: Int8Array[],
+): number {
+  for (const orbit of orbits) {
+    array.push(bytes.subarray(offset, (offset += orbit.length)));
+  }
+  return offset;
 }
