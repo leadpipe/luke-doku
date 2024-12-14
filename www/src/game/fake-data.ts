@@ -47,6 +47,9 @@ export const FAKE_HISTORY: RecordedCommand[] = [
   {command: new GuessSolutionCount(2), elapsedTimestamp: 16000},
 ];
 
+// Note we do not use CommandTag enum value names in this serialized history, so
+// that it would require changing this array in addition to the enum constants,
+// to drive home the point that we must never change the enum constants.
 // prettier-ignore
 export const FAKE_HISTORY_SERIALIZED: Int8Array = new Int8Array([
   0,                   // version

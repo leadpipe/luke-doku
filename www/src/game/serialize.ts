@@ -131,7 +131,13 @@ interface CommandCtor<T extends Command = Command> {
   new (...args: any): T;
 }
 
-interface Serializer<Ctor extends CommandCtor, TagValue extends CommandTag> {
+interface Serializer<
+  Ctor extends CommandCtor<Command<TagValue>>,
+  TagValue extends CommandTag,
+> {
+  // Note that the tag must match the tag on the command object.  The only
+  // actual use for this tag in the serializer is to let us test that
+  // `serializersByTag` is constructed correctly.
   readonly tag: TagValue;
   readonly ctor: Ctor;
   serializeArgs(
@@ -312,6 +318,9 @@ type SerializerMap = {
   [tag in CommandTag]: Serializer<any, any>;
 };
 
+// Note that there is nothing in TypeScript that would allow us to tie the keys
+// to the corresponding value types in this map.  Instead, we rely on a unit
+// test to guarantee that this map's keys and values match up correctly.
 const serializersByTag: SerializerMap = {
   [CommandTag.RESUME]: resume,
   [CommandTag.PAUSE]: pause,
