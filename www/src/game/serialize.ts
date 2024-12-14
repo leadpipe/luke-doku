@@ -27,16 +27,44 @@ import {Loc} from './loc';
 // We start the serialized form with the version number.
 const VERSION = 0;
 
+/** What gets returned from `serializeCommands`. */
+export interface SerializationResult {
+  /** The number of commands serialized. */
+  count: number;
+  /** The serialized form of the commands. */
+  serialized: Int8Array;
+}
+
 /**
  * Turns a list of recorded commands into a list of bytes, which can later be
- * converted back into the commands using `deserializeCommands`.
+ * converted back into the commands using `deserializeCommands`.  If given the
+ * previous result, will only serialize commands added after the previous call,
+ * and append them to the previous list of bytes.
+ *
+ * Throws on a command with an elapsed timestamp earlier than the previous
+ * command, or on a command without a serializer registered.
+ *
  * @param history The commands applied to a given Luke-doku game.
+ * @param previousResult The result from a previous call to this function with
+ * the same history array, now extended.
  */
-export function serializeCommands(history: RecordedCommand[]): Int8Array {
-  const array: number[] = [VERSION];
+export function serializeCommands(
+  history: RecordedCommand[],
+  previousResult?: SerializationResult,
+): SerializationResult {
+  const count = history.length;
+  if (previousResult && previousResult.count === count) {
+    return previousResult;
+  }
+  const array: number[] =
+    previousResult?.serialized.length ?
+      [...previousResult.serialized]
+    : [VERSION];
   const sink = (n: number) => writeBase128(n, array);
-  let prevTimestamp = 0;
-  for (const c of history) {
+  let index = previousResult?.count ?? 0;
+  let prevTimestamp = index ? history[index - 1].elapsedTimestamp : 0;
+  while (index < count) {
+    const c = history[index++];
     const {tag} = c.command;
     const s = serializersByTag[tag];
     if (!s) {
@@ -53,7 +81,7 @@ export function serializeCommands(history: RecordedCommand[]): Int8Array {
     sink(delta);
     prevTimestamp = c.elapsedTimestamp;
   }
-  return new Int8Array(array);
+  return {count, serialized: new Int8Array(array)};
 }
 
 /**

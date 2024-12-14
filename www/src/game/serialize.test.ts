@@ -6,7 +6,23 @@ const {serializersByTag} = TEST_ONLY;
 
 describe('serialize module', () => {
   it('serializing works', () => {
-    expect(serializeCommands(FAKE_HISTORY)).toEqual(FAKE_HISTORY_SERIALIZED);
+    expect(serializeCommands(FAKE_HISTORY).serialized).toEqual(
+      FAKE_HISTORY_SERIALIZED,
+    );
+  });
+
+  it('incremental serializing works', () => {
+    expect(
+      serializeCommands(
+        FAKE_HISTORY,
+        serializeCommands(FAKE_HISTORY.slice(0, 5)),
+      ).serialized,
+    ).toEqual(FAKE_HISTORY_SERIALIZED);
+  });
+
+  it('repeated serializing works', () => {
+    const result = serializeCommands(FAKE_HISTORY);
+    expect(serializeCommands(FAKE_HISTORY, result)).toBe(result);
   });
 
   it('deserializing works', () => {
@@ -21,7 +37,9 @@ describe('serialize module', () => {
 
   it(`command tags will fit in 7 bits`, () => {
     for (const serializer of Object.values(serializersByTag)) {
-      expect(serializer.tag & 127, CommandTag[serializer.tag]).toBe(serializer.tag);
+      expect(serializer.tag & 127, CommandTag[serializer.tag]).toBe(
+        serializer.tag,
+      );
     }
-  })
+  });
 });
