@@ -13,9 +13,38 @@ export interface Operation {
 }
 
 /**
+ * Serialization tags for the commands.  These must be treated as immutable,
+ * same as a protocol buffer field number.  Each concrete command needs its own
+ * tag.  Each tag must fit into 7 bits.  See `commands.ts` and
+ * `serialization.ts` for how these are used.
+ */
+export enum CommandTag {
+  RESUME = 0,
+  PAUSE = 1,
+  MARK_COMPLETED = 2,
+  GUESS_SOLUTION_COUNT = 3,
+  CLEAR_CELL = 4,
+  SET_NUM = 5,
+  SET_NUMS = 6,
+  UNDO = 7,
+  REDO = 8,
+  UNDO_TO_START = 9,
+  REDO_TO_END = 10,
+  CREATE_TRAIL = 11,
+  ACTIVATE_TRAIL = 12,
+  TOGGLE_TRAIL_VISIBILITY = 13,
+  ARCHIVE_TRAIL = 14,
+  TOGGLE_TRAILS_ACTIVE = 15,
+  COPY_FROM_TRAIL = 16,
+}
+
+/**
  * Describes an action that the user can take on a Luke-doku game.
  */
-export abstract class Command extends Object implements Operation {
+export abstract class Command<TagValue extends CommandTag = CommandTag>
+  extends Object
+  implements Operation
+{
   /**
    * Attempts to apply this command to the given game, and returns a record of
    * what happened, or returns null if the command could not be executed.
@@ -79,6 +108,9 @@ export abstract class Command extends Object implements Operation {
   protected stateAsString(): string {
     return '';
   }
+
+  /** The serialization tag for this command. */
+  abstract readonly tag: TagValue;
 }
 
 /**

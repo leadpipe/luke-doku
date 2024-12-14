@@ -2,7 +2,7 @@
  * Functions to serialize and deserialize commands.
  */
 
-import {Command, CompletionState, RecordedCommand} from './command';
+import {Command, CommandTag, CompletionState, RecordedCommand} from './command';
 import {
   ActivateTrail,
   ArchiveTrail,
@@ -37,11 +37,12 @@ export function serializeCommands(history: RecordedCommand[]): Int8Array {
   const sink = (n: number) => writeBase128(n, array);
   let prevTimestamp = 0;
   for (const c of history) {
-    const s = serializersByCtor.get(c.command.constructor);
+    const {tag} = c.command;
+    const s = serializersByTag[tag];
     if (!s) {
       throw new Error(`No serializer found for command ${c.command}`);
     }
-    sink(s.tag);
+    sink(tag);
     s.serializeArgs(c.command, sink);
     const delta = c.elapsedTimestamp - prevTimestamp;
     if (delta < 0) {
@@ -72,7 +73,7 @@ export function deserializeCommands(serialized: Int8Array): RecordedCommand[] {
   }
   let prevTimestamp = 0;
   while (index < serialized.length) {
-    const tag = readBase128(source);
+    const tag = readBase128(source) as CommandTag;
     const s = serializersByTag[tag];
     if (!s) {
       throw new Error(`No serializer found for tag ${tag}`);
@@ -130,8 +131,8 @@ interface CommandCtor<T extends Command = Command> {
   new (...args: any): T;
 }
 
-interface Serializer<Ctor extends CommandCtor> {
-  readonly tag: number;
+interface Serializer<Ctor extends CommandCtor, TagValue extends CommandTag> {
+  readonly tag: TagValue;
   readonly ctor: Ctor;
   serializeArgs(
     command: InstanceType<Ctor>,
@@ -152,8 +153,8 @@ const deserializeTrailId: (
   source: () => number,
 ) => [trailId: number] = source => [readBase128(source)];
 
-const resume: Serializer<typeof Resume> = {
-  tag: 0,
+const resume: Serializer<typeof Resume, CommandTag.RESUME> = {
+  tag: CommandTag.RESUME,
   ctor: Resume,
   serializeArgs(command, sink) {
     sink(command.timestamp);
@@ -162,8 +163,8 @@ const resume: Serializer<typeof Resume> = {
     return [readBase128(source)];
   },
 };
-const pause: Serializer<typeof Pause> = {
-  tag: 1,
+const pause: Serializer<typeof Pause, CommandTag.PAUSE> = {
+  tag: CommandTag.PAUSE,
   ctor: Pause,
   serializeArgs(command, sink) {
     sink(command.reason);
@@ -172,8 +173,11 @@ const pause: Serializer<typeof Pause> = {
     return [readBase128(source)];
   },
 };
-const markCompleted: Serializer<typeof MarkCompleted> = {
-  tag: 2,
+const markCompleted: Serializer<
+  typeof MarkCompleted,
+  CommandTag.MARK_COMPLETED
+> = {
+  tag: CommandTag.MARK_COMPLETED,
   ctor: MarkCompleted,
   serializeArgs(command, sink) {
     sink(command.completionState);
@@ -182,8 +186,11 @@ const markCompleted: Serializer<typeof MarkCompleted> = {
     return [readBase128(source)];
   },
 };
-const guessSolutionCount: Serializer<typeof GuessSolutionCount> = {
-  tag: 3,
+const guessSolutionCount: Serializer<
+  typeof GuessSolutionCount,
+  CommandTag.GUESS_SOLUTION_COUNT
+> = {
+  tag: CommandTag.GUESS_SOLUTION_COUNT,
   ctor: GuessSolutionCount,
   serializeArgs(command, sink) {
     sink(command.guess);
@@ -192,8 +199,8 @@ const guessSolutionCount: Serializer<typeof GuessSolutionCount> = {
     return [readBase128(source)];
   },
 };
-const clearCell: Serializer<typeof ClearCell> = {
-  tag: 4,
+const clearCell: Serializer<typeof ClearCell, CommandTag.CLEAR_CELL> = {
+  tag: CommandTag.CLEAR_CELL,
   ctor: ClearCell,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -202,8 +209,8 @@ const clearCell: Serializer<typeof ClearCell> = {
     return [Loc.of(readBase128(source))];
   },
 };
-const setNum: Serializer<typeof SetNum> = {
-  tag: 5,
+const setNum: Serializer<typeof SetNum, CommandTag.SET_NUM> = {
+  tag: CommandTag.SET_NUM,
   ctor: SetNum,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -213,8 +220,8 @@ const setNum: Serializer<typeof SetNum> = {
     return [Loc.of(readBase128(source)), readBase128(source)];
   },
 };
-const setNums: Serializer<typeof SetNums> = {
-  tag: 6,
+const setNums: Serializer<typeof SetNums, CommandTag.SET_NUMS> = {
+  tag: CommandTag.SET_NUMS,
   ctor: SetNums,
   serializeArgs(command, sink) {
     sink(command.loc.index);
@@ -227,94 +234,105 @@ const setNums: Serializer<typeof SetNums> = {
     ];
   },
 };
-const undo: Serializer<typeof Undo> = {
-  tag: 7,
+const undo: Serializer<typeof Undo, CommandTag.UNDO> = {
+  tag: CommandTag.UNDO,
   ctor: Undo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const redo: Serializer<typeof Redo> = {
-  tag: 8,
+const redo: Serializer<typeof Redo, CommandTag.REDO> = {
+  tag: CommandTag.REDO,
   ctor: Redo,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const undoToStart: Serializer<typeof UndoToStart> = {
-  tag: 9,
+const undoToStart: Serializer<typeof UndoToStart, CommandTag.UNDO_TO_START> = {
+  tag: CommandTag.UNDO_TO_START,
   ctor: UndoToStart,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const redoToEnd: Serializer<typeof RedoToEnd> = {
-  tag: 10,
+const redoToEnd: Serializer<typeof RedoToEnd, CommandTag.REDO_TO_END> = {
+  tag: CommandTag.REDO_TO_END,
   ctor: RedoToEnd,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const createTrail: Serializer<typeof CreateTrail> = {
-  tag: 11,
+const createTrail: Serializer<typeof CreateTrail, CommandTag.CREATE_TRAIL> = {
+  tag: CommandTag.CREATE_TRAIL,
   ctor: CreateTrail,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const activateTrail: Serializer<typeof ActivateTrail> = {
-  tag: 12,
+const activateTrail: Serializer<
+  typeof ActivateTrail,
+  CommandTag.ACTIVATE_TRAIL
+> = {
+  tag: CommandTag.ACTIVATE_TRAIL,
   ctor: ActivateTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
-const toggleTrailVisibility: Serializer<typeof ToggleTrailVisibility> = {
-  tag: 13,
+const toggleTrailVisibility: Serializer<
+  typeof ToggleTrailVisibility,
+  CommandTag.TOGGLE_TRAIL_VISIBILITY
+> = {
+  tag: CommandTag.TOGGLE_TRAIL_VISIBILITY,
   ctor: ToggleTrailVisibility,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
-const archiveTrail: Serializer<typeof ArchiveTrail> = {
-  tag: 14,
-  ctor: ArchiveTrail,
-  serializeArgs: serializeTrailId,
-  deserializeArgs: deserializeTrailId,
-};
-const toggleTrailsActive: Serializer<typeof ToggleTrailsActive> = {
-  tag: 15,
+const archiveTrail: Serializer<typeof ArchiveTrail, CommandTag.ARCHIVE_TRAIL> =
+  {
+    tag: CommandTag.ARCHIVE_TRAIL,
+    ctor: ArchiveTrail,
+    serializeArgs: serializeTrailId,
+    deserializeArgs: deserializeTrailId,
+  };
+const toggleTrailsActive: Serializer<
+  typeof ToggleTrailsActive,
+  CommandTag.TOGGLE_TRAILS_ACTIVE
+> = {
+  tag: CommandTag.TOGGLE_TRAILS_ACTIVE,
   ctor: ToggleTrailsActive,
   serializeArgs: noSerialize,
   deserializeArgs: noDeserialize,
 };
-const copyFromTrail: Serializer<typeof CopyFromTrail> = {
-  tag: 16,
+const copyFromTrail: Serializer<
+  typeof CopyFromTrail,
+  CommandTag.COPY_FROM_TRAIL
+> = {
+  tag: CommandTag.COPY_FROM_TRAIL,
   ctor: CopyFromTrail,
   serializeArgs: serializeTrailId,
   deserializeArgs: deserializeTrailId,
 };
 
-const serializersByTag: ReadonlyArray<Serializer<any>> = [
-  resume,
-  pause,
-  markCompleted,
-  guessSolutionCount,
-  clearCell,
-  setNum,
-  setNums,
-  undo,
-  redo,
-  undoToStart,
-  redoToEnd,
-  createTrail,
-  activateTrail,
-  toggleTrailVisibility,
-  archiveTrail,
-  toggleTrailsActive,
-  copyFromTrail,
-];
+type SerializerMap = {
+  [tag in CommandTag]: Serializer<any, any>;
+};
 
-const serializersByCtor: ReadonlyMap<Function, Serializer<any>> = new Map(
-  serializersByTag.map((s, i) => {
-    if (i != s.tag) {
-      throw new Error(
-        `The serializer for command ${s.ctor.name} should have tag ${i} but has ${s.tag}`,
-      );
-    }
-    return [s.ctor, s];
-  }),
-);
+const serializersByTag: SerializerMap = {
+  [CommandTag.RESUME]: resume,
+  [CommandTag.PAUSE]: pause,
+  [CommandTag.MARK_COMPLETED]: markCompleted,
+  [CommandTag.GUESS_SOLUTION_COUNT]: guessSolutionCount,
+  [CommandTag.CLEAR_CELL]: clearCell,
+  [CommandTag.SET_NUM]: setNum,
+  [CommandTag.SET_NUMS]: setNums,
+  [CommandTag.UNDO]: undo,
+  [CommandTag.REDO]: redo,
+  [CommandTag.UNDO_TO_START]: undoToStart,
+  [CommandTag.REDO_TO_END]: redoToEnd,
+  [CommandTag.CREATE_TRAIL]: createTrail,
+  [CommandTag.ACTIVATE_TRAIL]: activateTrail,
+  [CommandTag.TOGGLE_TRAIL_VISIBILITY]: toggleTrailVisibility,
+  [CommandTag.ARCHIVE_TRAIL]: archiveTrail,
+  [CommandTag.TOGGLE_TRAILS_ACTIVE]: toggleTrailsActive,
+  [CommandTag.COPY_FROM_TRAIL]: copyFromTrail,
+};
+
+/** For use by the test only. */
+export const TEST_ONLY = {
+  serializersByTag,
+};

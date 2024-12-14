@@ -1,10 +1,16 @@
-import {Command, CompletionState, GameInternals, Operation} from './command';
+import {
+  Command,
+  CommandTag,
+  CompletionState,
+  GameInternals,
+  Operation,
+} from './command';
 import {Loc} from './loc';
 import {Marks} from './marks';
 import {Trail} from './trail';
 import {Trails} from './trails';
 
-export class Resume extends Command {
+export class Resume extends Command<CommandTag.RESUME> {
   constructor(readonly timestamp: number) {
     super();
   }
@@ -12,6 +18,8 @@ export class Resume extends Command {
   override apply(internals: GameInternals): boolean {
     return internals.resume();
   }
+
+  readonly tag = CommandTag.RESUME;
 }
 
 /** How a game can be paused. */
@@ -27,7 +35,7 @@ export enum PauseReason {
   INFERRED,
 }
 
-export class Pause extends Command {
+export class Pause extends Command<CommandTag.PAUSE> {
   constructor(readonly reason: PauseReason) {
     super();
   }
@@ -35,9 +43,11 @@ export class Pause extends Command {
   override apply(internals: GameInternals): boolean {
     return internals.pause();
   }
+
+  readonly tag = CommandTag.PAUSE;
 }
 
-export class MarkCompleted extends Command {
+export class MarkCompleted extends Command<CommandTag.MARK_COMPLETED> {
   constructor(readonly completionState: CompletionState) {
     super();
   }
@@ -45,9 +55,11 @@ export class MarkCompleted extends Command {
   override apply(internals: GameInternals): boolean {
     return internals.markCompleted(this.completionState);
   }
+
+  readonly tag = CommandTag.MARK_COMPLETED;
 }
 
-export class GuessSolutionCount extends Command {
+export class GuessSolutionCount extends Command<CommandTag.GUESS_SOLUTION_COUNT> {
   constructor(readonly guess: number) {
     super();
   }
@@ -55,9 +67,11 @@ export class GuessSolutionCount extends Command {
   override apply(internals: GameInternals): boolean {
     return internals.guessSolutionCount(this.guess);
   }
+
+  readonly tag = CommandTag.GUESS_SOLUTION_COUNT;
 }
 
-abstract class Move extends Command {
+abstract class Move<TagValue extends CommandTag> extends Command<TagValue> {
   constructor(readonly loc: Loc) {
     super();
   }
@@ -77,7 +91,7 @@ abstract class Move extends Command {
   protected abstract move(internals: GameInternals): void;
 }
 
-export class ClearCell extends Move {
+export class ClearCell extends Move<CommandTag.CLEAR_CELL> {
   constructor(loc: Loc) {
     super(loc);
   }
@@ -94,9 +108,11 @@ export class ClearCell extends Move {
   protected override stateAsString(): string {
     return `${this.loc}`;
   }
+
+  readonly tag = CommandTag.CLEAR_CELL;
 }
 
-abstract class Assign extends Move {
+abstract class Assign<TagValue extends CommandTag> extends Move<TagValue> {
   override supersedes(prevCommand: Command): boolean {
     // A subsequent assignment to the same location in the grid supersedes the
     // previous one in the undo stack.
@@ -104,7 +120,7 @@ abstract class Assign extends Move {
   }
 }
 
-export class SetNum extends Assign {
+export class SetNum extends Assign<CommandTag.SET_NUM> {
   constructor(
     loc: Loc,
     readonly num: number,
@@ -124,9 +140,11 @@ export class SetNum extends Assign {
   protected override stateAsString(): string {
     return `${this.loc}, ${this.num}`;
   }
+
+  readonly tag = CommandTag.SET_NUM;
 }
 
-export class SetNums extends Assign {
+export class SetNums extends Assign<CommandTag.SET_NUMS> {
   constructor(
     loc: Loc,
     readonly nums: ReadonlySet<number>,
@@ -146,36 +164,46 @@ export class SetNums extends Assign {
   protected override stateAsString(): string {
     return `${this.loc}, {${[...this.nums].join()}}`;
   }
+
+  readonly tag = CommandTag.SET_NUMS;
 }
 
-export class Undo extends Command {
+export class Undo extends Command<CommandTag.UNDO> {
   override apply(internals: GameInternals): boolean {
     return internals.undoStack.undo(internals);
   }
+
+  readonly tag = CommandTag.UNDO;
 }
 
-export class Redo extends Command {
+export class Redo extends Command<CommandTag.REDO> {
   override apply(internals: GameInternals): boolean {
     return internals.undoStack.redo(internals);
   }
+
+  readonly tag = CommandTag.REDO;
 }
 
-export class UndoToStart extends Command {
+export class UndoToStart extends Command<CommandTag.UNDO_TO_START> {
   override apply(internals: GameInternals): boolean {
     while (internals.undoStack.canUndo()) {
       if (!internals.undoStack.undo(internals)) return false;
     }
     return true;
   }
+
+  readonly tag = CommandTag.UNDO_TO_START;
 }
 
-export class RedoToEnd extends Command {
+export class RedoToEnd extends Command<CommandTag.REDO_TO_END> {
   override apply(internals: GameInternals): boolean {
     while (internals.undoStack.canRedo()) {
       if (!internals.undoStack.redo(internals)) return false;
     }
     return true;
   }
+
+  readonly tag = CommandTag.REDO_TO_END;
 }
 
 /**
@@ -231,7 +259,9 @@ class RestoreMarksAndTrailsOperation extends RestoreTrailsOperation {
 /**
  * The base class for all trail commands.
  */
-abstract class TrailCommand extends Command {
+abstract class TrailCommand<
+  TagValue extends CommandTag,
+> extends Command<TagValue> {
   /** Trail commands are undoable but only count as part of a single undo step. */
   protected override get partialUndoStep(): boolean {
     return true;
@@ -242,7 +272,7 @@ abstract class TrailCommand extends Command {
   }
 }
 
-export class CreateTrail extends TrailCommand {
+export class CreateTrail extends TrailCommand<CommandTag.CREATE_TRAIL> {
   override apply(internals: GameInternals): boolean {
     const {trails} = internals;
     const empty = trails.order.find(t => t.isEmpty);
@@ -254,9 +284,13 @@ export class CreateTrail extends TrailCommand {
     }
     return true;
   }
+
+  readonly tag = CommandTag.CREATE_TRAIL;
 }
 
-abstract class TrailIdCommand extends TrailCommand {
+abstract class TrailIdCommand<
+  TagValue extends CommandTag,
+> extends TrailCommand<TagValue> {
   constructor(readonly trailId: number) {
     super();
   }
@@ -266,7 +300,7 @@ abstract class TrailIdCommand extends TrailCommand {
   }
 }
 
-export class ActivateTrail extends TrailIdCommand {
+export class ActivateTrail extends TrailIdCommand<CommandTag.ACTIVATE_TRAIL> {
   constructor(trailId: number) {
     super(trailId);
   }
@@ -275,9 +309,11 @@ export class ActivateTrail extends TrailIdCommand {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.activate(trail);
   }
+
+  readonly tag = CommandTag.ACTIVATE_TRAIL;
 }
 
-export class ToggleTrailVisibility extends TrailIdCommand {
+export class ToggleTrailVisibility extends TrailIdCommand<CommandTag.TOGGLE_TRAIL_VISIBILITY> {
   constructor(trailId: number) {
     super(trailId);
   }
@@ -286,9 +322,11 @@ export class ToggleTrailVisibility extends TrailIdCommand {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.toggleVisibility(trail);
   }
+
+  readonly tag = CommandTag.TOGGLE_TRAIL_VISIBILITY;
 }
 
-export class ArchiveTrail extends TrailIdCommand {
+export class ArchiveTrail extends TrailIdCommand<CommandTag.ARCHIVE_TRAIL> {
   constructor(trailId: number) {
     super(trailId);
   }
@@ -297,15 +335,19 @@ export class ArchiveTrail extends TrailIdCommand {
     const trail = internals.trails.get(this.trailId);
     return !!trail && internals.trails.archive(trail);
   }
+
+  readonly tag = CommandTag.ARCHIVE_TRAIL;
 }
 
-export class ToggleTrailsActive extends TrailCommand {
+export class ToggleTrailsActive extends TrailCommand<CommandTag.TOGGLE_TRAILS_ACTIVE> {
   override apply(internals: GameInternals): boolean {
     return internals.trails.toggleActive();
   }
+
+  readonly tag = CommandTag.TOGGLE_TRAILS_ACTIVE;
 }
 
-export class CopyFromTrail extends TrailIdCommand {
+export class CopyFromTrail extends TrailIdCommand<CommandTag.COPY_FROM_TRAIL> {
   constructor(trailId: number) {
     super(trailId);
   }
@@ -352,4 +394,6 @@ export class CopyFromTrail extends TrailIdCommand {
     }
     return true;
   }
+
+  readonly tag = CommandTag.COPY_FROM_TRAIL;
 }
