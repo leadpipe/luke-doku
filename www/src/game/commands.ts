@@ -19,7 +19,9 @@ export class Resume extends Command<CommandTag.RESUME> {
     return internals.resume();
   }
 
-  readonly tag = CommandTag.RESUME;
+  override tag(): CommandTag.RESUME {
+    return CommandTag.RESUME;
+  }
 }
 
 /** How a game can be paused. */
@@ -44,7 +46,9 @@ export class Pause extends Command<CommandTag.PAUSE> {
     return internals.pause(elapsedTimestamp);
   }
 
-  readonly tag = CommandTag.PAUSE;
+  override tag(): CommandTag.PAUSE {
+    return CommandTag.PAUSE;
+  }
 }
 
 export class MarkCompleted extends Command<CommandTag.MARK_COMPLETED> {
@@ -56,7 +60,9 @@ export class MarkCompleted extends Command<CommandTag.MARK_COMPLETED> {
     return internals.markCompleted(this.completionState, elapsedTimestamp);
   }
 
-  readonly tag = CommandTag.MARK_COMPLETED;
+  override tag(): CommandTag.MARK_COMPLETED {
+    return CommandTag.MARK_COMPLETED;
+  }
 }
 
 export class GuessSolutionCount extends Command<CommandTag.GUESS_SOLUTION_COUNT> {
@@ -68,7 +74,9 @@ export class GuessSolutionCount extends Command<CommandTag.GUESS_SOLUTION_COUNT>
     return internals.guessSolutionCount(this.guess);
   }
 
-  readonly tag = CommandTag.GUESS_SOLUTION_COUNT;
+  override tag(): CommandTag.GUESS_SOLUTION_COUNT {
+    return CommandTag.GUESS_SOLUTION_COUNT;
+  }
 }
 
 abstract class Move<TagValue extends CommandTag> extends Command<TagValue> {
@@ -109,7 +117,9 @@ export class ClearCell extends Move<CommandTag.CLEAR_CELL> {
     return `${this.loc}`;
   }
 
-  readonly tag = CommandTag.CLEAR_CELL;
+  override tag(): CommandTag.CLEAR_CELL {
+    return CommandTag.CLEAR_CELL;
+  }
 }
 
 abstract class Assign<TagValue extends CommandTag> extends Move<TagValue> {
@@ -141,7 +151,9 @@ export class SetNum extends Assign<CommandTag.SET_NUM> {
     return `${this.loc}, ${this.num}`;
   }
 
-  readonly tag = CommandTag.SET_NUM;
+  override tag(): CommandTag.SET_NUM {
+    return CommandTag.SET_NUM;
+  }
 }
 
 export class SetNums extends Assign<CommandTag.SET_NUMS> {
@@ -165,7 +177,9 @@ export class SetNums extends Assign<CommandTag.SET_NUMS> {
     return `${this.loc}, {${[...this.nums].join()}}`;
   }
 
-  readonly tag = CommandTag.SET_NUMS;
+  override tag(): CommandTag.SET_NUMS {
+    return CommandTag.SET_NUMS;
+  }
 }
 
 export class Undo extends Command<CommandTag.UNDO> {
@@ -173,7 +187,9 @@ export class Undo extends Command<CommandTag.UNDO> {
     return internals.undoStack.undo(internals);
   }
 
-  readonly tag = CommandTag.UNDO;
+  override tag(): CommandTag.UNDO {
+    return CommandTag.UNDO;
+  }
 }
 
 export class Redo extends Command<CommandTag.REDO> {
@@ -181,7 +197,9 @@ export class Redo extends Command<CommandTag.REDO> {
     return internals.undoStack.redo(internals);
   }
 
-  readonly tag = CommandTag.REDO;
+  override tag(): CommandTag.REDO {
+    return CommandTag.REDO;
+  }
 }
 
 export class UndoToStart extends Command<CommandTag.UNDO_TO_START> {
@@ -192,7 +210,9 @@ export class UndoToStart extends Command<CommandTag.UNDO_TO_START> {
     return true;
   }
 
-  readonly tag = CommandTag.UNDO_TO_START;
+  override tag(): CommandTag.UNDO_TO_START {
+    return CommandTag.UNDO_TO_START;
+  }
 }
 
 export class RedoToEnd extends Command<CommandTag.REDO_TO_END> {
@@ -203,7 +223,9 @@ export class RedoToEnd extends Command<CommandTag.REDO_TO_END> {
     return true;
   }
 
-  readonly tag = CommandTag.REDO_TO_END;
+  override tag(): CommandTag.REDO_TO_END {
+    return CommandTag.REDO_TO_END;
+  }
 }
 
 /**
@@ -285,7 +307,9 @@ export class CreateTrail extends TrailCommand<CommandTag.CREATE_TRAIL> {
     return true;
   }
 
-  readonly tag = CommandTag.CREATE_TRAIL;
+  override tag(): CommandTag.CREATE_TRAIL {
+    return CommandTag.CREATE_TRAIL;
+  }
 }
 
 abstract class TrailIdCommand<
@@ -310,7 +334,9 @@ export class ActivateTrail extends TrailIdCommand<CommandTag.ACTIVATE_TRAIL> {
     return !!trail && internals.trails.activate(trail);
   }
 
-  readonly tag = CommandTag.ACTIVATE_TRAIL;
+  override tag(): CommandTag.ACTIVATE_TRAIL {
+    return CommandTag.ACTIVATE_TRAIL;
+  }
 }
 
 export class ToggleTrailVisibility extends TrailIdCommand<CommandTag.TOGGLE_TRAIL_VISIBILITY> {
@@ -323,7 +349,9 @@ export class ToggleTrailVisibility extends TrailIdCommand<CommandTag.TOGGLE_TRAI
     return !!trail && internals.trails.toggleVisibility(trail);
   }
 
-  readonly tag = CommandTag.TOGGLE_TRAIL_VISIBILITY;
+  override tag(): CommandTag.TOGGLE_TRAIL_VISIBILITY {
+    return CommandTag.TOGGLE_TRAIL_VISIBILITY;
+  }
 }
 
 export class ArchiveTrail extends TrailIdCommand<CommandTag.ARCHIVE_TRAIL> {
@@ -336,7 +364,9 @@ export class ArchiveTrail extends TrailIdCommand<CommandTag.ARCHIVE_TRAIL> {
     return !!trail && internals.trails.archive(trail);
   }
 
-  readonly tag = CommandTag.ARCHIVE_TRAIL;
+  override tag(): CommandTag.ARCHIVE_TRAIL {
+    return CommandTag.ARCHIVE_TRAIL;
+  }
 }
 
 export class ToggleTrailsActive extends TrailCommand<CommandTag.TOGGLE_TRAILS_ACTIVE> {
@@ -344,7 +374,9 @@ export class ToggleTrailsActive extends TrailCommand<CommandTag.TOGGLE_TRAILS_AC
     return internals.trails.toggleActive();
   }
 
-  readonly tag = CommandTag.TOGGLE_TRAILS_ACTIVE;
+  override tag(): CommandTag.TOGGLE_TRAILS_ACTIVE {
+    return CommandTag.TOGGLE_TRAILS_ACTIVE;
+  }
 }
 
 export class CopyFromTrail extends TrailIdCommand<CommandTag.COPY_FROM_TRAIL> {
@@ -395,5 +427,7 @@ export class CopyFromTrail extends TrailIdCommand<CommandTag.COPY_FROM_TRAIL> {
     return true;
   }
 
-  readonly tag = CommandTag.COPY_FROM_TRAIL;
+  override tag(): CommandTag.COPY_FROM_TRAIL {
+    return CommandTag.COPY_FROM_TRAIL;
+  }
 }

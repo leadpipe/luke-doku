@@ -32,6 +32,7 @@ describe('serialize module', () => {
   it(`serializers are indexed correctly`, () => {
     for (const [tag, serializer] of Object.entries(serializersByTag)) {
       expect(CommandTag[Number(tag)]).toBe(CommandTag[serializer.tag]);
+      expect(serializer.tag).toBe(serializer.ctor.prototype.tag());
     }
   });
 

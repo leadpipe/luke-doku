@@ -110,7 +110,7 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
   }
 
   /** The serialization tag for this command. */
-  abstract readonly tag: TagValue;
+  abstract tag(): TagValue;
 }
 
 /**

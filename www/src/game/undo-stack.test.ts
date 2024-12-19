@@ -46,7 +46,9 @@ class FakeCommand extends Command {
     return this.partial;
   }
 
-  readonly tag = CommandTag.GUESS_SOLUTION_COUNT; // Has to be something
+  override tag() {
+    return CommandTag.GUESS_SOLUTION_COUNT; // Has to be something
+  }
 }
 
 describe(`UndoStack`, () => {

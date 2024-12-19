@@ -65,7 +65,7 @@ export function serializeCommands(
   let prevTimestamp = index ? history[index - 1].elapsedTimestamp : 0;
   while (index < count) {
     const c = history[index++];
-    const {tag} = c.command;
+    const tag = c.command.tag();
     const s = serializersByTag[tag];
     if (!s) {
       throw new Error(`No serializer found for command ${c.command}`);
