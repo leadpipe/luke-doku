@@ -322,23 +322,50 @@ export enum PlayState {
  * manage saving to and restoring from the database.
  */
 export class Game extends BaseGame {
-  private readonly db: IDBPDatabase<LukeDokuDb>;
-  private readonly record: PuzzleRecord;
-// Tracks the most recent DB serialization of the game history.
+  /**
+   * Returns the Game that corresponds to a database record, creating a new one
+   * if it has not already been created or if it has been garbage collected.
+   * @param db The database
+   * @param record The record in the database
+   */
+  static forDbRecord(db: IDBPDatabase<LukeDokuDb>, record: PuzzleRecord): Game {
+    let answer = this.forCluesString(record.clues);
+    if (!answer) {
+      answer = new Game(db, record);
+      this.instances.set(record.clues, new WeakRef(answer));
+    }
+    return answer;
+  }
+
+  /**
+   * Returns the Game that corresponds to the given clues string, if it has been
+   * created and not garbage collected.
+   * @param clues The clues string for the game in question
+   * @returns The Game for the given clues, or undefined
+   */
+  static forCluesString(clues: string): Game | undefined {
+    return this.instances.get(clues)?.deref();
+  }
+
+  private static readonly instances = new Map<string, WeakRef<Game>>();
+
+  // private readonly db: IDBPDatabase<LukeDokuDb>;
+  // private readonly record: PuzzleRecord;
+  // Tracks the most recent DB serialization of the game history.
   private serializationResult: SerializationResult;
 
   /**
    * Requires a database instance and the record from the DB that corresponds to
    * this game.
    */
-  constructor(
-    db: IDBPDatabase<LukeDokuDb>,
-    record: PuzzleRecord,
+  private constructor(
+    private readonly db: IDBPDatabase<LukeDokuDb>,
+    private readonly record: PuzzleRecord,
   ) {
     const history = record.history ? deserializeCommands(record.history) : [];
     super(Sudoku.fromDatabaseRecord(record), history);
-    this.db = db;
-    this.record = record;
+    // this.db = db;
+    // this.record = record;
     this.serializationResult = {
       count: history.length,
       serialized: record.history ?? new Int8Array(),

@@ -60,7 +60,6 @@ export class PuzzlesPage extends LitElement {
   }
 
   @state() private todaysGames: Game[] = [];
-  private readonly gamesByCluesString = new Map<GridString, Game>();
 
   constructor() {
     super();
@@ -68,7 +67,6 @@ export class PuzzlesPage extends LitElement {
   }
 
   private async loadPuzzles() {
-    const {gamesByCluesString} = this;
     const todaysGames = [];
     const db = await openDb();
     const today = wasm.LogicalDate.fromDate(new Date());
@@ -80,9 +78,7 @@ export class PuzzlesPage extends LitElement {
       // are in the DB.
       IDBKeyRange.bound(todayString + ':', todayString + ';'),
     )) {
-      const game = new Game(db, cursor.value);
-      gamesByCluesString.set(game.sudoku.cluesString(), game);
-      todaysGames.push(game);
+      todaysGames.push(Game.forDbRecord(db, cursor.value));
     }
     todaysGames.sort(
       (a, b) => (a.sudoku.id?.counter ?? 0) - (b.sudoku.id?.counter ?? 0),
@@ -94,9 +90,8 @@ export class PuzzlesPage extends LitElement {
       const sudoku = await this.generatePuzzle(dailySolution, counter);
       const record = sudoku.toDatabaseRecord();
       await db.add('puzzles', record);
-      const game = new Game(db, record);
-      gamesByCluesString.set(game.sudoku.cluesString(), game);
-      this.todaysGames = [...todaysGames, game];
+      todaysGames.push(Game.forDbRecord(db, record));
+      this.todaysGames = [...todaysGames];
     }
   }
 
@@ -109,9 +104,8 @@ export class PuzzlesPage extends LitElement {
   }
 
   private selectPuzzle(event: Event) {
-    const {gamesByCluesString} = this;
     const cluesString = findDataString(event, 'clues') as GridString;
-    const game = gamesByCluesString.get(cluesString);
+    const game = Game.forCluesString(cluesString);
     if (game) {
       this.dispatchEvent(
         customEvent('play-puzzle', {
