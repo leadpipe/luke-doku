@@ -40,8 +40,8 @@ export class Pause extends Command<CommandTag.PAUSE> {
     super();
   }
 
-  override apply(internals: GameInternals): boolean {
-    return internals.pause();
+  override apply(internals: GameInternals, elapsedTimestamp: number): boolean {
+    return internals.pause(elapsedTimestamp);
   }
 
   readonly tag = CommandTag.PAUSE;
@@ -52,8 +52,8 @@ export class MarkCompleted extends Command<CommandTag.MARK_COMPLETED> {
     super();
   }
 
-  override apply(internals: GameInternals): boolean {
-    return internals.markCompleted(this.completionState);
+  override apply(internals: GameInternals, elapsedTimestamp: number): boolean {
+    return internals.markCompleted(this.completionState, elapsedTimestamp);
   }
 
   readonly tag = CommandTag.MARK_COMPLETED;

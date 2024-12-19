@@ -7,8 +7,8 @@ import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {CompletionState} from '../game/command';
+import {PauseReason} from '../game/commands';
 import {Game, PlayState} from '../game/game';
-import {Sudoku} from '../game/sudoku';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {customEvent} from './events';
@@ -412,17 +412,15 @@ export class SolvePage extends LitElement {
     `;
   }
 
-  @property({attribute: false}) sudoku: Sudoku | null = null;
-  @state() private game: Game | null = null;
-  private trailColors: TrailColors | null = null;
+  @property({attribute: false}) game: Game | null = null;
+  @state() private trailColors: TrailColors | null = null;
   @state() private theme = getCurrentTheme();
   @query('sudoku-view') sudokuView?: SudokuView;
 
   override updated(changedProperties: PropertyValues<this>) {
-    if (changedProperties.has('sudoku')) {
-      this.game = this.sudoku ? new Game(this.sudoku) : null;
+    if (changedProperties.has('game')) {
       this.trailColors =
-        this.sudoku ? new TrailColors(this.sudoku.cluesString()) : null;
+        this.game ? new TrailColors(this.game.sudoku.cluesString()) : null;
     }
   }
 
@@ -446,6 +444,7 @@ export class SolvePage extends LitElement {
   }
 
   private showPuzzlesPage(event_: Event) {
+    this.game?.pause(PauseReason.AUTO);
     this.dispatchEvent(
       customEvent('show-puzzles-page', {
         composed: true,
@@ -481,7 +480,7 @@ export class SolvePage extends LitElement {
   }
 
   private saveGame() {
-    // TODO: implement
+    this.game?.save();
   }
 
   private notePuzzleSolved() {

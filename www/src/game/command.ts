@@ -9,7 +9,7 @@ export interface Operation {
   /**
    * Applies this operation to the given game.
    */
-  apply(internals: GameInternals): boolean;
+  apply(internals: GameInternals, elapsedTimestamp: number): boolean;
 }
 
 /**
@@ -54,7 +54,7 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
     elapsedTimestamp: number,
   ): ExecutedCommand | null {
     const undo = this.makeUndo(internals);
-    if (this.apply(internals)) {
+    if (this.apply(internals, elapsedTimestamp)) {
       return {
         command: this,
         elapsedTimestamp,
@@ -94,7 +94,7 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
    * Actually applies this command to the given game, telling whether it was
    * able to do so.
    */
-  abstract apply(internals: GameInternals): boolean;
+  abstract apply(internals: GameInternals, elapsedTimestamp: number): boolean;
 
   /**
    * Whether this command should be considered a partial undo step; defaults to
@@ -178,7 +178,7 @@ export interface GameInternals {
   marks: Marks;
   trails: Trails;
   resume(): boolean;
-  pause(): boolean;
-  markCompleted(completionState: CompletionState): boolean;
+  pause(elapsedTimestamp: number): boolean;
+  markCompleted(completionState: CompletionState, elapsedTimestamp: number): boolean;
   guessSolutionCount(guess: number): boolean;
 }

@@ -1,3 +1,4 @@
+import type {IDBPDatabase} from 'idb';
 import {
   Command,
   CompletionState,
@@ -25,15 +26,22 @@ import {
   Undo,
   UndoToStart,
 } from './commands';
+import {AttemptState, LukeDokuDb, PuzzleRecord} from './database';
 import {Loc} from './loc';
 import {Marks, ReadonlyMarks} from './marks';
+import {
+  deserializeCommands,
+  type SerializationResult,
+  serializeCommands,
+} from './serialize';
 import {Sudoku} from './sudoku';
 import {ReadonlyTrail} from './trail';
 import {ReadonlyTrails, Trails} from './trails';
 import {UndoStack} from './undo-stack';
+import {ensureExhaustiveSwitch} from './utils';
 
 /** Manages the game state for solving a sudoku interactively. */
-export class Game {
+class BaseGame {
   private writableMarks: Marks;
   private readonly writableHistory: RecordedCommand[] = [];
   private readonly undoStack: UndoStack = new UndoStack();
@@ -88,17 +96,17 @@ export class Game {
         }
         return false;
       },
-      pause: () => {
+      pause: elapsedTimestamp => {
         if (this.playState === PlayState.RUNNING) {
-          this.priorElapsedMs = this.elapsedMs;
+          this.priorElapsedMs = elapsedTimestamp;
           this.resumedTimestamp = 0;
           this.#playState = PlayState.PAUSED;
           return true;
         }
         return false;
       },
-      markCompleted: completionState => {
-        this.internals.pause();
+      markCompleted: (completionState, elapsedTimestamp) => {
+        this.internals.pause(elapsedTimestamp);
         this.#playState = PlayState.COMPLETED;
         this.#completionState = completionState;
         this.writableTrails.hideAllTrails();
@@ -265,7 +273,7 @@ export class Game {
     return this.execute(new CopyFromTrail(trail.id));
   }
 
-  private execute(command: Command, elapsedTimestamp?: number): boolean {
+  protected execute(command: Command, elapsedTimestamp?: number): boolean {
     const done = command.execute(
       this.internals,
       elapsedTimestamp ?? this.elapsedMs,
@@ -306,3 +314,87 @@ export enum PlayState {
    */
   COMPLETED = 'completed',
 }
+
+/**
+ * Manages the game state for solving a sudoku interactively.
+ *
+ * Extends BaseGame, which provides all the interaction points for the game, to
+ * manage saving to and restoring from the database.
+ */
+export class Game extends BaseGame {
+  private readonly db: IDBPDatabase<LukeDokuDb>;
+  private readonly record: PuzzleRecord;
+// Tracks the most recent DB serialization of the game history.
+  private serializationResult: SerializationResult;
+
+  /**
+   * Requires a database instance and the record from the DB that corresponds to
+   * this game.
+   */
+  constructor(
+    db: IDBPDatabase<LukeDokuDb>,
+    record: PuzzleRecord,
+  ) {
+    const history = record.history ? deserializeCommands(record.history) : [];
+    super(Sudoku.fromDatabaseRecord(record), history);
+    this.db = db;
+    this.record = record;
+    this.serializationResult = {
+      count: history.length,
+      serialized: record.history ?? new Int8Array(),
+    };
+    // If the game is currently running, the app must have gotten zapped before
+    // successfully writing a pause command to the database.  Insert a synthetic
+    // pause using the last `elapsedMs` we were able to write.
+    if (this.playState === PlayState.RUNNING) {
+      this.execute(new Pause(PauseReason.INFERRED), record.elapsedMs);
+    }
+  }
+
+  /**
+   * Saves the current game state to the database.  Returns a promise that
+   * resolves when the save is complete (or rejects when the save is aborted).
+   */
+  async save() {
+    // Note that this call to `serializeCommands` will be a no-op when the
+    // history has not grown since the last time we serialized it.
+    this.serializationResult = serializeCommands(
+      this.history,
+      this.serializationResult,
+    );
+    const {record} = this;
+    record.history = this.serializationResult.serialized;
+    record.elapsedMs = this.elapsedMs;
+    record.lastUpdated = new Date();
+    record.attemptState = this.getAttemptState();
+    await this.db.put('puzzles', record);
+  }
+
+  protected override execute(
+    command: Command,
+    elapsedTimestamp?: number,
+  ): boolean {
+    const answer = super.execute(command, elapsedTimestamp);
+    if (answer && this.record) {
+      this.save();
+    }
+    return answer;
+  }
+
+  private getAttemptState(): AttemptState {
+    switch (this.playState) {
+      case PlayState.UNSTARTED:
+        return AttemptState.UNSTARTED;
+      case PlayState.COMPLETED:
+        return AttemptState.COMPLETED;
+      case PlayState.PAUSED:
+      case PlayState.RUNNING:
+        return AttemptState.ONGOING;
+      default:
+        ensureExhaustiveSwitch(this.playState);
+    }
+  }
+}
+
+/** For use by tests only. */
+export const TEST_ONLY = {BaseGame};

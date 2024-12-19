@@ -39,9 +39,10 @@ export class UndoStack {
   undo(internals: GameInternals): boolean {
     if (!this.canUndo()) return false;
     const {commands} = this;
+    const elapsedTimestamp = 0; // Not applicable to any undoable commands
     do {
       const undoableCommand = commands[--this.next];
-      if (!undoableCommand.undo.apply(internals)) {
+      if (!undoableCommand.undo.apply(internals, elapsedTimestamp)) {
         return false;
       }
     } while (commands[this.next - 1]?.partialUndoStep);

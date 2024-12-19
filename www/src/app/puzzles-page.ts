@@ -1,8 +1,9 @@
 import './events';
 
 import {css, html, LitElement} from 'lit';
-import {customElement} from 'lit/decorators.js';
+import {customElement, state} from 'lit/decorators.js';
 import * as wasm from 'luke-doku-rust';
+import {openDb} from '../game/database';
 import {Game} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
@@ -42,15 +43,15 @@ export class PuzzlesPage extends LitElement {
       <h1>Luke-doku</h1>
       <h2>Today&apos;s puzzles</h2>
       <div class="puzzle-list">
-        ${this.puzzles.map(
-          sudoku => html`
+        ${this.todaysGames.map(
+          game => html`
             <div
               class="puzzle"
               @click=${this.selectPuzzle}
-              data-clues=${sudoku.cluesString() as string}
+              data-clues=${game.sudoku.cluesString() as string}
             >
-              <sudoku-view .game=${new Game(sudoku)}></sudoku-view>
-              #${sudoku.id?.counter}
+              <sudoku-view .game=${game}></sudoku-view>
+              #${game.sudoku.id?.counter}
             </div>
           `,
         )}
@@ -58,32 +59,63 @@ export class PuzzlesPage extends LitElement {
     `;
   }
 
-  private readonly puzzles: Sudoku[];
-  private readonly puzzlesByCluesString: Map<GridString, Sudoku>;
+  @state() private todaysGames: Game[] = [];
+  private readonly gamesByCluesString = new Map<GridString, Game>();
 
   constructor() {
     super();
-    const date = wasm.LogicalDate.fromDate(new Date());
-    const dailySolution = wasm.dailySolution(date);
-    const puzzles: Sudoku[] = [];
-    const puzzlesByCluesString = new Map<GridString, Sudoku>();
-    for (let counter = 1; counter <= 10; ++counter) {
-      const sudoku = Sudoku.fromWasm(dailySolution.gen(counter));
-      puzzles.push(sudoku);
-      puzzlesByCluesString.set(sudoku.cluesString(), sudoku);
+    this.loadPuzzles();
+  }
+
+  private async loadPuzzles() {
+    const {gamesByCluesString} = this;
+    const todaysGames = [];
+    const db = await openDb();
+    const today = wasm.LogicalDate.fromDate(new Date());
+    const todayString = today.toString();
+    const index = db.transaction('puzzles').store.index('byPuzzleId');
+    for await (const cursor of index.iterate(
+      // Puzzle IDs in the db are `${date}:${counter}`, and semicolon is the
+      // next character after colon, so this gets all of today's puzzles that
+      // are in the DB.
+      IDBKeyRange.bound(todayString + ':', todayString + ';'),
+    )) {
+      const game = new Game(db, cursor.value);
+      gamesByCluesString.set(game.sudoku.cluesString(), game);
+      todaysGames.push(game);
     }
-    this.puzzles = puzzles;
-    this.puzzlesByCluesString = puzzlesByCluesString;
+    todaysGames.sort(
+      (a, b) => (a.sudoku.id?.counter ?? 0) - (b.sudoku.id?.counter ?? 0),
+    );
+    this.todaysGames = todaysGames;
+    if (todaysGames.length >= 10) return;
+    const dailySolution = wasm.dailySolution(today);
+    for (let counter = todaysGames.length + 1; counter <= 10; ++counter) {
+      const sudoku = await this.generatePuzzle(dailySolution, counter);
+      const record = sudoku.toDatabaseRecord();
+      await db.add('puzzles', record);
+      const game = new Game(db, record);
+      gamesByCluesString.set(game.sudoku.cluesString(), game);
+      this.todaysGames = [...todaysGames, game];
+    }
+  }
+
+  private async generatePuzzle(
+    dailySolution: wasm.DailySolution,
+    counter: number,
+  ): Promise<Sudoku> {
+    // Eventually this will be a call to a worker thread.
+    return Sudoku.fromWasm(dailySolution.gen(counter));
   }
 
   private selectPuzzle(event: Event) {
-    const {puzzlesByCluesString} = this;
+    const {gamesByCluesString} = this;
     const cluesString = findDataString(event, 'clues') as GridString;
-    const puzzle = puzzlesByCluesString.get(cluesString);
-    if (puzzle) {
+    const game = gamesByCluesString.get(cluesString);
+    if (game) {
       this.dispatchEvent(
         customEvent('play-puzzle', {
-          detail: puzzle,
+          detail: game,
           bubbles: true,
           composed: true,
         }),

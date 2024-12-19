@@ -1,13 +1,13 @@
+import type {Game} from '../game/game';
 import {Loc} from '../game/loc';
-import {Sudoku} from '../game/sudoku';
 import {Theme} from './types';
 
 declare global {
   interface HTMLElementEventMap {
     /**
-     * Sent to switch to the solve page showing the given Sudoku.
+     * Sent to switch to the solve page showing the given Game.
      */
-    'play-puzzle': CustomEvent<Sudoku>;
+    'play-puzzle': CustomEvent<Game>;
     /**
      * Sent by game-clock when another second has passed.  The event detail
      * tells whether the clock was being shown.

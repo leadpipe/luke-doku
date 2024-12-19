@@ -1,4 +1,10 @@
-import {Command, GameInternals, Operation, UndoableCommand} from './command';
+import {
+  Command,
+  CommandTag,
+  GameInternals,
+  Operation,
+  UndoableCommand,
+} from './command';
 import {Marks} from './marks';
 import {Trails} from './trails';
 import {UndoStack} from './undo-stack';
@@ -39,6 +45,8 @@ class FakeCommand extends Command {
   protected override get partialUndoStep(): boolean {
     return this.partial;
   }
+
+  readonly tag = CommandTag.GUESS_SOLUTION_COUNT; // Has to be something
 }
 
 describe(`UndoStack`, () => {

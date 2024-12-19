@@ -5,7 +5,7 @@ import './sudoku-view';
 
 import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
-import {Sudoku} from '../game/sudoku';
+import type {Game} from '../game/game';
 import {ensureExhaustiveSwitch} from '../game/utils';
 
 type Page = 'solve' | 'puzzles';
@@ -26,7 +26,7 @@ export class LukeDoku extends LitElement {
   private renderPage(page: Page): TemplateResult {
     switch (page) {
       case 'solve':
-        return html` <solve-page .sudoku=${this.sudoku}></solve-page> `;
+        return html` <solve-page .game=${this.game}></solve-page> `;
       case 'puzzles':
         return html` <puzzles-page></puzzles-page> `;
       default:
@@ -34,7 +34,7 @@ export class LukeDoku extends LitElement {
     }
   }
 
-  @state() private sudoku: Sudoku | null = null;
+  @state() private game: Game | null = null;
   @state() page: Page = 'puzzles';
 
   constructor() {
@@ -43,8 +43,8 @@ export class LukeDoku extends LitElement {
     this.addEventListener('show-puzzles-page', () => this.showPuzzlesPage());
   }
 
-  private selectPuzzle(event: CustomEvent<Sudoku>) {
-    this.sudoku = event.detail;
+  private selectPuzzle(event: CustomEvent<Game>) {
+    this.game = event.detail;
     this.page = 'solve';
   }
 

@@ -56,7 +56,7 @@ export interface LukeDokuDb extends DBSchema {
        * situations where the game is not properly paused before the app process
        * is killed.
        */
-      elapsedMillis?: number;
+      elapsedMs?: number;
 
       /**
        * Collects the histories of all attempts to solve the puzzle that were

@@ -49,7 +49,7 @@ export interface SerializationResult {
  * the same history array, now extended.
  */
 export function serializeCommands(
-  history: RecordedCommand[],
+  history: readonly RecordedCommand[],
   previousResult?: SerializationResult,
 ): SerializationResult {
   const count = history.length;
