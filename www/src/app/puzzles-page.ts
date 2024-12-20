@@ -86,11 +86,12 @@ export class PuzzlesPage extends LitElement {
     this.todaysGames = todaysGames;
     if (todaysGames.length >= 10) return;
     const dailySolution = wasm.dailySolution(today);
-    for (let counter = todaysGames.length + 1; counter <= 10; ++counter) {
+    for (let counter = 1; counter <= 10; ++counter) {
       const sudoku = await this.generatePuzzle(dailySolution, counter);
+      if (Game.forCluesString(sudoku.cluesString())) continue;
       const record = sudoku.toDatabaseRecord();
       await db.add('puzzles', record);
-      todaysGames.push(Game.forDbRecord(db, record));
+      todaysGames.splice(counter - 1, 0, Game.forDbRecord(db, record));
       this.todaysGames = [...todaysGames];
     }
   }

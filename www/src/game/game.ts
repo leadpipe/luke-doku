@@ -37,6 +37,7 @@ import {
 import {Sudoku} from './sudoku';
 import {ReadonlyTrail} from './trail';
 import {ReadonlyTrails, Trails} from './trails';
+import type {GridString} from './types';
 import {UndoStack} from './undo-stack';
 import {ensureExhaustiveSwitch} from './utils';
 
@@ -343,7 +344,7 @@ export class Game extends BaseGame {
    * @param clues The clues string for the game in question
    * @returns The Game for the given clues, or undefined
    */
-  static forCluesString(clues: string): Game | undefined {
+  static forCluesString(clues: string | GridString): Game | undefined {
     return this.instances.get(clues)?.deref();
   }
 
