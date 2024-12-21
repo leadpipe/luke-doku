@@ -1,15 +1,19 @@
 import './events';
 
+import type {IDBPDatabase} from 'idb';
 import {css, html, LitElement} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
+import {repeat} from 'lit/directives/repeat.js';
 import * as wasm from 'luke-doku-rust';
-import {openDb} from '../game/database';
+import {AttemptState, type LukeDokuDb, openDb} from '../game/database';
 import {Game} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
 import {customEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
 import {findDataString} from './utils';
+
+const DATE_BOUND = 8640000000000000;
 
 @customElement('puzzles-page')
 export class PuzzlesPage extends LitElement {
@@ -41,9 +45,30 @@ export class PuzzlesPage extends LitElement {
   override render() {
     return html`
       <h1>Luke-doku</h1>
+      ${this.ongoingGames.length > 0 ?
+        html`
+          <h2>Ongoing</h2>
+          ${this.renderPuzzleList(this.ongoingGames)}
+        `
+      : ''}
       <h2>Today&apos;s puzzles</h2>
+      ${this.renderPuzzleList(this.todaysGames)}
+      ${this.recentlyCompletedGames.length > 0 ?
+        html`
+          <h2>Recently completed</h2>
+          ${this.renderPuzzleList(this.recentlyCompletedGames)}
+        `
+      : ''}
+    `;
+  }
+
+  private renderPuzzleList(list: readonly Game[]) {
+    const {todayString} = this;
+    return html`
       <div class="puzzle-list">
-        ${this.todaysGames.map(
+        ${repeat(
+          list,
+          game => game.sudoku.cluesString(),
           game => html`
             <div
               class="puzzle"
@@ -51,7 +76,11 @@ export class PuzzlesPage extends LitElement {
               data-clues=${game.sudoku.cluesString() as string}
             >
               <sudoku-view .game=${game}></sudoku-view>
-              #${game.sudoku.id?.counter}
+              ${(game.sudoku.id?.date ?? todayString) === todayString ?
+                ''
+              : game.sudoku.id?.date}
+              #${game.sudoku.id?.counter} ${game.playState}, ${game.elapsedMs}
+              ms
             </div>
           `,
         )}
@@ -59,7 +88,11 @@ export class PuzzlesPage extends LitElement {
     `;
   }
 
+  private readonly today = wasm.LogicalDate.fromDate(new Date());
+  private readonly todayString = this.today.toString();
+  @state() private ongoingGames: Game[] = [];
   @state() private todaysGames: Game[] = [];
+  @state() private recentlyCompletedGames: Game[] = [];
 
   constructor() {
     super();
@@ -67,10 +100,25 @@ export class PuzzlesPage extends LitElement {
   }
 
   private async loadPuzzles() {
-    const todaysGames = [];
     const db = await openDb();
-    const today = wasm.LogicalDate.fromDate(new Date());
-    const todayString = today.toString();
+    this.cleanOldUnstartedPuzzles(db);
+    const [todaysGames, ongoingGames, recentlyCompletedGames] =
+      await Promise.all([
+        this.loadTodaysPuzzles(db),
+        this.loadOngoingPuzzles(db),
+        this.loadRecentlyCompletedPuzzles(db),
+      ]);
+    this.todaysGames = todaysGames;
+    this.ongoingGames = ongoingGames;
+    this.recentlyCompletedGames = recentlyCompletedGames;
+    this.generateTodaysPuzzles(db, 10);
+  }
+
+  private async loadTodaysPuzzles(
+    db: IDBPDatabase<LukeDokuDb>,
+  ): Promise<Game[]> {
+    const todaysGames = [];
+    const {today, todayString} = this;
     const index = db.transaction('puzzles').store.index('byPuzzleId');
     for await (const cursor of index.iterate(
       // Puzzle IDs in the db are `${date}:${counter}`, and semicolon is the
@@ -83,16 +131,76 @@ export class PuzzlesPage extends LitElement {
     todaysGames.sort(
       (a, b) => (a.sudoku.id?.counter ?? 0) - (b.sudoku.id?.counter ?? 0),
     );
-    this.todaysGames = todaysGames;
-    if (todaysGames.length >= 10) return;
+    return todaysGames;
+  }
+
+  private async generateTodaysPuzzles(
+    db: IDBPDatabase<LukeDokuDb>,
+    totalCount: number,
+  ) {
+    const {todaysGames, today} = this;
+    if (todaysGames.length >= totalCount) return;
     const dailySolution = wasm.dailySolution(today);
-    for (let counter = 1; counter <= 10; ++counter) {
+    for (let counter = 1; counter <= totalCount; ++counter) {
       const sudoku = await this.generatePuzzle(dailySolution, counter);
       if (Game.forCluesString(sudoku.cluesString())) continue;
       const record = sudoku.toDatabaseRecord();
       await db.add('puzzles', record);
       todaysGames.splice(counter - 1, 0, Game.forDbRecord(db, record));
       this.todaysGames = [...todaysGames];
+    }
+  }
+
+  private async loadOngoingPuzzles(
+    db: IDBPDatabase<LukeDokuDb>,
+  ): Promise<Game[]> {
+    const ongoingGames = [];
+    const index = db.transaction('puzzles').store.index('byStateAndDate');
+    for await (const cursor of index.iterate(
+      IDBKeyRange.bound(
+        [AttemptState.ONGOING, new Date(-DATE_BOUND)],
+        [AttemptState.ONGOING, new Date(DATE_BOUND)],
+      ),
+      'prev',
+    )) {
+      ongoingGames.push(Game.forDbRecord(db, cursor.value));
+    }
+    return ongoingGames;
+  }
+
+  private async loadRecentlyCompletedPuzzles(
+    db: IDBPDatabase<LukeDokuDb>,
+  ): Promise<Game[]> {
+    const recentlyCompletedGames = [];
+    const index = db.transaction('puzzles').store.index('byStateAndDate');
+    for await (const cursor of index.iterate(
+      IDBKeyRange.bound(
+        [AttemptState.COMPLETED, new Date(-DATE_BOUND)],
+        [AttemptState.COMPLETED, new Date(DATE_BOUND)],
+      ),
+      'prev',
+    )) {
+      recentlyCompletedGames.push(Game.forDbRecord(db, cursor.value));
+      if (recentlyCompletedGames.length >= 10) break;
+    }
+    return recentlyCompletedGames;
+  }
+
+  private async cleanOldUnstartedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+    const toDelete = [];
+    const index = db.transaction('puzzles').store.index('byStateAndDate');
+    for await (const cursor of index.iterate(
+      IDBKeyRange.bound(
+        [AttemptState.UNSTARTED, new Date(-DATE_BOUND)],
+        [AttemptState.UNSTARTED, this.today.toDateAtMidnight()],
+        false,
+        true,
+      ),
+    )) {
+      toDelete.push(cursor.primaryKey);
+    }
+    for (const cluesString of toDelete) {
+      await db.delete('puzzles', cluesString);
     }
   }
 
