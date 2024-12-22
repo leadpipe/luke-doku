@@ -7,6 +7,7 @@ import {customElement, property} from 'lit/decorators.js';
 import {Game} from '../game/game';
 import {customEvent} from './events';
 import {getShowClock, setShowClock} from './prefs';
+import {elapsedTimeString} from './utils';
 
 /**
  * Displays the clock on the game page, and/or an icon for turning on or off the
@@ -58,15 +59,7 @@ export class GameClock extends LitElement {
   }
 
   private elapsedTime(): string {
-    const elapsedMs = this.game?.elapsedMs ?? 0;
-    const elapsedSec = Math.ceil(elapsedMs / 1000);
-    const elapsedMin = Math.floor(elapsedSec / 60);
-    const hrs = Math.floor(elapsedMin / 60);
-    const sec = elapsedSec % 60;
-    const min = elapsedMin % 60;
-    return hrs ?
-        `${hrs}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
-      : `${min}:${String(sec).padStart(2, '0')}`;
+    return elapsedTimeString(this.game?.elapsedMs ?? 0);
   }
 
   private clockTicked() {

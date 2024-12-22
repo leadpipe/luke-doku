@@ -32,3 +32,20 @@ export function findDataString(event: Event, name: string): string | null {
   }
   return null;
 }
+
+/**
+ * Converts a number of milliseconds into a string showing minutes and seconds,
+ * or hours, minutes, and seconds.
+ * @param elapsedMs Elapsed time in milliseconds
+ * @returns elapsed time in text form
+ */
+export function elapsedTimeString(elapsedMs: number): string {
+  const elapsedSec = Math.ceil(elapsedMs / 1000);
+  const elapsedMin = Math.floor(elapsedSec / 60);
+  const hrs = Math.floor(elapsedMin / 60);
+  const sec = elapsedSec % 60;
+  const min = elapsedMin % 60;
+  return hrs ?
+      `${hrs}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+    : `${min}:${String(sec).padStart(2, '0')}`;
+}
