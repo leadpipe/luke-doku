@@ -172,7 +172,7 @@ export class SolvePage extends LitElement {
     const playState = game?.playState ?? PlayState.UNSTARTED;
     return [
       this.renderTopPanel(game, playState),
-      this.renderBoard(game, playState),
+      this.renderBoard(game),
       this.renderBottomPanel(game, playState, trailColors),
     ];
   }
@@ -239,11 +239,10 @@ export class SolvePage extends LitElement {
     `;
   }
 
-  private renderBoard(game: Game | null, playState: PlayState) {
+  private renderBoard(game: Game | null) {
     return html`
       <sudoku-view
-        .game=${game}
-        .playState=${playState}
+        .gameWrapper=${game?.wrapper ?? null}
         .padding=${cssPixels(10)}
         interactive
         @cell-modified=${this.noteCellModified}
@@ -455,7 +454,6 @@ export class SolvePage extends LitElement {
   }
 
   private gameUpdated() {
-    this.sudokuView?.requestUpdate();
     this.requestUpdate();
   }
 
@@ -493,19 +491,13 @@ export class SolvePage extends LitElement {
   }
 
   private resumePlay() {
-    const {game} = this;
-    if (game) {
-      game.resume();
-      this.gameUpdated();
-    }
+    this.game?.resume();
+    this.gameUpdated();
   }
 
   private pausePlay() {
-    const {game} = this;
-    if (game) {
-      game.pause();
-      this.gameUpdated();
-    }
+    this.game?.pause();
+    this.gameUpdated();
   }
 
   private quit() {
@@ -513,19 +505,13 @@ export class SolvePage extends LitElement {
   }
 
   private createTrail() {
-    const {game} = this;
-    if (game) {
-      game.createTrail();
-      this.gameUpdated();
-    }
+    this.game?.createTrail();
+    this.gameUpdated();
   }
 
   private toggleTrailsActive() {
-    const {game} = this;
-    if (game) {
-      game.toggleTrailsActive();
-      this.gameUpdated();
-    }
+    this.game?.toggleTrailsActive();
+    this.gameUpdated();
   }
 
   private getTrailIndex(event: Event): number | null {

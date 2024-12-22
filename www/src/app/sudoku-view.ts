@@ -5,7 +5,7 @@ import {css, html, LitElement, PropertyValues, svg, TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
-import {Game, PlayState} from '../game/game';
+import {Game, type GameWrapper, PlayState} from '../game/game';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
 import {Sudoku} from '../game/sudoku';
@@ -313,7 +313,8 @@ export class SudokuView extends LitElement implements GridContainer {
   ];
 
   override render() {
-    const {sideSize, cellSize, padding, game} = this;
+    const {sideSize, cellSize, padding, gameWrapper} = this;
+    const game = gameWrapper?.game;
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
@@ -370,9 +371,9 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   private renderTrailColors() {
-    const {game, trailColors} = this;
-    if (!game || !trailColors) return;
-    const numColors = game.trails.order.length;
+    const {gameWrapper, trailColors} = this;
+    if (!gameWrapper || !trailColors) return;
+    const numColors = gameWrapper.game.trails.order.length;
     const colors = trailColors.getColors(numColors);
     return colors.map(
       (c, i) => svg`
@@ -510,8 +511,11 @@ export class SudokuView extends LitElement implements GridContainer {
   /** The game's play state.  Reflects `game.playState`. */
   @property({reflect: true}) playState: PlayState = PlayState.UNSTARTED;
 
-  /** The game.  */
-  @property({attribute: false}) game: Game | null = null;
+  /**
+   * The game, wrapped in an object that's recreated on every command so we'll
+   * be automatically updated.
+   */
+  @property({attribute: false}) gameWrapper: GameWrapper | null = null;
   private sudoku: Sudoku | null = null;
   private trailColors: TrailColors | null = null;
 
@@ -564,24 +568,29 @@ export class SudokuView extends LitElement implements GridContainer {
   private input?: SudokuInput;
 
   override updated(changedProperties: PropertyValues<this>) {
-    if (
-      changedProperties.has('game') &&
-      this.game?.sudoku != this.sudoku // single = on purpose
-    ) {
-      this.sudoku = this.game ? this.game.sudoku : null;
-      this.pausePatterns = [];
-      this.updateSymmetries();
-      this.trailColors =
-        this.game ? new TrailColors(this.game.sudoku.cluesString()) : null;
+    if (changedProperties.has('gameWrapper')) {
+      const game = this.gameWrapper?.game;
+      this.playState = game?.playState ?? PlayState.UNSTARTED;
+      if (
+        game?.sudoku != this.sudoku // single = on purpose
+      ) {
+        this.sudoku = game ? game.sudoku : null;
+        this.pausePatterns = [];
+        this.updateSymmetries();
+        this.trailColors =
+          game ? new TrailColors(game.sudoku.cluesString()) : null;
+      }
     }
   }
 
   private updateSymmetries() {
-    const {game, interactive} = this;
-    if (game && !this.pausePatterns.length) {
-      this.input = interactive ? new SudokuInput(this, game) : undefined;
-      this.pausePatterns = game.sudoku.symmetryMatches.map(
-        symMatch => new PausePattern(symMatch, game.sudoku.clues, this),
+    const {gameWrapper, interactive} = this;
+    if (gameWrapper && !this.pausePatterns.length) {
+      this.input =
+        interactive ? new SudokuInput(this, gameWrapper.game) : undefined;
+      this.pausePatterns = gameWrapper.game.sudoku.symmetryMatches.map(
+        symMatch =>
+          new PausePattern(symMatch, gameWrapper.game.sudoku.clues, this),
       );
       this.overlayIndex = 0;
     }

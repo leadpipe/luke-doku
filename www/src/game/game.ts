@@ -350,10 +350,10 @@ export class Game extends BaseGame {
 
   private static readonly instances = new Map<string, WeakRef<Game>>();
 
-  // private readonly db: IDBPDatabase<LukeDokuDb>;
-  // private readonly record: PuzzleRecord;
   // Tracks the most recent DB serialization of the game history.
   private serializationResult: SerializationResult;
+  // An object that's updated on every command, so components will be updated.
+  #wrapper: GameWrapper;
 
   /**
    * Requires a database instance and the record from the DB that corresponds to
@@ -365,12 +365,12 @@ export class Game extends BaseGame {
   ) {
     const history = record.history ? deserializeCommands(record.history) : [];
     super(Sudoku.fromDatabaseRecord(record), history);
-    // this.db = db;
-    // this.record = record;
     this.serializationResult = {
       count: history.length,
       serialized: record.history ?? new Int8Array(),
     };
+    this.#wrapper = {game: this};
+
     // If the game is currently running, the app must have gotten zapped before
     // successfully writing a pause command to the database.  Insert a synthetic
     // pause using the last `elapsedMs` we were able to write.
@@ -398,13 +398,21 @@ export class Game extends BaseGame {
     await this.db.put('puzzles', record);
   }
 
+  /** An object containing this game that is recreated on every command. */
+  get wrapper(): GameWrapper {
+    return this.#wrapper;
+  }
+
   protected override execute(
     command: Command,
     elapsedTimestamp?: number,
   ): boolean {
     const answer = super.execute(command, elapsedTimestamp);
-    if (answer && this.record) {
-      this.save();
+    if (this.record) {
+      this.#wrapper = {game: this};
+      if (answer) {
+        this.save();
+      }
     }
     return answer;
   }
@@ -422,6 +430,10 @@ export class Game extends BaseGame {
         ensureExhaustiveSwitch(this.playState);
     }
   }
+}
+
+export interface GameWrapper {
+  readonly game: Game;
 }
 
 /** For use by tests only. */

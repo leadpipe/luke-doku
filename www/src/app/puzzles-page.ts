@@ -75,7 +75,7 @@ export class PuzzlesPage extends LitElement {
               @click=${this.selectPuzzle}
               data-clues=${game.sudoku.cluesString() as string}
             >
-              <sudoku-view .game=${game}></sudoku-view>
+              <sudoku-view .gameWrapper=${game.wrapper}></sudoku-view>
               ${(game.sudoku.id?.date ?? todayString) === todayString ?
                 ''
               : game.sudoku.id?.date}
