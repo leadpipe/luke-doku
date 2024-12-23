@@ -427,13 +427,30 @@ export class SolvePage extends LitElement {
     this.theme = event.detail;
   };
 
+  private readonly foregroundnessHandler = () => {
+    if (document.visibilityState !== 'visible') {
+      this.pausePlay(PauseReason.AUTO);
+    }
+  };
+
+  private readonly windowBlurHandler = () => {
+    this.pausePlay(PauseReason.AUTO);
+  };
+
   override connectedCallback(): void {
     super.connectedCallback();
+    document.addEventListener('visibilitychange', this.foregroundnessHandler);
+    window.addEventListener('blur', this.windowBlurHandler);
     prefsTarget.addEventListener('current-theme', this.themeHandler);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
+    document.removeEventListener(
+      'visibilitychange',
+      this.foregroundnessHandler,
+    );
+    window.removeEventListener('blur', this.windowBlurHandler);
     prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
@@ -491,8 +508,8 @@ export class SolvePage extends LitElement {
     this.requestUpdate();
   }
 
-  private pausePlay() {
-    this.game?.pause();
+  private pausePlay(reason?: PauseReason) {
+    this.game?.pause(reason);
     this.requestUpdate();
   }
 
