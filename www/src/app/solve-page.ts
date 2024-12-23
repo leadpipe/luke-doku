@@ -453,28 +453,24 @@ export class SolvePage extends LitElement {
     );
   }
 
-  private gameUpdated() {
-    this.requestUpdate();
-  }
-
   private undo(_event: Event) {
     this.game?.undo();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private redo(_event: Event) {
     this.game?.redo();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private undoToStart(_event: Event) {
     this.game?.undoToStart();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private redoToEnd(_event: Event) {
     this.game?.redoToEnd();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private saveGame() {
@@ -483,7 +479,7 @@ export class SolvePage extends LitElement {
 
   private notePuzzleSolved() {
     this.game?.markCompleted(CompletionState.SOLVED);
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private noteCellModified() {
@@ -492,12 +488,12 @@ export class SolvePage extends LitElement {
 
   private resumePlay() {
     this.game?.resume();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private pausePlay() {
     this.game?.pause();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private quit() {
@@ -506,12 +502,12 @@ export class SolvePage extends LitElement {
 
   private createTrail() {
     this.game?.createTrail();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private toggleTrailsActive() {
     this.game?.toggleTrailsActive();
-    this.gameUpdated();
+    this.requestUpdate();
   }
 
   private getTrailIndex(event: Event): number | null {
@@ -524,7 +520,7 @@ export class SolvePage extends LitElement {
     const index = this.getTrailIndex(event);
     if (game != null && index != null) {
       game.toggleTrailVisibility(game.trails.order[index]);
-      this.gameUpdated();
+      this.requestUpdate();
     }
   }
 
@@ -585,7 +581,7 @@ export class SolvePage extends LitElement {
     if (game != null && trailForMenu != null) {
       game.copyFromTrail(trailForMenu);
       this.hideTrailMenu();
-      this.gameUpdated();
+      this.requestUpdate();
       if (!game.trails.active && game.marks.asGrid().isSolved()) {
         this.notePuzzleSolved();
       }
@@ -597,7 +593,7 @@ export class SolvePage extends LitElement {
     if (game != null && trailForMenu != null) {
       game.activateTrail(trailForMenu);
       this.hideTrailMenu();
-      this.gameUpdated();
+      this.requestUpdate();
     }
   }
 
@@ -606,7 +602,7 @@ export class SolvePage extends LitElement {
     if (game != null && trailForMenu != null) {
       game.archiveTrail(trailForMenu);
       this.hideTrailMenu();
-      this.gameUpdated();
+      this.requestUpdate();
     }
   }
 
@@ -630,7 +626,7 @@ export class SolvePage extends LitElement {
           target.releasePointerCapture(event.pointerId);
           navigator.vibrate(200);
           game.archiveTrail(game.trails.order[index]);
-          this.gameUpdated();
+          this.requestUpdate();
         }
       }, 1000);
     }
@@ -644,7 +640,7 @@ export class SolvePage extends LitElement {
       this.pendingClickedTrailTimer = 0;
       const trail = this.game?.trails.order[index];
       trail && this.game?.activateTrail(trail);
-      this.gameUpdated();
+      this.requestUpdate();
     }
   }
 
