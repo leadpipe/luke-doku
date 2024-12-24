@@ -45,6 +45,10 @@ export class SolvePage extends LitElement {
       h1 {
         font-family: ${LOGO_FONT_FAMILY};
         font-size: 48px;
+        margin-block: 16px;
+      }
+      h2 {
+        margin-block: 8px;
       }
 
       #top-panel {
