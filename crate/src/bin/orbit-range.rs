@@ -35,7 +35,7 @@ fn find_orbit_range(
   let mut smallest = None;
   let mut largest = None;
   while count > 0 {
-    let ds = daily_solution(LogicalDate::from(date));
+    let ds = daily_solution(&LogicalDate::from(date));
     let (_, min, _) = GridPermutation::minimizing(&ds.solution);
     let mut replace = true;
     if let Some((prev_min, _)) = smallest {

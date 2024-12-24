@@ -31,7 +31,7 @@ fn main() {
 fn find_shared_orbit(mut date: NaiveDate) -> (NaiveDate, NaiveDate) {
   let mut minima: HashMap<SolvedGrid, NaiveDate> = HashMap::new();
   loop {
-    let ds = daily_solution(LogicalDate::from(date));
+    let ds = daily_solution(&LogicalDate::from(date));
     let (_, min, _) = GridPermutation::minimizing(&ds.solution);
     if let Some(&prev_date) = minima.get(&min) {
       return (prev_date, date);

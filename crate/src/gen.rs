@@ -160,15 +160,15 @@ impl GenOpts {
 
 /// Generates the puzzle with the given ID.
 pub fn generate_puzzle(id: PuzzleId) -> Puzzle {
-  daily_solution(id.date).gen(id.counter)
+  daily_solution(&id.date).gen(id.counter)
 }
 
 #[wasm_bindgen(js_name = "dailySolution")]
-pub fn daily_solution(date: LogicalDate) -> DailySolution {
+pub fn daily_solution(date: &LogicalDate) -> DailySolution {
   let seed = date.to_string(); // yyyy-mm-dd
   let mut random = new_random(&seed);
   let solution = gen_solved_grid(&mut random);
-  DailySolution { date, solution }
+  DailySolution { date: *date, solution }
 }
 
 #[wasm_bindgen]
@@ -457,7 +457,7 @@ mod tests {
       .solved_grid()
       .unwrap(),
     };
-    assert_eq!(super::daily_solution(id.date), daily_solution);
+    assert_eq!(super::daily_solution(&id.date), daily_solution);
     assert_eq!(
       generate_puzzle(id),
       Puzzle {
