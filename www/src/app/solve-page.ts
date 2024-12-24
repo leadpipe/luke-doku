@@ -18,11 +18,15 @@ import {
   prefsTarget,
   setPreferredTheme,
 } from './prefs';
-import {TRAILHEAD_FONT_STYLE, TRAILHEAD_FONT_WEIGHT} from './styles';
+import {
+  LOGO_FONT_FAMILY,
+  TRAILHEAD_FONT_STYLE,
+  TRAILHEAD_FONT_WEIGHT,
+} from './styles';
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
-import {findDataString, setBooleanAttribute} from './utils';
+import {findDataString, renderPuzzleTitle, setBooleanAttribute} from './utils';
 
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
@@ -37,6 +41,10 @@ export class SolvePage extends LitElement {
         gap: var(--page-grid-gap);
         --page-grid-gap: 8px;
         --top-panel-height: calc(25px + 16px);
+      }
+      h1 {
+        font-family: ${LOGO_FONT_FAMILY};
+        font-size: 48px;
       }
 
       #top-panel {
@@ -266,6 +274,13 @@ export class SolvePage extends LitElement {
     const {trails} = game;
     return html`
       ${startOrResumeButton}
+      ${pauseButton ? '' : (
+        html`
+          <h1>Luke-doku</h1>
+          <h2>${renderPuzzleTitle(game.sudoku, /*assumeToday=*/ true)}</h2>
+          ${game.sudoku.id?.toString()}
+        `
+      )}
       <div id="bottom-panel">
         <style>
           ${trailColors

@@ -5,13 +5,20 @@ import {css, html, LitElement} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
 import * as wasm from 'luke-doku-rust';
+import {CompletionState} from '../game/command';
 import {AttemptState, type LukeDokuDb, openDb} from '../game/database';
-import {Game} from '../game/game';
+import {Game, PlayState} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
 import {customEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
-import {findDataString} from './utils';
+import {
+  elapsedTimeString,
+  findDataString,
+  renderPuzzleTitle,
+  today,
+  todayString,
+} from './utils';
 
 const DATE_BOUND = 8640000000000000;
 
@@ -33,10 +40,11 @@ export class PuzzlesPage extends LitElement {
       .puzzle {
         text-align: center;
         cursor: pointer;
+        width: min-content;
       }
       sudoku-view {
-        width: 100px;
-        height: 100px;
+        width: 144px;
+        height: 144px;
         margin-bottom: 4px;
       }
     }
@@ -52,7 +60,7 @@ export class PuzzlesPage extends LitElement {
         `
       : ''}
       <h2>Today&apos;s puzzles</h2>
-      ${this.renderPuzzleList(this.todaysGames)}
+      ${this.renderPuzzleList(this.todaysGames, /*assumeToday=*/ true)}
       ${this.recentlyCompletedGames.length > 0 ?
         html`
           <h2>Recently completed</h2>
@@ -62,8 +70,7 @@ export class PuzzlesPage extends LitElement {
     `;
   }
 
-  private renderPuzzleList(list: readonly Game[]) {
-    const {todayString} = this;
+  private renderPuzzleList(list: readonly Game[], assumeToday = false) {
     return html`
       <div class="puzzle-list">
         ${repeat(
@@ -76,11 +83,9 @@ export class PuzzlesPage extends LitElement {
               data-clues=${game.sudoku.cluesString() as string}
             >
               <sudoku-view .gameWrapper=${game.wrapper}></sudoku-view>
-              ${(game.sudoku.id?.date ?? todayString) === todayString ?
-                ''
-              : game.sudoku.id?.date}
-              #${game.sudoku.id?.counter} ${game.playState}, ${game.elapsedMs}
-              ms
+              <div class="description">
+                ${this.renderPuzzleDescription(game, assumeToday)}
+              </div>
             </div>
           `,
         )}
@@ -88,11 +93,37 @@ export class PuzzlesPage extends LitElement {
     `;
   }
 
-  private readonly today = wasm.LogicalDate.fromDate(new Date());
-  private readonly todayString = this.today.toString();
-  @state() private ongoingGames: Game[] = [];
-  @state() private todaysGames: Game[] = [];
-  @state() private recentlyCompletedGames: Game[] = [];
+  private renderPuzzleDescription(game: Game, assumeToday: boolean) {
+    const parts = [renderPuzzleTitle(game.sudoku, assumeToday)];
+    switch (game.playState) {
+      case PlayState.UNSTARTED:
+        break;
+      case PlayState.COMPLETED:
+        switch (game.completionState) {
+          case CompletionState.SOLVED:
+            parts.push(
+              html`<div>Solved in ${elapsedTimeString(game.elapsedMs)}</div>`,
+            );
+            break;
+          case CompletionState.QUIT:
+            parts.push(
+              html`<div>
+                Gave up after ${elapsedTimeString(game.elapsedMs)}
+              </div>`,
+            );
+            break;
+        }
+        break;
+      default:
+        parts.push(html`<div>${elapsedTimeString(game.elapsedMs)}</div>`);
+        break;
+    }
+    return parts;
+  }
+
+  @state() private ongoingGames: readonly Game[] = [];
+  @state() private todaysGames: readonly Game[] = [];
+  @state() private recentlyCompletedGames: readonly Game[] = [];
 
   constructor() {
     super();
@@ -118,7 +149,6 @@ export class PuzzlesPage extends LitElement {
     db: IDBPDatabase<LukeDokuDb>,
   ): Promise<Game[]> {
     const todaysGames = [];
-    const {today, todayString} = this;
     const index = db.transaction('puzzles').store.index('byPuzzleId');
     for await (const cursor of index.iterate(
       // Puzzle IDs in the db are `${date}:${counter}`, and semicolon is the
@@ -138,7 +168,7 @@ export class PuzzlesPage extends LitElement {
     db: IDBPDatabase<LukeDokuDb>,
     totalCount: number,
   ) {
-    const {todaysGames, today} = this;
+    const todaysGames = this.todaysGames.slice();
     if (todaysGames.length >= totalCount) return;
     const dailySolution = wasm.dailySolution(today);
     for (let counter = 1; counter <= totalCount; ++counter) {
@@ -192,7 +222,7 @@ export class PuzzlesPage extends LitElement {
     for await (const cursor of index.iterate(
       IDBKeyRange.bound(
         [AttemptState.UNSTARTED, new Date(-DATE_BOUND)],
-        [AttemptState.UNSTARTED, this.today.toDateAtMidnight()],
+        [AttemptState.UNSTARTED, today.toDateAtMidnight()],
         false,
         true,
       ),

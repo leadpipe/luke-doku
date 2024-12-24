@@ -40,6 +40,12 @@ impl LogicalDate {
     self.const_day()
   }
 
+  /// Returns this date's weekday, with 0 being Monday and 6 being Sunday.
+  pub fn weekday(&self) -> u32 {
+    let date: NaiveDate = (*self).into();
+    date.weekday() as _
+  }
+
   #[wasm_bindgen(js_name = "toString")]
   pub fn to_iso_string(&self) -> String {
     self.to_string()
@@ -48,6 +54,12 @@ impl LogicalDate {
   #[wasm_bindgen(js_name = "toDateAtMidnight")]
   pub fn to_date(&self) -> Date {
     Date::new_with_year_month_day(self.year() as u32, self.month() as i32 - 1, self.day() as i32)
+  }
+
+  #[wasm_bindgen(js_name = "daysSince")]
+  pub fn days_since(&self, other: &LogicalDate) -> i32 {
+    let date: NaiveDate = (*self).into();
+    date.signed_duration_since((*other).into()).num_days() as _
   }
 }
 
