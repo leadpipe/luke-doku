@@ -1,14 +1,16 @@
 import * as wasm from 'luke-doku-rust';
-import {AttemptState, type DbSymMatch, type PuzzleRecord} from './database';
+import {
+  AttemptState,
+  type DbSymMatch,
+  type PuzzleRecord,
+} from '../system/database';
+import type {
+  GeneratePuzzleMessage,
+  PuzzleGeneratedMessage,
+} from '../worker/worker-types';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {dateString, DateString, GridString} from './types';
-
-/**
- * The largest number of puzzle locations that don't conform to a symmetry
- * we'll still count as matching it.
- */
-const MAX_NONCONFORMING_LOCS = 8;
 
 /**
  * Describes a Sudoku puzzle.
@@ -26,12 +28,17 @@ export class Sudoku {
     readonly source?: string,
   ) {}
 
-  static fromWasm(puzzle: wasm.Puzzle, source?: string): Sudoku {
+  static fromWorker(puzzle: PuzzleGeneratedMessage, source?: string): Sudoku {
     return new Sudoku(
       new Grid(puzzle.clues),
       puzzle.solutions.map(s => new Grid(s)),
-      bestSymmetryMatches(puzzle.clues),
-      PuzzleId.fromGenOpts(puzzle.gen_opts),
+      puzzle.symmetryMatches.map(([sym, match]) => ({
+        sym,
+        fullOrbits: match.full_orbits.map(orbitToLocs),
+        numNonconformingLocs: match.num_nonconforming_locs,
+        partialOrbits: match.partial_orbits.map(orbitToLocs),
+      })),
+      PuzzleId.fromWorker(puzzle.toWorkerMessage),
       source,
     );
   }
@@ -80,11 +87,8 @@ export class PuzzleId {
     readonly counter: number,
   ) {}
 
-  static fromGenOpts(genOpts?: wasm.GenOpts): PuzzleId | undefined {
-    return (
-      genOpts &&
-      new PuzzleId(dateString(genOpts.daily_solution.date), genOpts.counter)
-    );
+  static fromWorker(message: GeneratePuzzleMessage): PuzzleId {
+    return new PuzzleId(message.date as DateString, message.counter);
   }
 
   static fromString(s?: string): PuzzleId | undefined {
@@ -116,27 +120,6 @@ export declare interface SymMatch {
   readonly fullOrbits: Loc[][];
   readonly numNonconformingLocs: number;
   readonly partialOrbits: Loc[][];
-}
-
-/** Returns an array of symmetry matches for this grid. */
-function bestSymmetryMatches(clues: wasm.Grid): SymMatch[] {
-  return wasm
-    .bestSymmetryMatches(clues, MAX_NONCONFORMING_LOCS)
-    .map(([sym, match]: [wasm.Sym, WasmSymMatch]) => ({
-      sym,
-      fullOrbits: match.full_orbits.map(orbitToLocs),
-      numNonconformingLocs: match.num_nonconforming_locs,
-      partialOrbits: match.partial_orbits.map(orbitToLocs),
-    }));
-}
-
-/**
- * This is the interface of the match objects returned from Rust.
- */
-declare interface WasmSymMatch {
-  full_orbits: number[][];
-  num_nonconforming_locs: number;
-  partial_orbits: number[][];
 }
 
 function orbitToLocs(orbit: number[] | Int8Array): Loc[] {

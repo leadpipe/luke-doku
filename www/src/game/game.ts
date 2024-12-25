@@ -1,4 +1,5 @@
 import type {IDBPDatabase} from 'idb';
+import {AttemptState, LukeDokuDb, PuzzleRecord} from '../system/database';
 import {
   Command,
   CompletionState,
@@ -26,7 +27,6 @@ import {
   Undo,
   UndoToStart,
 } from './commands';
-import {AttemptState, LukeDokuDb, PuzzleRecord} from './database';
 import {Loc} from './loc';
 import {Marks, ReadonlyMarks} from './marks';
 import {

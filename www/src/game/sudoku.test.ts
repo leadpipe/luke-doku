@@ -1,12 +1,22 @@
 import {advanceTo} from 'jest-date-mock';
 import * as wasm from 'luke-doku-rust';
+import {TEST_ONLY} from '../worker/puzzle-worker';
+import {
+  type PuzzleGeneratedMessage,
+  ToWorkerMessageType,
+} from '../worker/worker-types';
 import {PuzzleId, Sudoku} from './sudoku';
 
+const {generatePuzzle} = TEST_ONLY;
+
 describe('Sudoku', () => {
-  const now = new Date(2024, 11, 7, 19, 47);
-  const date = wasm.LogicalDate.fromDate(now);
-  const dailySolution = wasm.dailySolution(date);
-  const sudoku = Sudoku.fromWasm(dailySolution.gen(4));
+  const now = new Date(2024, 11 /*december*/, 7, 19, 47);
+  const workerMessage = generatePuzzle({
+    type: ToWorkerMessageType.GENERATE_PUZZLE,
+    date: '2024-12-07',
+    counter: 4,
+  }) as PuzzleGeneratedMessage;
+  const sudoku = Sudoku.fromWorker(workerMessage);
 
   beforeEach(() => {
     advanceTo(now);
@@ -86,9 +96,11 @@ describe('Sudoku', () => {
 
   describe('fromDatabaseRecord', () => {
     it('undoes toDatabaseRecord', () => {
-      expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(sudoku);
-    })
-  })
+      expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(
+        sudoku,
+      );
+    });
+  });
 });
 
 describe('PuzzleId', () => {
@@ -97,6 +109,6 @@ describe('PuzzleId', () => {
       expect(PuzzleId.fromString('asfd:123')).toBeUndefined();
       expect(PuzzleId.fromString('2024-12-08:asdf')).toBeUndefined();
       expect(PuzzleId.fromString('2024-12-08:1:huzzah')).toBeUndefined();
-    })
-  })
-})
+    });
+  });
+});

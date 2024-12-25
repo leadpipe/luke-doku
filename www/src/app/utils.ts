@@ -1,6 +1,7 @@
 import {html} from 'lit';
 import * as wasm from 'luke-doku-rust';
 import type {Sudoku} from '../game/sudoku';
+import {dateString} from '../game/types';
 
 /**
  * Adds or removes an attribute from an HTML element according to a boolean flag.
@@ -57,7 +58,7 @@ export function elapsedTimeString(elapsedMs: number): string {
 /** The app is auto-reloaded every day, so this is always actually today. */
 export const today = wasm.LogicalDate.fromDate(new Date());
 /** Today in string form (YYYY-MM-DD). */
-export const todayString = today.toString();
+export const todayString = dateString(today);
 
 /**
  * Constructs a title for a given Sudoku, based on its Luke-doku ID if it has

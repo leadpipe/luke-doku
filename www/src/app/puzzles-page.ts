@@ -4,12 +4,12 @@ import type {IDBPDatabase} from 'idb';
 import {css, html, LitElement} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
-import * as wasm from 'luke-doku-rust';
 import {CompletionState} from '../game/command';
-import {AttemptState, type LukeDokuDb, openDb} from '../game/database';
 import {Game, PlayState} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
+import {AttemptState, type LukeDokuDb, openDb} from '../system/database';
+import {requestPuzzle} from '../system/puzzle-service';
 import {customEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
 import {
@@ -170,10 +170,10 @@ export class PuzzlesPage extends LitElement {
   ) {
     const todaysGames = this.todaysGames.slice();
     if (todaysGames.length >= totalCount) return;
-    const dailySolution = wasm.dailySolution(today);
     for (let counter = 1; counter <= totalCount; ++counter) {
-      const sudoku = await this.generatePuzzle(dailySolution, counter);
-      if (Game.forCluesString(sudoku.cluesString())) continue;
+      const puzzle = await requestPuzzle(todayString, counter);
+      if (Game.forCluesString(puzzle.clues)) continue;
+      const sudoku = Sudoku.fromWorker(puzzle);
       const record = sudoku.toDatabaseRecord();
       await db.add('puzzles', record);
       todaysGames.splice(counter - 1, 0, Game.forDbRecord(db, record));
@@ -232,14 +232,6 @@ export class PuzzlesPage extends LitElement {
     for (const cluesString of toDelete) {
       await db.delete('puzzles', cluesString);
     }
-  }
-
-  private async generatePuzzle(
-    dailySolution: wasm.DailySolution,
-    counter: number,
-  ): Promise<Sudoku> {
-    // Eventually this will be a call to a worker thread.
-    return Sudoku.fromWasm(dailySolution.gen(counter));
   }
 
   private selectPuzzle(event: Event) {
