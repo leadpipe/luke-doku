@@ -5,7 +5,7 @@ import * as wasm from 'luke-doku-rust';
  * Opens the IndexedDB that Luke-doku stores puzzles in.
  */
 export function openDb(): Promise<IDBPDatabase<LukeDokuDb>> {
-  return openDB<LukeDokuDb>('puzzles', 1, {
+  return openDB<LukeDokuDb>('luke-doku', 1, {
     upgrade(database) {
       const store = database.createObjectStore('puzzles', {keyPath: 'clues'});
       store.createIndex('byPuzzleId', 'puzzleId');
@@ -31,11 +31,11 @@ export interface LukeDokuDb extends DBSchema {
       /** The grid symmetries exhibited by this puzzle's clues. */
       symmetryMatches: DbSymMatch[];
       /**
-       * The puzzle ID, if we generated the puzzle, as `${date}:${counter}`: for
-       * example, '1776-07-04:10' is the tenth puzzle generated for US
+       * The puzzle ID, if we generated the puzzle, as [date, counter]: for
+       * example, ['1776-07-04', 10] is the tenth puzzle generated for US
        * Independence Day.
        */
-      puzzleId?: string;
+      puzzleId?: [string, number];
       /**
        * Typically only set for external puzzles: a description of where this
        * puzzle came from.
@@ -70,7 +70,7 @@ export interface LukeDokuDb extends DBSchema {
        * Lets you find a particular generated puzzle, or all the generated
        * puzzles for a particular day.
        */
-      byPuzzleId: string;
+      byPuzzleId: [string, number];
 
       /**
        * Lets you find all the puzzles in a given state, ordered by last updated

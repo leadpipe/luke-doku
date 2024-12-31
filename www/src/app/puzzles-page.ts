@@ -20,7 +20,7 @@ import {
   todayString,
 } from './utils';
 
-const DATE_BOUND = 8640000000000000;
+const INFINITE_DATE = 8640000000000000;
 
 @customElement('puzzles-page')
 export class PuzzlesPage extends LitElement {
@@ -121,9 +121,9 @@ export class PuzzlesPage extends LitElement {
     return parts;
   }
 
-  @state() private ongoingGames: readonly Game[] = [];
-  @state() private todaysGames: readonly Game[] = [];
-  @state() private recentlyCompletedGames: readonly Game[] = [];
+  @state() private ongoingGames: Game[] = [];
+  @state() private todaysGames: Game[] = [];
+  @state() private recentlyCompletedGames: Game[] = [];
 
   constructor() {
     super();
@@ -133,87 +133,86 @@ export class PuzzlesPage extends LitElement {
   private async loadPuzzles() {
     const db = await openDb();
     this.cleanOldUnstartedPuzzles(db);
-    const [todaysGames, ongoingGames, recentlyCompletedGames] =
-      await Promise.all([
-        this.loadTodaysPuzzles(db),
-        this.loadOngoingPuzzles(db),
-        this.loadRecentlyCompletedPuzzles(db),
-      ]);
-    this.todaysGames = todaysGames;
-    this.ongoingGames = ongoingGames;
-    this.recentlyCompletedGames = recentlyCompletedGames;
+    this.loadOngoingPuzzles(db);
+    this.loadRecentlyCompletedPuzzles(db);
+    await this.loadTodaysPuzzles(db);
     this.generateTodaysPuzzles(db, 10);
   }
 
-  private async loadTodaysPuzzles(
-    db: IDBPDatabase<LukeDokuDb>,
-  ): Promise<Game[]> {
-    const todaysGames = [];
+  private async loadTodaysPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+    const a = this.todaysGames;
+    const b = [...a];
     const index = db.transaction('puzzles').store.index('byPuzzleId');
     for await (const cursor of index.iterate(
-      // Puzzle IDs in the db are `${date}:${counter}`, and semicolon is the
-      // next character after colon, so this gets all of today's puzzles that
-      // are in the DB.
-      IDBKeyRange.bound(todayString + ':', todayString + ';'),
+      // Puzzle IDs in the db are `[date, counter]`, so this gets all of today's
+      // puzzles that are in the DB (starting at 1).
+      IDBKeyRange.bound([todayString, 1], [todayString, Infinity]),
     )) {
-      todaysGames.push(Game.forDbRecord(db, cursor.value));
+      const game = Game.forDbRecord(db, cursor.value);
+      a.push(game);
+      b.push(game);
+      this.todaysGames = this.todaysGames === a ? b : a;
     }
-    todaysGames.sort(
-      (a, b) => (a.sudoku.id?.counter ?? 0) - (b.sudoku.id?.counter ?? 0),
-    );
-    return todaysGames;
   }
 
   private async generateTodaysPuzzles(
     db: IDBPDatabase<LukeDokuDb>,
     totalCount: number,
   ) {
-    const todaysGames = this.todaysGames.slice();
-    if (todaysGames.length >= totalCount) return;
-    for (let counter = 1; counter <= totalCount; ++counter) {
+    const a = this.todaysGames;
+    const b = [...a];
+    for (let counter = 1, index = 0; counter <= totalCount; ++counter) {
+      if (a[index] && a[index].sudoku.id?.counter === counter) {
+        ++index;
+        continue;
+      }
       const puzzle = await requestPuzzle(todayString, counter);
-      if (Game.forCluesString(puzzle.clues)) continue;
       const sudoku = Sudoku.fromWorker(puzzle);
       const record = sudoku.toDatabaseRecord();
       await db.add('puzzles', record);
-      todaysGames.splice(counter - 1, 0, Game.forDbRecord(db, record));
-      this.todaysGames = [...todaysGames];
+      const game = Game.forDbRecord(db, record);
+      a.splice(counter - 1, 0, game);
+      b.splice(counter - 1, 0, game);
+      ++index;
+      this.todaysGames = this.todaysGames === a ? b : a;
     }
   }
 
-  private async loadOngoingPuzzles(
-    db: IDBPDatabase<LukeDokuDb>,
-  ): Promise<Game[]> {
-    const ongoingGames = [];
+  private async loadOngoingPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+    const a = this.ongoingGames;
+    const b = [...a];
     const index = db.transaction('puzzles').store.index('byStateAndDate');
     for await (const cursor of index.iterate(
       IDBKeyRange.bound(
-        [AttemptState.ONGOING, new Date(-DATE_BOUND)],
-        [AttemptState.ONGOING, new Date(DATE_BOUND)],
+        [AttemptState.ONGOING, new Date(-INFINITE_DATE)],
+        [AttemptState.ONGOING, new Date(INFINITE_DATE)],
       ),
       'prev',
     )) {
-      ongoingGames.push(Game.forDbRecord(db, cursor.value));
+      const game = Game.forDbRecord(db, cursor.value);
+      a.push(game);
+      b.push(game);
+      this.ongoingGames = this.ongoingGames === a ? b : a;
     }
-    return ongoingGames;
   }
 
-  private async loadRecentlyCompletedPuzzles(
-    db: IDBPDatabase<LukeDokuDb>,
-  ): Promise<Game[]> {
-    const recentlyCompletedGames = [];
+  private async loadRecentlyCompletedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+    const a = this.recentlyCompletedGames;
+    const b = [...a];
     const index = db.transaction('puzzles').store.index('byStateAndDate');
     for await (const cursor of index.iterate(
       IDBKeyRange.bound(
-        [AttemptState.COMPLETED, new Date(-DATE_BOUND)],
-        [AttemptState.COMPLETED, new Date(DATE_BOUND)],
+        [AttemptState.COMPLETED, new Date(-INFINITE_DATE)],
+        [AttemptState.COMPLETED, new Date(INFINITE_DATE)],
       ),
       'prev',
     )) {
-      recentlyCompletedGames.push(Game.forDbRecord(db, cursor.value));
-      if (recentlyCompletedGames.length >= 10) break;
+      const game = Game.forDbRecord(db, cursor.value);
+      a.push(game);
+      b.push(game);
+      this.recentlyCompletedGames = this.recentlyCompletedGames === a ? b : a;
+      if (a.length >= 10) break;
     }
-    return recentlyCompletedGames;
   }
 
   private async cleanOldUnstartedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
@@ -221,7 +220,7 @@ export class PuzzlesPage extends LitElement {
     const index = db.transaction('puzzles').store.index('byStateAndDate');
     for await (const cursor of index.iterate(
       IDBKeyRange.bound(
-        [AttemptState.UNSTARTED, new Date(-DATE_BOUND)],
+        [AttemptState.UNSTARTED, new Date(-INFINITE_DATE)],
         [AttemptState.UNSTARTED, today.toDateAtMidnight()],
         false,
         true,

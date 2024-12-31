@@ -5,7 +5,7 @@ import {
   type PuzzleGeneratedMessage,
   ToWorkerMessageType,
 } from '../worker/worker-types';
-import {PuzzleId, Sudoku} from './sudoku';
+import {Sudoku} from './sudoku';
 
 const {generatePuzzle} = TEST_ONLY;
 
@@ -31,7 +31,7 @@ describe('Sudoku', () => {
         solutions: [
           '327456198814739652956182437548617329731295846692348715475823961189564273263971584',
         ],
-        puzzleId: '2024-12-07:4',
+        puzzleId: ['2024-12-07', 4],
         attemptState: 'unstarted',
         lastUpdated: now,
         symmetryMatches: [
@@ -99,16 +99,6 @@ describe('Sudoku', () => {
       expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(
         sudoku,
       );
-    });
-  });
-});
-
-describe('PuzzleId', () => {
-  describe('fromString', () => {
-    it('ignores bad data', () => {
-      expect(PuzzleId.fromString('asfd:123')).toBeUndefined();
-      expect(PuzzleId.fromString('2024-12-08:asdf')).toBeUndefined();
-      expect(PuzzleId.fromString('2024-12-08:1:huzzah')).toBeUndefined();
     });
   });
 });

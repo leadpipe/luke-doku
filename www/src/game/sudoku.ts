@@ -10,7 +10,7 @@ import type {
 } from '../worker/worker-types';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
-import {dateString, DateString, GridString} from './types';
+import {DateString, GridString} from './types';
 
 /**
  * Describes a Sudoku puzzle.
@@ -48,7 +48,7 @@ export class Sudoku {
       new Grid(wasm.Grid.newFromString(record.clues)),
       record.solutions.map(s => new Grid(wasm.Grid.newFromString(s))),
       record.symmetryMatches.map(symMatchFromDb),
-      PuzzleId.fromString(record.puzzleId),
+      PuzzleId.fromDatabase(record.puzzleId),
       record.source,
     );
   }
@@ -69,7 +69,7 @@ export class Sudoku {
       lastUpdated: new Date(),
     };
     if (this.id) {
-      record.puzzleId = this.id.toString();
+      record.puzzleId = [this.id.date, this.id.counter];
     }
     if (this.source) {
       record.source = this.source;
@@ -91,19 +91,8 @@ export class PuzzleId {
     return new PuzzleId(message.date as DateString, message.counter);
   }
 
-  static fromString(s?: string): PuzzleId | undefined {
-    if (s) {
-      const parts = s.split(':');
-      if (parts.length === 2) {
-        try {
-          const date = wasm.LogicalDate.fromString(parts[0]);
-          const counter = Number(parts[1]);
-          if (!isNaN(counter)) {
-            return new PuzzleId(dateString(date), counter);
-          }
-        } catch (e: unknown) {}
-      }
-    }
+  static fromDatabase(id: [string, number] | undefined): PuzzleId | undefined {
+    return id ? new PuzzleId(id[0] as DateString, id[1]) : undefined;
   }
 
   toString(): string {
