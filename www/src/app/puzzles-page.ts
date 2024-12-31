@@ -89,6 +89,11 @@ export class PuzzlesPage extends LitElement {
             </div>
           `,
         )}
+        ${assumeToday ?
+          html`<div>
+            <button @click=${this.generateMore}>Make more</button>
+          </div>`
+        : ''}
       </div>
     `;
   }
@@ -123,6 +128,7 @@ export class PuzzlesPage extends LitElement {
 
   @state() private ongoingGames: Game[] = [];
   @state() private todaysGames: Game[] = [];
+  private topCounter = 0;
   @state() private recentlyCompletedGames: Game[] = [];
 
   constructor() {
@@ -152,6 +158,7 @@ export class PuzzlesPage extends LitElement {
       a.push(game);
       b.push(game);
       this.todaysGames = this.todaysGames === a ? b : a;
+      this.topCounter = game.sudoku.id!.counter;
     }
   }
 
@@ -176,6 +183,7 @@ export class PuzzlesPage extends LitElement {
       ++index;
       this.todaysGames = this.todaysGames === a ? b : a;
     }
+    this.topCounter = Math.max(this.topCounter, totalCount);
   }
 
   private async loadOngoingPuzzles(db: IDBPDatabase<LukeDokuDb>) {
@@ -245,6 +253,11 @@ export class PuzzlesPage extends LitElement {
         }),
       );
     }
+  }
+
+  private async generateMore() {
+    const db = await openDb();
+    await this.generateTodaysPuzzles(db, this.topCounter + 10);
   }
 }
 
