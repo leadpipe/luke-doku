@@ -52,7 +52,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --clock-fill: light-dark(#f0f0f0e0, #202020e0);
         --target-fill: light-dark(#e0e0e040, #30303040);
         --selection-fill: light-dark(#bdfe, #337e);
-        --broken-fill: light-dark(#f00, #337e);
+        --broken-fill: #f00;
 
         --gf: light-dark(#fff, #000);
         --gd: light-dark(#ddd, #222);
@@ -297,11 +297,17 @@ export class SudokuView extends LitElement implements GridContainer {
         line-height: 100%;
         width: 100%;
       }
+      .multi .solution {
+        opacity: 40%;
+      }
+      svg:not(.trail-active) .multi .solution {
+        opacity: 90%;
+      }
       .solution.large {
-        font-size: 0.9em;
+        font-size: 0.8em;
       }
       .solution.medium {
-        font-size: 0.75em;
+        font-size: 0.7em;
       }
       .solution.small {
         font-size: 0.6em;

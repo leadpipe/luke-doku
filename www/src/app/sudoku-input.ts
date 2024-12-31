@@ -546,7 +546,7 @@ export class SudokuInput implements ReactiveController {
           }
         }
         // If we're hovering over a set cell, clear it.
-        else if (hoverLoc && game.getNum(hoverLoc)) {
+        else if (hoverLoc && game.getNums(hoverLoc)) {
           game.clearCell(hoverLoc);
           this.cellModified(hoverLoc);
           update = true;
