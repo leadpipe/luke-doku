@@ -67,64 +67,62 @@ export class SudokuView extends LitElement implements GridContainer {
         display: none;
       }
 
-      :host([playstate='running']) {
-        #multi-input-popup {
-          display: block;
-          z-index: 100;
-        }
-        #pause {
-          opacity: 0;
-          transition: opacity, 200ms;
-        }
-        #pause-background {
-          opacity: 0;
-          transition: opacity, 500ms;
-        }
-        #clues {
-          opacity: 1;
-          transition: opacity, 100ms;
-        }
-        #solution,
-        #input {
-          opacity: 1;
-          transition: opacity, 300ms;
-        }
+      :host([playstate='running']) #multi-input-popup {
+        display: block;
+        z-index: 100;
+      }
+      :host([playstate='running']) #pause {
+        opacity: 0;
+        transition: opacity, 200ms;
+      }
+      :host([playstate='running']) #pause-background {
+        opacity: 0;
+        transition: opacity, 500ms;
+      }
+      :host([playstate='running']) #clues {
+        opacity: 1;
+        transition: opacity, 100ms;
+      }
+      :host([playstate='running']) #solution,
+      :host([playstate='running']) #input {
+        opacity: 1;
+        transition: opacity, 300ms;
       }
 
-      :host([playstate='unstarted']),
-      :host([playstate='paused']) {
-        #pause {
-          opacity: 1;
-          transition: opacity, 200ms;
-        }
-        #pause-background {
-          opacity: 1;
-          transition: opacity, 500ms;
-        }
-        #clues {
-          opacity: 0;
-          transition: opacity, 100ms;
-        }
-        #solution,
-        #input {
-          opacity: 0;
-          transition: opacity, 300ms;
-        }
+      :host([playstate='unstarted']) #pause,
+      :host([playstate='paused']) #pause {
+        opacity: 1;
+        transition: opacity, 200ms;
+      }
+      :host([playstate='unstarted']) #pause-background,
+      :host([playstate='paused']) #pause-background {
+        opacity: 1;
+        transition: opacity, 500ms;
+      }
+      :host([playstate='unstarted']) #clues,
+      :host([playstate='paused']) #clues {
+        opacity: 0;
+        transition: opacity, 100ms;
+      }
+      :host([playstate='unstarted']) #solution,
+      :host([playstate='paused']) #solution,
+      :host([playstate='unstarted']) #input,
+      :host([playstate='paused']) #input {
+        opacity: 0;
+        transition: opacity, 300ms;
       }
 
-      :host([playstate='completed']) {
-        #clues {
-          animation: 10s infinite alternate completed-clues;
-        }
-        #solution {
-          animation: 10s infinite alternate completed-solution;
-        }
-        #pause {
-          animation: 10s infinite alternate completed-pause;
-        }
-        #pause-background {
-          animation: 10s infinite alternate completed-pause-background;
-        }
+      :host([playstate='completed']) #clues {
+        animation: 10s infinite alternate completed-clues;
+      }
+      :host([playstate='completed']) #solution {
+        animation: 10s infinite alternate completed-solution;
+      }
+      :host([playstate='completed']) #pause {
+        animation: 10s infinite alternate completed-pause;
+      }
+      :host([playstate='completed']) #pause-background {
+        animation: 10s infinite alternate completed-pause-background;
       }
 
       @keyframes completed-clues {

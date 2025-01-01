@@ -721,7 +721,7 @@ export class SolvePage extends LitElement {
           this.pendingClickedTrailIndex = null;
           this.pendingClickedTrailTimer = 0;
           target.releasePointerCapture(event.pointerId);
-          navigator.vibrate(200);
+          navigator.vibrate?.(200);
           game.archiveTrail(game.trails.order[index]);
           this.requestUpdate();
         }
