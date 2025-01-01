@@ -19,6 +19,7 @@ import {
   setPreferredTheme,
 } from './prefs';
 import {
+  HIGHLIGHT_COLOR,
   LOGO_FONT_FAMILY,
   TRAILHEAD_FONT_STYLE,
   TRAILHEAD_FONT_WEIGHT,
@@ -81,26 +82,26 @@ export class SolvePage extends LitElement {
         padding: 8px 0;
       }
 
-      #trail-menu {
+      .menu {
         margin: 0;
       }
-      #trail-menu table {
+      .menu table {
         border-collapse: collapse;
       }
-      #trail-menu span {
+      .menu span {
         cursor: default;
       }
-      #trail-menu td:has(icon-button) span {
+      .menu td:has(icon-button) span {
         cursor: pointer;
       }
-      #trail-menu tr:has(icon-button[disabled]) span {
+      .menu tr:has(icon-button[disabled]) span {
         cursor: default;
         opacity: 50%;
       }
-      #trail-menu tr:has(td:hover icon-button:not([disabled])) {
-        background-color: aliceblue; // TODO: choose something better
+      .menu tr:has(td:hover icon-button:not([disabled])) {
+        background-color: ${HIGHLIGHT_COLOR};
       }
-      #trail-menu td {
+      .menu td {
         vertical-align: bottom;
       }
 
@@ -198,31 +199,20 @@ export class SolvePage extends LitElement {
         : 'light'
       : 'auto';
     const newThemeName = newTheme.charAt(0).toUpperCase() + newTheme.slice(1);
+    const newThemeIcon = newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`;
+    const newThemeTitle = `Switch to ${newThemeName} theme`;
     return html`
       <div id="top-panel">
         <div>
           <icon-button
+            id="show-puzzles-button"
             @click=${this.showPuzzlesPage}
             iconName="arrow_back"
             title="Show the puzzles page"
             label="Puzzles"
           ></icon-button>
-          <icon-button
-            @click=${this.setTheme}
-            iconName=${newTheme === 'auto' ? 'contrast' : `${newTheme}_mode`}
-            title="Switch to ${newThemeName} theme"
-            label="${newThemeName}"
-            data-theme=${newTheme}
-          ></icon-button>
           ${playState === PlayState.RUNNING ?
             html`
-              <icon-button
-                @click=${this.undoToStart}
-                iconName="first_page"
-                ?disabled=${!game?.canUndo()}
-                title="Undo to start"
-                label="Undo all"
-              ></icon-button>
               <icon-button
                 @click=${this.undo}
                 iconName="undo"
@@ -237,15 +227,53 @@ export class SolvePage extends LitElement {
                 title="Redo"
                 label="Redo"
               ></icon-button>
+              <div
+                id="game-menu"
+                class="menu"
+                popover
+                @toggle=${this.gameMenuToggled}
+              >
+                <table @click=${this.hideGameMenu}>
+                  <tr>
+                    <td @click=${this.undoToStart}>
+                      <icon-button
+                        iconName="first_page"
+                        ?disabled=${!game?.canUndo()}
+                      ></icon-button>
+                      <span>Undo to start</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td @click=${this.redoToEnd}>
+                      <icon-button
+                        iconName="last_page"
+                        ?disabled=${!game?.canRedo()}
+                      ></icon-button>
+                      <span>Redo to end</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td @click=${this.setTheme} data-theme=${newTheme}>
+                      <icon-button iconName=${newThemeIcon}></icon-button>
+                      <span>${newThemeTitle}</span>
+                    </td>
+                  </tr>
+                </table>
+              </div>
               <icon-button
-                @click=${this.redoToEnd}
-                iconName="last_page"
-                ?disabled=${!game?.canRedo()}
-                title="Redo to end"
-                label="Redo all"
+                @click=${this.toggleGameMenu}
+                iconName="more_horiz"
               ></icon-button>
             `
-          : ''}
+          : html`
+              <icon-button
+                @click=${this.setTheme}
+                iconName=${newThemeIcon}
+                title="${newThemeTitle}"
+                label="${newThemeName}"
+                data-theme=${newTheme}
+              ></icon-button>
+            `}
         </div>
       </div>
     `;
@@ -291,7 +319,12 @@ export class SolvePage extends LitElement {
             .getColors(trails.order.length)
             .map((c, i) => html` .trail.trail-${i} { color: ${c}; } `)}
         </style>
-        <div id="trail-menu" popover @toggle=${this.trailMenuToggled}>
+        <div
+          id="trail-menu"
+          class="menu"
+          popover
+          @toggle=${this.trailMenuToggled}
+        >
           <table>
             <tr>
               <td @click=${this.copyFromTrail}>
@@ -474,7 +507,7 @@ export class SolvePage extends LitElement {
   }
 
   private setTheme(event: Event) {
-    const theme = (event.target as HTMLElement).dataset.theme;
+    const theme = findDataString(event, 'theme');
     setPreferredTheme(theme as ThemeOrAuto);
   }
 
@@ -536,6 +569,45 @@ export class SolvePage extends LitElement {
     // TODO: implement
   }
 
+  private gameMenuShowing = false;
+
+  private toggleGameMenu(event: Event) {
+    const {game} = this;
+    const popover = this.shadowRoot?.getElementById('game-menu');
+    if (game != null && popover != null) {
+      if (this.gameMenuShowing) {
+        popover.hidePopover();
+      } else {
+        this.gameMenuShowing = true;
+        this.positionAndOpenPopoverMenu(event, popover);
+      }
+    }
+  }
+
+  private positionAndOpenPopoverMenu(event: Event, popover: HTMLElement) {
+    const menuButton = event.target as HTMLElement;
+    const buttonRect = menuButton.getBoundingClientRect();
+    popover.style.top = `${buttonRect.bottom}px`;
+    popover.style.left = `${buttonRect.left}px`;
+    const thisRect = this.getBoundingClientRect();
+    popover.showPopover();
+    const menuRect = popover.getBoundingClientRect();
+    if (menuRect.right > thisRect.right) {
+      popover.style.left = `${buttonRect.left - (menuRect.right - thisRect.right)}px`;
+    }
+  }
+
+  private hideGameMenu() {
+    this.shadowRoot?.getElementById('game-menu')?.hidePopover();
+    this.gameMenuShowing = false;
+  }
+
+  private gameMenuToggled(event: ToggleEvent) {
+    if (event.newState === 'closed') {
+      this.gameMenuShowing = false;
+    }
+  }
+
   private createTrail() {
     this.game?.createTrail();
     this.requestUpdate();
@@ -585,18 +657,7 @@ export class SolvePage extends LitElement {
           'disabled',
           game.trails.isArchived(trail),
         );
-        const menuButton = event.target as HTMLElement;
-        const buttonRect = menuButton.getBoundingClientRect();
-        popover.style.top = `${buttonRect.bottom}px`;
-        popover.style.left = `${buttonRect.left}px`;
-        const thisRect = this.getBoundingClientRect();
-        popover.showPopover();
-        const menuRect = popover.getBoundingClientRect();
-        if (menuRect.right > thisRect.right) {
-          popover.style.left = `${
-            buttonRect.left - (menuRect.right - thisRect.right)
-          }px`;
-        }
+        this.positionAndOpenPopoverMenu(event, popover);
       }
     }
   }
