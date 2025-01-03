@@ -22,6 +22,7 @@ export class PausePattern {
 
   constructor(
     private readonly symMatch: SymMatch,
+    private readonly index: number,
     private readonly clues: ReadonlyGrid,
     private readonly gridContainer: GridContainer,
   ) {
@@ -64,7 +65,7 @@ export class PausePattern {
     const {sideSize} = this.gridContainer;
     return svg`
         <style>
-          .bg {
+          .bg${this.index} {
             width: 100%;
             height: 100%;
             ${this.renderBgClass()}
@@ -81,7 +82,7 @@ export class PausePattern {
           width=${sideSize}
           height=${sideSize}
         >
-          <div class="bg"></div>
+          <div class="bg${this.index}"></div>
         </foreignObject>
     `;
   }
