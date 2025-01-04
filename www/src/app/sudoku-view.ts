@@ -29,6 +29,9 @@ import {
   Point,
 } from './types';
 
+const COMPLETED_HALF_CYCLE_SEC = 10;
+const COMPLETED_CYCLE_SEC = 2 * COMPLETED_HALF_CYCLE_SEC;
+
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
  * symmetry of its clues.
@@ -71,11 +74,11 @@ export class SudokuView extends LitElement implements GridContainer {
         display: block;
         z-index: 100;
       }
-      :host([playstate='running']) .pause {
+      :host([playstate='running']) #pause {
         opacity: 0;
         transition: opacity, 200ms;
       }
-      :host([playstate='running']) .pause-background {
+      :host([playstate='running']) #pause-background {
         opacity: 0;
         transition: opacity, 500ms;
       }
@@ -89,13 +92,13 @@ export class SudokuView extends LitElement implements GridContainer {
         transition: opacity, 300ms;
       }
 
-      :host([playstate='unstarted']) .pause,
-      :host([playstate='paused']) .pause {
+      :host([playstate='unstarted']) #pause,
+      :host([playstate='paused']) #pause {
         opacity: 1;
         transition: opacity, 200ms;
       }
-      :host([playstate='unstarted']) .pause-background,
-      :host([playstate='paused']) .pause-background {
+      :host([playstate='unstarted']) #pause-background,
+      :host([playstate='paused']) #pause-background {
         opacity: 1;
         transition: opacity, 500ms;
       }
@@ -112,37 +115,56 @@ export class SudokuView extends LitElement implements GridContainer {
         transition: opacity, 300ms;
       }
 
+      #next-pause-background,
+      #next-pause {
+        transform: translateX(-100%);
+      }
+
       :host([playstate='completed']) #clues {
-        animation: 10s infinite alternate completed-clues;
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-clues;
       }
       :host([playstate='completed']) #solution {
-        animation: 10s infinite alternate completed-solution;
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-solution;
       }
       :host([playstate='completed']) #pause-background {
-        animation: 10s infinite alternate completed-pause-background;
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-pause-background;
       }
       :host([playstate='completed']) #pause {
-        animation: 10s infinite alternate completed-pause;
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-pause;
       }
       :host([playstate='completed']) #pause-background.next {
         animation:
-          20s infinite pause-next,
-          10s infinite alternate completed-pause-background;
+          ${COMPLETED_CYCLE_SEC}s infinite pause-next,
+          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+            completed-pause-background;
       }
       :host([playstate='completed']) #pause.next {
         animation:
-          20s infinite pause-next,
-          10s infinite alternate completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite pause-next,
+          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate completed-pause;
       }
       :host([playstate='completed']) #next-pause-background {
-        animation:
-          20s infinite next-pause,
-          10s infinite alternate completed-pause-background;
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-pause-background;
       }
       :host([playstate='completed']) #next-pause {
+        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+          completed-pause;
+      }
+      :host([playstate='completed']) #next-pause-background.next {
         animation:
-          20s infinite next-pause,
-          10s infinite alternate completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite next-pause,
+          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
+            completed-pause-background;
+      }
+      :host([playstate='completed']) #next-pause.next {
+        animation:
+          ${COMPLETED_CYCLE_SEC}s infinite next-pause,
+          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate completed-pause;
       }
 
       @keyframes completed-clues {
@@ -385,6 +407,7 @@ export class SudokuView extends LitElement implements GridContainer {
       pausePatterns.length > 1 ?
         pausePatterns[(overlayIndex + 1) % pausePatterns.length]
       : null;
+    const nextPauseClass = {next: !!nextPattern && this.showNextOverlay};
 
     return html`
       <style>
@@ -425,21 +448,30 @@ export class SudokuView extends LitElement implements GridContainer {
           }
           ${this.renderTrailColors()}
         </style>
-        <g
-          id="pause-background"
-          class="pause-background ${classMap({next: !!nextPattern})}"
-        >
+        <g id="pause-background" class=${classMap(nextPauseClass)}>
           ${pausePattern?.renderBackground()}
         </g>
         ${nextPattern ?
-          svg`<g id="next-pause-background" class="pause-background">${nextPattern.renderBackground()}</g>`
+          svg`<g id="next-pause-background" class=${classMap(nextPauseClass)}
+            >${nextPattern.renderBackground()}</g
+          >`
         : ''}
         <g id="grid">${this.renderGrid()}</g>
-        <g id="pause" class="pause ${classMap({next: !!nextPattern})}">
+        <g
+          id="pause"
+          class=${classMap(nextPauseClass)}
+          @animationiteration=${this.optionallyShowNextOverlay}
+        >
           ${pausePattern?.renderPattern()}
         </g>
         ${nextPattern ?
-          svg`<g id="next-pause" class="pause" @animationiteration=${this.bumpOverlayIndex}>${nextPattern.renderPattern()}</g>`
+          svg`<g
+            id="next-pause"
+            class=${classMap(nextPauseClass)}
+            @animationiteration=${this.bumpOverlayIndex}
+          >
+            ${nextPattern.renderPattern()}
+          </g>`
         : ''}
         <g id="clues">${game && this.renderClues(game)}</g>
         <g id="solution">${game && this.renderGameState(game)}</g>
@@ -604,6 +636,9 @@ export class SudokuView extends LitElement implements GridContainer {
   /** Which overlay to display when the game is paused. */
   @state() private overlayIndex = 0;
 
+  /** Whether to show and animate the next pause overlay. */
+  @state() private showNextOverlay = false;
+
   /**
    * The element that lets you assign more than one possible numeral to a
    * location.
@@ -669,7 +704,12 @@ export class SudokuView extends LitElement implements GridContainer {
         interactive ? new SudokuInput(this, gameWrapper.game) : undefined;
       this.pausePatterns = gameWrapper.game.sudoku.symmetryMatches.map(
         (symMatch, index) =>
-          new PausePattern(symMatch, index, gameWrapper.game.sudoku.clues, this),
+          new PausePattern(
+            symMatch,
+            index,
+            gameWrapper.game.sudoku.clues,
+            this,
+          ),
       );
       this.overlayIndex = 0;
     }
@@ -678,6 +718,18 @@ export class SudokuView extends LitElement implements GridContainer {
   private bumpOverlayIndex(event: AnimationEvent) {
     if (event.animationName === 'next-pause') {
       this.overlayIndex = (this.overlayIndex + 1) % this.pausePatterns.length;
+    }
+  }
+
+  private optionallyShowNextOverlay(event: AnimationEvent) {
+    if (event.animationName === 'completed-pause') {
+      const halfCycleCount = Math.round(
+        event.elapsedTime / COMPLETED_HALF_CYCLE_SEC,
+      );
+      const fullCycleComplete = halfCycleCount % 2 === 0;
+      if (fullCycleComplete) {
+        this.showNextOverlay = Math.random() < 0.083; // 1 in 12
+      }
     }
   }
 
