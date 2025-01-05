@@ -22,7 +22,7 @@ export enum CommandTag {
   RESUME = 0,
   PAUSE = 1,
   MARK_COMPLETED = 2,
-  GUESS_SOLUTION_COUNT = 3,
+  GUESS_SOLUTIONS_COUNT = 3,
   CLEAR_CELL = 4,
   SET_NUM = 5,
   SET_NUMS = 6,
@@ -179,6 +179,9 @@ export interface GameInternals {
   trails: Trails;
   resume(): boolean;
   pause(elapsedTimestamp: number): boolean;
-  markCompleted(completionState: CompletionState, elapsedTimestamp: number): boolean;
-  guessSolutionCount(guess: number): boolean;
+  markCompleted(
+    completionState: CompletionState,
+    elapsedTimestamp: number,
+  ): boolean;
+  guessSolutionsCount(guess: number): boolean;
 }

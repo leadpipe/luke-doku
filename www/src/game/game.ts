@@ -13,7 +13,7 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  GuessSolutionCount,
+  GuessSolutionsCount,
   MarkCompleted,
   Pause,
   PauseReason,
@@ -56,7 +56,7 @@ class BaseGame {
 
   #playState = PlayState.UNSTARTED;
   #completionState?: CompletionState;
-  #solutionCountGuess?: 1 | 2 | 3;
+  #solutionsCountGuess?: 1 | 2 | 3;
 
   constructor(
     readonly sudoku: Sudoku,
@@ -113,12 +113,12 @@ class BaseGame {
         this.writableTrails.hideAllTrails();
         return true;
       },
-      guessSolutionCount: guess => {
+      guessSolutionsCount: guess => {
         switch (guess) {
           case 1:
           case 2:
           case 3:
-            this.#solutionCountGuess = guess;
+            this.#solutionsCountGuess = guess;
             return true;
           default:
             return false;
@@ -171,9 +171,9 @@ class BaseGame {
     return this.#completionState;
   }
 
-  /** Undefined before `guessSolutionCount` is called. */
-  get solutionCountGuess(): 1 | 2 | 3 | undefined {
-    return this.#solutionCountGuess;
+  /** Undefined before `guessSolutionsCount` is called. */
+  get solutionsCountGuess(): 1 | 2 | 3 | undefined {
+    return this.#solutionsCountGuess;
   }
 
   /**
@@ -210,8 +210,8 @@ class BaseGame {
     this.execute(new MarkCompleted(completionState));
   }
 
-  guessSolutionCount(guess: 1 | 2 | 3) {
-    this.execute(new GuessSolutionCount(guess));
+  guessSolutionsCount(guess: 1 | 2 | 3) {
+    this.execute(new GuessSolutionsCount(guess));
   }
 
   clearCell(loc: Loc): boolean {

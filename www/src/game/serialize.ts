@@ -9,7 +9,7 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  GuessSolutionCount,
+  GuessSolutionsCount,
   MarkCompleted,
   Pause,
   Redo,
@@ -220,12 +220,12 @@ const markCompleted: Serializer<
     return [readBase128(source)];
   },
 };
-const guessSolutionCount: Serializer<
-  typeof GuessSolutionCount,
-  CommandTag.GUESS_SOLUTION_COUNT
+const guessSolutionsCount: Serializer<
+  typeof GuessSolutionsCount,
+  CommandTag.GUESS_SOLUTIONS_COUNT
 > = {
-  tag: CommandTag.GUESS_SOLUTION_COUNT,
-  ctor: GuessSolutionCount,
+  tag: CommandTag.GUESS_SOLUTIONS_COUNT,
+  ctor: GuessSolutionsCount,
   serializeArgs(command, sink) {
     sink(command.guess);
   },
@@ -353,7 +353,7 @@ const serializersByTag: SerializerMap = {
   [CommandTag.RESUME]: resume,
   [CommandTag.PAUSE]: pause,
   [CommandTag.MARK_COMPLETED]: markCompleted,
-  [CommandTag.GUESS_SOLUTION_COUNT]: guessSolutionCount,
+  [CommandTag.GUESS_SOLUTIONS_COUNT]: guessSolutionsCount,
   [CommandTag.CLEAR_CELL]: clearCell,
   [CommandTag.SET_NUM]: setNum,
   [CommandTag.SET_NUMS]: setNums,

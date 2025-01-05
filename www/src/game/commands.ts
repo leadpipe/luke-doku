@@ -65,17 +65,17 @@ export class MarkCompleted extends Command<CommandTag.MARK_COMPLETED> {
   }
 }
 
-export class GuessSolutionCount extends Command<CommandTag.GUESS_SOLUTION_COUNT> {
+export class GuessSolutionsCount extends Command<CommandTag.GUESS_SOLUTIONS_COUNT> {
   constructor(readonly guess: number) {
     super();
   }
 
   override apply(internals: GameInternals): boolean {
-    return internals.guessSolutionCount(this.guess);
+    return internals.guessSolutionsCount(this.guess);
   }
 
-  override tag(): CommandTag.GUESS_SOLUTION_COUNT {
-    return CommandTag.GUESS_SOLUTION_COUNT;
+  override tag(): CommandTag.GUESS_SOLUTIONS_COUNT {
+    return CommandTag.GUESS_SOLUTIONS_COUNT;
   }
 }
 

@@ -38,6 +38,14 @@ export function findDataString(event: Event, name: string): string | null {
   return null;
 }
 
+export function pluralize(noun: string, number: number): string {
+  return number === 1 ? noun : `${noun}s`;
+}
+
+export function renderCount(count: number, countingWhat: string): string {
+  return `${count} ${pluralize(countingWhat, count)}`;
+}
+
 /**
  * Converts a number of milliseconds into a string showing minutes and seconds,
  * or hours, minutes, and seconds.

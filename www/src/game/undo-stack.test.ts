@@ -47,7 +47,7 @@ class FakeCommand extends Command {
   }
 
   override tag() {
-    return CommandTag.GUESS_SOLUTION_COUNT; // Has to be something
+    return CommandTag.GUESS_SOLUTIONS_COUNT; // Has to be something
   }
 }
 
@@ -68,7 +68,7 @@ describe(`UndoStack`, () => {
       markCompleted(_completionState) {
         return true;
       },
-      guessSolutionCount(_guess) {
+      guessSolutionsCount(_guess) {
         return true;
       },
     };

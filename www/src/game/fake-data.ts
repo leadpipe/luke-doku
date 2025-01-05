@@ -5,7 +5,7 @@ import {
   ClearCell,
   CopyFromTrail,
   CreateTrail,
-  GuessSolutionCount,
+  GuessSolutionsCount,
   MarkCompleted,
   Pause,
   PauseReason,
@@ -44,7 +44,7 @@ export const FAKE_HISTORY: RecordedCommand[] = [
   {command: new ToggleTrailsActive(), elapsedTimestamp: 14000},
   {command: new CopyFromTrail(1), elapsedTimestamp: 15000},
   {command: new MarkCompleted(CompletionState.QUIT), elapsedTimestamp: 16000},
-  {command: new GuessSolutionCount(2), elapsedTimestamp: 16000},
+  {command: new GuessSolutionsCount(2), elapsedTimestamp: 16000},
 ];
 
 // Note we do not use CommandTag enum value names in this serialized history, so
@@ -77,5 +77,5 @@ export const FAKE_HISTORY_SERIALIZED: Int8Array = new Int8Array([
   15, -24,7,           // toggleTrailsActive
   16, 1, -24,7,        // copyFromTrail
   2, 1, -24,7,         // markCompleted (QUIT)
-  3, 2, 0,             // guessSolutionCount (2)
+  3, 2, 0,             // guessSolutionsCount (2)
 ]);

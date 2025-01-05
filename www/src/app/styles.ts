@@ -8,3 +8,5 @@ export const TRAILHEAD_FONT_STYLE = css`italic`;
 export const TRAILHEAD_FONT_WEIGHT = css`700`;
 
 export const HIGHLIGHT_COLOR = css`light-dark(#bdfe, #337e)`;
+export const ERROR_COLOR = css`#f00`;
+export const CORRECT_COLOR = css`#0f0`;

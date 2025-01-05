@@ -13,6 +13,7 @@ import {ReadonlyTrails} from '../game/trails';
 import {PausePattern} from './pause-pattern';
 import {
   CLUES_FONT,
+  ERROR_COLOR,
   HIGHLIGHT_COLOR,
   SOLUTION_FONT_FAMILY,
   SOLUTION_FONT_WEIGHT,
@@ -56,7 +57,7 @@ export class SudokuView extends LitElement implements GridContainer {
         --clock-fill: light-dark(#f0f0f0e0, #202020e0);
         --target-fill: light-dark(#e0e0e040, #30303040);
         --selection-fill: ${HIGHLIGHT_COLOR};
-        --broken-fill: #f00;
+        --broken-fill: ${ERROR_COLOR};
 
         --gf: light-dark(#fff, #000);
         --gd: light-dark(#ddd, #222);

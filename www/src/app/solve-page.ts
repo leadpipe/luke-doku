@@ -5,6 +5,7 @@ import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
+import {classMap} from 'lit/directives/class-map.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {CompletionState} from '../game/command';
 import {PauseReason} from '../game/commands';
@@ -19,6 +20,8 @@ import {
   setPreferredTheme,
 } from './prefs';
 import {
+  CORRECT_COLOR,
+  ERROR_COLOR,
   HIGHLIGHT_COLOR,
   LOGO_FONT_FAMILY,
   TRAILHEAD_FONT_STYLE,
@@ -27,7 +30,12 @@ import {
 import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
-import {findDataString, renderPuzzleTitle, setBooleanAttribute} from './utils';
+import {
+  findDataString,
+  renderCount,
+  renderPuzzleTitle,
+  setBooleanAttribute,
+} from './utils';
 
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
@@ -80,6 +88,44 @@ export class SolvePage extends LitElement {
         gap: 8px;
         align-items: self-start;
         padding: 8px 0;
+      }
+
+      #congrats {
+        display: flex;
+        flex-direction: column;
+
+        #how-many-solutions {
+          margin: 16px;
+          font-weight: bold;
+        }
+        #solutions-count-buttons {
+          display: flex;
+          justify-content: space-evenly;
+          margin: 16px 0px 32px;
+
+          button {
+            font-size: xx-large;
+            padding-inline: 16px;
+            &.guessed {
+              background-color: ${HIGHLIGHT_COLOR};
+            }
+          }
+        }
+        #solutions-count-guess {
+          display: flex;
+          align-items: center;
+          margin: 8px auto;
+        }
+
+        #guess-solutions-count:not([disabled]) {
+          background-color: ${HIGHLIGHT_COLOR};
+        }
+        .correct {
+          color: ${CORRECT_COLOR};
+        }
+        .incorrect {
+          color: ${ERROR_COLOR};
+        }
       }
 
       .menu {
@@ -187,6 +233,7 @@ export class SolvePage extends LitElement {
       this.renderTopPanel(game, playState),
       this.renderBoard(game),
       this.renderBottomPanel(game, playState, trailColors),
+      this.showCongratsDialog ? this.renderCongratulationsDialog() : '',
     ];
   }
 
@@ -463,10 +510,62 @@ export class SolvePage extends LitElement {
     `;
   }
 
+  private renderCongratulationsDialog() {
+    const {game} = this;
+    if (!game) return undefined;
+    const guessed = !!game.solutionsCountGuess;
+    const solutionsCountGuess =
+      guessed ? game.solutionsCountGuess : this.solutionsCountGuess;
+    const actualCount = game.sudoku.solutions.length;
+    return html`
+      <dialog id="congrats" @keydown=${this.handleCongratsDialogKey}>
+        <h2>Congratulations!</h2>
+        Now:
+        <div id="how-many-solutions">
+          How many solutions does this puzzle have?
+        </div>
+        <div id="solutions-count-buttons">
+          ${[1, 2, 3].map(
+            count =>
+              html` <button
+                data-count=${count}
+                class=${classMap({guessed: count === solutionsCountGuess})}
+                @click=${this.setSolutionsCount}
+              >
+                ${count}
+              </button>`,
+          )}
+        </div>
+        <div id="solutions-count-guess">
+          ${guessed ?
+            actualCount === solutionsCountGuess ?
+              html`<mat-icon class="correct" name="check"></mat-icon> Correct!`
+            : html`<mat-icon class="incorrect" name="close"></mat-icon> Oops, no — it has
+                ${renderCount(actualCount, 'solution')}.
+              </div>`
+          : html` <button
+              id="guess-solutions-count"
+              ?disabled=${!solutionsCountGuess}
+              @click=${this.guessSolutionsCount}
+            >
+              ${solutionsCountGuess ?
+                'Guess ' + renderCount(solutionsCountGuess, 'Solution')
+              : 'Choose'}
+            </button>`}
+        </div>
+      </dialog>
+    `;
+  }
+
   @property({attribute: false}) game: Game | null = null;
   @state() private trailColors: TrailColors | null = null;
   @state() private theme = getCurrentTheme();
+  @state() private showCongratsDialog = false;
+  @state() private solutionsCountGuess?: 1 | 2 | 3;
   @query('sudoku-view') sudokuView?: SudokuView;
+  @query('dialog#congrats') congratsDialog?: HTMLDialogElement;
+  @query('#guess-solutions-count')
+  guessSolutionsCountButton?: HTMLButtonElement;
 
   override updated(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('game')) {
@@ -546,9 +645,12 @@ export class SolvePage extends LitElement {
     this.game?.save();
   }
 
-  private notePuzzleSolved() {
+  private async notePuzzleSolved() {
     this.game?.markCompleted(CompletionState.SOLVED);
     this.requestUpdate();
+    this.showCongratsDialog = true;
+    await this.updateComplete;
+    this.congratsDialog?.showModal();
   }
 
   private noteCellModified() {
@@ -567,6 +669,45 @@ export class SolvePage extends LitElement {
 
   private quit() {
     // TODO: implement
+  }
+
+  private handleCongratsDialogKey(event: KeyboardEvent) {
+    // We swallow most keys.
+    switch (event.key) {
+      case 'Tab':
+        return; // Allow the default handling for tabs.
+      case 'Enter':
+      case ' ':
+        (event.target as HTMLElement | null)?.click(); // Treat the same as a click.
+        break;
+      case '1':
+      case '2':
+      case '3':
+        this.updateCountAndButton(Number(event.key) as 1 | 2 | 3);
+        break;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  private setSolutionsCount(event: Event) {
+    this.updateCountAndButton(
+      Number(findDataString(event, 'count')) as 1 | 2 | 3,
+    );
+  }
+
+  private async updateCountAndButton(count: 1 | 2 | 3) {
+    this.solutionsCountGuess = count;
+    await this.updateComplete;
+    this.guessSolutionsCountButton?.focus();
+  }
+
+  private guessSolutionsCount() {
+    this.game?.guessSolutionsCount(this.solutionsCountGuess!);
+    this.requestUpdate();
+    setTimeout(() => {
+      this.showCongratsDialog = false;
+    }, 3000);
   }
 
   private gameMenuShowing = false;
