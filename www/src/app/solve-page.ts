@@ -31,7 +31,9 @@ import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {
+  centerDialog,
   findDataString,
+  renderCompletedGameDescription,
   renderCount,
   renderPuzzleTitle,
   setBooleanAttribute,
@@ -93,6 +95,7 @@ export class SolvePage extends LitElement {
       #congrats {
         display: flex;
         flex-direction: column;
+        margin: 0;
 
         #how-many-solutions {
           margin: 16px;
@@ -357,6 +360,9 @@ export class SolvePage extends LitElement {
         html`
           <h1>Luke-doku</h1>
           <h2>${renderPuzzleTitle(game.sudoku, /*assumeToday=*/ true)}</h2>
+          ${playState === PlayState.COMPLETED ?
+            renderCompletedGameDescription(game)
+          : ''}
           ${game.sudoku.id?.toString()}
         `
       )}
@@ -650,7 +656,11 @@ export class SolvePage extends LitElement {
     this.requestUpdate();
     this.showCongratsDialog = true;
     await this.updateComplete;
-    this.congratsDialog?.showModal();
+    const {congratsDialog, sudokuView} = this;
+    if (congratsDialog && sudokuView) {
+      centerDialog(congratsDialog, sudokuView);
+      congratsDialog.showModal();
+    }
   }
 
   private noteCellModified() {
@@ -707,7 +717,7 @@ export class SolvePage extends LitElement {
     this.requestUpdate();
     setTimeout(() => {
       this.showCongratsDialog = false;
-    }, 3000);
+    }, 2000);
   }
 
   private gameMenuShowing = false;

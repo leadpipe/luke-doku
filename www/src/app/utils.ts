@@ -1,7 +1,10 @@
-import {html} from 'lit';
+import {html, type HTMLTemplateResult} from 'lit';
 import * as wasm from 'luke-doku-rust';
+import {CompletionState} from '../game/command';
+import type {Game} from '../game/game';
 import type {Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
+import {CORRECT_COLOR, ERROR_COLOR} from './styles';
 
 /**
  * Adds or removes an attribute from an HTML element according to a boolean flag.
@@ -44,6 +47,50 @@ export function pluralize(noun: string, number: number): string {
 
 export function renderCount(count: number, countingWhat: string): string {
   return `${count} ${pluralize(countingWhat, count)}`;
+}
+
+export function renderCompletedGameDescription(
+  game: Game,
+): Array<string | HTMLTemplateResult> {
+  const parts: Array<string | HTMLTemplateResult> = [];
+  let showSolutionsCount = true;
+  switch (game.completionState) {
+    case CompletionState.SOLVED:
+      parts.push(
+        html`<div>Solved in ${elapsedTimeString(game.elapsedMs)}</div>`,
+      );
+      if (!game.solutionsCountGuess) {
+        showSolutionsCount = false;
+      }
+      break;
+    case CompletionState.QUIT:
+      parts.push(
+        html`<div>Gave up after ${elapsedTimeString(game.elapsedMs)}</div>`,
+      );
+      break;
+  }
+  if (showSolutionsCount) {
+    const guess = game.solutionsCountGuess;
+    const actual = game.sudoku.solutions.length;
+    parts.push(
+      html`<div>
+        ${guess ?
+          guess === actual ?
+            html`<mat-icon
+              name="check"
+              style="color: ${CORRECT_COLOR}"
+            ></mat-icon>`
+          : html`<mat-icon
+              name="close"
+              style="color: ${ERROR_COLOR}"
+            ></mat-icon>`
+        : ''}
+        ${renderCount(actual, 'solution')}
+        ${guess && guess !== actual ? html` (guessed ${guess})` : ''}
+      </div>`,
+    );
+  }
+  return parts;
 }
 
 /**
@@ -113,6 +160,22 @@ export function renderPuzzleTitle(sudoku: Sudoku, assumeToday: boolean) {
   return relative ?
       `${dayName}'s #${id.counter}`
     : `#${id.counter} of ${dayName}`;
+}
+
+/**
+ * Centers a dialog over an element.  Written by Gemini.
+ * @param dialog The dialog to center
+ * @param element The element to center over
+ */
+export function centerDialog(dialog: HTMLElement, element: HTMLElement) {
+  const dialogRect = dialog.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+
+  const dialogTop = elementRect.top + (elementRect.height - dialogRect.height) / 2;
+  const dialogLeft = elementRect.left + (elementRect.width - dialogRect.width) / 2;
+
+  dialog.style.top = `${dialogTop}px`;
+  dialog.style.left = `${dialogLeft}px`;
 }
 
 function weekdayName(date: wasm.LogicalDate): string {

@@ -11,10 +11,12 @@ import {GridString} from '../game/types';
 import {AttemptState, type LukeDokuDb, openDb} from '../system/database';
 import {requestPuzzle} from '../system/puzzle-service';
 import {customEvent} from './events';
-import {LOGO_FONT_FAMILY} from './styles';
+import {CORRECT_COLOR, ERROR_COLOR, LOGO_FONT_FAMILY} from './styles';
 import {
   elapsedTimeString,
   findDataString,
+  renderCompletedGameDescription,
+  renderCount,
   renderPuzzleTitle,
   today,
   todayString,
@@ -104,20 +106,7 @@ export class PuzzlesPage extends LitElement {
       case PlayState.UNSTARTED:
         break;
       case PlayState.COMPLETED:
-        switch (game.completionState) {
-          case CompletionState.SOLVED:
-            parts.push(
-              html`<div>Solved in ${elapsedTimeString(game.elapsedMs)}</div>`,
-            );
-            break;
-          case CompletionState.QUIT:
-            parts.push(
-              html`<div>
-                Gave up after ${elapsedTimeString(game.elapsedMs)}
-              </div>`,
-            );
-            break;
-        }
+        parts.push(...renderCompletedGameDescription(game));
         break;
       default:
         parts.push(html`<div>${elapsedTimeString(game.elapsedMs)}</div>`);
