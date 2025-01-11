@@ -159,7 +159,12 @@ class BaseGame {
   }
 
   getNums(loc: Loc): ReadonlySet<number> | null {
-    return this.trails.active ? null : this.marks.getNums(loc);
+    const {activeTrail} = this.trails;
+    if (activeTrail) {
+      const num = activeTrail.get(loc);
+      return num === null ? null : new Set([num]);
+    }
+    return this.marks.getNums(loc);
   }
 
   get playState(): PlayState {
