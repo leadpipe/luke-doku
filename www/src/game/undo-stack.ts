@@ -38,15 +38,9 @@ export class UndoStack {
    */
   undo(internals: GameInternals): boolean {
     if (!this.canUndo()) return false;
-    const {commands} = this;
-    const elapsedTimestamp = 0; // Not applicable to any undoable commands
-    do {
-      const undoableCommand = commands[--this.next];
-      if (!undoableCommand.undo.apply(internals, elapsedTimestamp)) {
-        return false;
-      }
-    } while (commands[this.next - 1]?.partialUndoStep);
-    return true;
+    const elapsedTimestamp = 0; // Not applicable to undoing a command
+    const undoableCommand = this.commands[--this.next];
+    return undoableCommand.undo.apply(internals, elapsedTimestamp);
   }
 
   /**
@@ -55,17 +49,15 @@ export class UndoStack {
   redo(internals: GameInternals): boolean {
     if (!this.canRedo()) return false;
     const {commands} = this;
-    while (this.next < commands.length) {
-      const reExecutedCommand = commands[this.next++].command.execute(
-        internals,
-        internals.elapsedMs,
-      );
-      if (!reExecutedCommand || !isUndoable(reExecutedCommand)) {
-        return false;
-      }
-      commands[this.next - 1] = reExecutedCommand;
-      if (!reExecutedCommand.partialUndoStep) return true;
+    const elapsedTimestamp = 0; // Not applicable to redoing a command
+    const reExecutedCommand = commands[this.next++].command.execute(
+      internals,
+      elapsedTimestamp,
+    );
+    if (!reExecutedCommand || !isUndoable(reExecutedCommand)) {
+      return false;
     }
+    commands[this.next - 1] = reExecutedCommand;
     return true;
   }
 }

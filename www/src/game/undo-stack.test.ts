@@ -24,10 +24,6 @@ class FakeCommand extends Command {
   applyCount = 0;
   undoCount = 0;
 
-  constructor(readonly partial: boolean = false) {
-    super();
-  }
-
   override apply(_internals: GameInternals): boolean {
     ++this.applyCount;
     return true;
@@ -40,10 +36,6 @@ class FakeCommand extends Command {
         return true;
       },
     };
-  }
-
-  protected override get partialUndoStep(): boolean {
-    return this.partial;
   }
 
   override tag() {
@@ -96,54 +88,5 @@ describe(`UndoStack`, () => {
     expect(state.undoStack.canRedo()).toBe(true);
     expect(state.command.applyCount).toBe(1);
     expect(state.command.undoCount).toBe(1);
-  });
-
-  it(`undoes all partial undo steps that preceded the last command`, () => {
-    const partialCommand = new FakeCommand(true);
-    const partial = partialCommand.execute(
-      state.internals,
-      0,
-    ) as UndoableCommand;
-    state.undoStack.push(state.undoable);
-    state.undoStack.push(partial);
-    state.undoStack.push(state.undoable);
-
-    // when
-    const undid = state.undoStack.undo(state.internals);
-
-    // then
-    expect(undid).toBe(true);
-    expect(state.command.applyCount).toBe(1);
-    expect(state.command.undoCount).toBe(1);
-    expect(partialCommand.applyCount).toBe(1);
-    expect(partialCommand.undoCount).toBe(1);
-    expect(state.undoStack.undo(state.internals)).toBe(true);
-    expect(state.command.undoCount).toBe(2);
-    expect(state.undoStack.canUndo()).toBe(false);
-  });
-
-  it(`redoes all partial undo steps that precede the next full command`, () => {
-    const partialCommand = new FakeCommand(true);
-    const partial = partialCommand.execute(
-      state.internals,
-      0,
-    ) as UndoableCommand;
-    state.undoStack.push(state.undoable);
-    state.undoStack.push(partial);
-    state.undoStack.push(state.undoable);
-    state.undoStack.undo(state.internals);
-    expect(state.command.applyCount).toBe(1);
-    expect(state.command.undoCount).toBe(1);
-    expect(partialCommand.applyCount).toBe(1);
-    expect(partialCommand.undoCount).toBe(1);
-
-    // when
-    const redid = state.undoStack.redo(state.internals);
-
-    // then
-    expect(redid).toBe(true);
-    expect(state.command.applyCount).toBe(2);
-    expect(partialCommand.applyCount).toBe(2);
-    expect(state.undoStack.canRedo()).toBe(false);
   });
 });

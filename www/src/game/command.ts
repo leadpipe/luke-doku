@@ -59,7 +59,6 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
         command: this,
         elapsedTimestamp,
         undo,
-        partialUndoStep: this.partialUndoStep,
       };
     }
     return null;
@@ -96,14 +95,6 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
    */
   abstract apply(internals: GameInternals, elapsedTimestamp: number): boolean;
 
-  /**
-   * Whether this command should be considered a partial undo step; defaults to
-   * false.
-   */
-  protected get partialUndoStep(): boolean {
-    return false;
-  }
-
   /** Commands with state should override this to return it in string form. */
   protected stateAsString(): string {
     return '';
@@ -133,14 +124,6 @@ export interface ExecutedCommand extends RecordedCommand {
    * will undo it.
    */
   readonly undo: Operation | null;
-
-  /**
-   * True when undoing (or redoing) this command should be combined with the
-   * preceding (or following) non-partial command.  For example, enabling a
-   * trail is a partial step because undoing it should also undo the cell
-   * assignment that preceded enabling that trail.
-   */
-  readonly partialUndoStep: boolean;
 }
 
 /**

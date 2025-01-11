@@ -284,11 +284,6 @@ class RestoreMarksAndTrailsOperation extends RestoreTrailsOperation {
 abstract class TrailCommand<
   TagValue extends CommandTag,
 > extends Command<TagValue> {
-  /** Trail commands are undoable but only count as part of a single undo step. */
-  protected override get partialUndoStep(): boolean {
-    return true;
-  }
-
   protected override makeUndo(internals: GameInternals): Operation {
     return new RestoreTrailsOperation(internals);
   }
