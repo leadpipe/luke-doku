@@ -85,9 +85,16 @@ abstract class Move<TagValue extends CommandTag> extends Command<TagValue> {
   }
 
   protected override makeUndo(internals: GameInternals): Command {
-    const nums = internals.marks.getNums(this.loc);
-    if (nums) return new SetNums(this.loc, nums);
-    return new ClearCell(this.loc);
+    const {loc} = this;
+    const {activeTrail} = internals.trails;
+    if (activeTrail) {
+      const num = activeTrail.get(loc);
+      if (num) return new SetNum(loc, num);
+    } else {
+      const nums = internals.marks.getNums(loc);
+      if (nums) return new SetNums(loc, nums);
+    }
+    return new ClearCell(loc);
   }
 
   override apply(internals: GameInternals): boolean {
@@ -105,7 +112,7 @@ export class ClearCell extends Move<CommandTag.CLEAR_CELL> {
   }
 
   protected override move(internals: GameInternals): void {
-    const activeTrail = internals.trails.activeTrail;
+    const {activeTrail} = internals.trails;
     if (activeTrail) {
       activeTrail.set(this.loc, null);
     } else {
@@ -139,7 +146,7 @@ export class SetNum extends Assign<CommandTag.SET_NUM> {
   }
 
   protected override move(internals: GameInternals): void {
-    const activeTrail = internals.trails.activeTrail;
+    const {activeTrail} = internals.trails;
     if (activeTrail) {
       activeTrail.set(this.loc, this.num);
     } else {

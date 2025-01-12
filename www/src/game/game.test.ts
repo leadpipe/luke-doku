@@ -64,4 +64,12 @@ describe('Game', () => {
     expect(game.trails.order[0].trailhead).toBe(Loc.of(1));
     expect(game.trails.order[0].bytes).toEqual(game.trails.order[1].bytes);
   });
+
+  it(`can undo a trail move over an existing marks move`, () => {
+    const game = new BaseGame(newSudoku(new Grid()));
+    game.setNum(Loc.of(0), 1);
+    game.createTrail();
+    game.setNum(Loc.of(0), 2);
+    expect(game.undo()).toBe(true);
+  });
 });
