@@ -573,7 +573,7 @@ export class SolvePage extends LitElement {
   @query('#guess-solutions-count')
   guessSolutionsCountButton?: HTMLButtonElement;
 
-  override updated(changedProperties: PropertyValues<this>) {
+  override willUpdate(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('game')) {
       this.trailColors =
         this.game ? new TrailColors(this.game.sudoku.cluesString()) : null;

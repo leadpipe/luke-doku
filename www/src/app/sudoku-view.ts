@@ -682,7 +682,7 @@ export class SudokuView extends LitElement implements GridContainer {
   /** The input controller. */
   private input?: SudokuInput;
 
-  override updated(changedProperties: PropertyValues<this>) {
+  override willUpdate(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('gameWrapper')) {
       const game = this.gameWrapper?.game;
       this.playState = game?.playState ?? PlayState.UNSTARTED;
@@ -691,10 +691,15 @@ export class SudokuView extends LitElement implements GridContainer {
       ) {
         this.sudoku = game ? game.sudoku : null;
         this.pausePatterns = [];
-        this.updateSymmetries();
         this.trailColors =
           game ? new TrailColors(game.sudoku.cluesString()) : null;
       }
+    }
+  }
+
+  override updated(changedProperties: PropertyValues<this>) {
+    if (changedProperties.has('gameWrapper') && !this.pausePatterns.length) {
+      this.updateSymmetries();
     }
   }
 
