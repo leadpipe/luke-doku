@@ -109,6 +109,15 @@ impl Grid {
       None
     }
   }
+
+  /// Clears all cells that have different assignments from `other`.
+  pub fn intersect(&mut self, other: &Grid) {
+    for loc in Loc::all() {
+      if self[loc] != other[loc] {
+        self[loc] = None;
+      }
+    }
+  }
 }
 
 impl Grid {
@@ -144,15 +153,6 @@ impl Grid {
       }
     } else {
       GridState::Broken(broken)
-    }
-  }
-
-  /// Clears all cells that have different assignments from `other`.
-  pub fn intersect(&mut self, other: &Grid) {
-    for loc in Loc::all() {
-      if self[loc] != other[loc] {
-        self[loc] = None;
-      }
     }
   }
 

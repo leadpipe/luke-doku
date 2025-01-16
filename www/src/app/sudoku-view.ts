@@ -5,7 +5,10 @@ import {css, html, LitElement, PropertyValues, svg, TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
+import {CompletionState} from '../game/command';
 import {Game, type GameWrapper, PlayState} from '../game/game';
+import type {ReadonlyGrid} from '../game/grid';
+import {Grid} from '../game/grid';
 import {Loc} from '../game/loc';
 import {ReadonlyMarks} from '../game/marks';
 import {Sudoku} from '../game/sudoku';
@@ -32,6 +35,8 @@ import {
 
 const COMPLETED_HALF_CYCLE_SEC = 10;
 const COMPLETED_CYCLE_SEC = 2 * COMPLETED_HALF_CYCLE_SEC;
+const MULTI_SOLUTION_CYCLE_SEC = 1;
+const MULTI_SOLUTION_FILL = css`light-dark(blue, lightblue)`;
 
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
@@ -128,6 +133,28 @@ export class SudokuView extends LitElement implements GridContainer {
       :host([playstate='completed']) #solution {
         animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
           completed-solution;
+
+        text.solution.v1-of-2 {
+          animation: ${2 * MULTI_SOLUTION_CYCLE_SEC}s infinite v1-of-2;
+          fill: ${MULTI_SOLUTION_FILL};
+        }
+        text.solution.v2-of-2 {
+          animation: ${2 * MULTI_SOLUTION_CYCLE_SEC}s infinite v2-of-2;
+          fill: ${MULTI_SOLUTION_FILL};
+        }
+
+        text.solution.v1-of-3 {
+          animation: ${3 * MULTI_SOLUTION_CYCLE_SEC}s infinite v1-of-3;
+          fill: ${MULTI_SOLUTION_FILL};
+        }
+        text.solution.v2-of-3 {
+          animation: ${3 * MULTI_SOLUTION_CYCLE_SEC}s infinite v2-of-3;
+          fill: ${MULTI_SOLUTION_FILL};
+        }
+        text.solution.v3-of-3 {
+          animation: ${3 * MULTI_SOLUTION_CYCLE_SEC}s infinite v3-of-3;
+          fill: ${MULTI_SOLUTION_FILL};
+        }
       }
       :host([playstate='completed']) #pause-background {
         animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
@@ -195,6 +222,99 @@ export class SudokuView extends LitElement implements GridContainer {
         }
         100% {
           opacity: 0;
+        }
+      }
+
+      @keyframes v1-of-2 {
+        0% {
+          opacity: 0;
+        }
+        10% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 1;
+        }
+        60% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes v2-of-2 {
+        0% {
+          opacity: 1;
+        }
+        10% {
+          opacity: 0;
+        }
+        50% {
+          opacity: 0;
+        }
+        60% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
+        }
+      }
+
+      @keyframes v1-of-3 {
+        0% {
+          opacity: 0;
+        }
+        6.66% {
+          opacity: 1;
+        }
+        33.33% {
+          opacity: 1;
+        }
+        40% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes v2-of-3 {
+        0% {
+          opacity: 0;
+        }
+        33.33% {
+          opacity: 0;
+        }
+        40% {
+          opacity: 1;
+        }
+        66.66% {
+          opacity: 1;
+        }
+        73.33% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
+        }
+      }
+
+      @keyframes v3-of-3 {
+        0% {
+          opacity: 1;
+        }
+        6.66% {
+          opacity: 0;
+        }
+        66.66% {
+          opacity: 0;
+        }
+        73.33% {
+          opacity: 1;
+        }
+        100% {
+          opacity: 1;
         }
       }
 
@@ -552,10 +672,46 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   private renderGameState(game: Game) {
-    const brokenLocs = game.marks.asGrid().brokenLocs();
+    if (
+      game.playState === PlayState.COMPLETED &&
+      game.completionState === CompletionState.SOLVED &&
+      game.solutionsCountGuess !== undefined &&
+      game.sudoku.solutions.length > 1
+    ) {
+      return this.renderMultiSolutionCells(game.sudoku.solutions);
+    }
     const answer = this.input?.renderHoverLoc() ?? [];
+    const brokenLocs = game.marks.asGrid().brokenLocs();
     this.pushSolutionCells(game.marks, brokenLocs, answer);
     this.pushTrails(game.trails, answer);
+    return answer;
+  }
+
+  private renderMultiSolutionCells(
+    solutions: readonly ReadonlyGrid[],
+  ): TemplateResult[] {
+    const answer = [];
+    const count = solutions.length;
+    const commonWasm = solutions[0].toWasm();
+    for (let i = 1; i < count; ++i) {
+      commonWasm.intersect(solutions[i].toWasm());
+    }
+    const common = new Grid(commonWasm);
+    const {cellCenter} = this;
+    for (const loc of Loc.ALL) {
+      const [x, y] = cellCenter(loc);
+      const num = common.get(loc);
+      if (num) {
+        answer.push(svg`<text x=${x} y=${y} class="solution">${num}</text>`);
+      } else {
+        for (let i = 0; i < count; ++i) {
+          const num = solutions[i].get(loc);
+          answer.push(
+            svg`<text x=${x} y=${y} class="solution v${i + 1}-of-${count}">${num}</text>`,
+          );
+        }
+      }
+    }
     return answer;
   }
 
