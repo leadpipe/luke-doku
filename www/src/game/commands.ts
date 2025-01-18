@@ -26,7 +26,10 @@ export class Resume extends Command<CommandTag.RESUME> {
 
 /** How a game can be paused. */
 export enum PauseReason {
-  /** The user clicked the pause button. */
+  /** 
+   * The user clicked the pause button or took another action that implied a
+   * pause.
+   */
   MANUAL,
   /** The user switched away from the app. */
   AUTO,

@@ -3,7 +3,7 @@ import './game-clock';
 import './mat-icon';
 import './sudoku-view';
 
-import {LitElement, PropertyValues, css, html} from 'lit';
+import {LitElement, PropertyValues, css, html, type TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
 import {classMap} from 'lit/directives/class-map.js';
 import {repeat} from 'lit/directives/repeat.js';
@@ -236,7 +236,7 @@ export class SolvePage extends LitElement {
       this.renderTopPanel(game, playState),
       this.renderBoard(game),
       this.renderBottomPanel(game, playState, trailColors),
-      this.showCongratsDialog ? this.renderCongratulationsDialog() : '',
+      this.dialogRenderer?.call(this),
     ];
   }
 
@@ -566,10 +566,10 @@ export class SolvePage extends LitElement {
   @property({attribute: false}) game: Game | null = null;
   @state() private trailColors: TrailColors | null = null;
   @state() private theme = getCurrentTheme();
-  @state() private showCongratsDialog = false;
   @state() private solutionsCountGuess?: 1 | 2 | 3;
+  @state() private dialogRenderer?: (this: SolvePage) => TemplateResult | undefined;
   @query('sudoku-view') sudokuView?: SudokuView;
-  @query('dialog#congrats') congratsDialog?: HTMLDialogElement;
+  @query('dialog') dialog?: HTMLDialogElement;
   @query('#guess-solutions-count')
   guessSolutionsCountButton?: HTMLButtonElement;
 
@@ -627,6 +627,22 @@ export class SolvePage extends LitElement {
     );
   }
 
+  private async showDialog(
+    dialogRenderer: (this: SolvePage) => TemplateResult | undefined,
+  ) {
+    this.pausePlay(PauseReason.MANUAL);
+    this.dialogRenderer = dialogRenderer;
+    await this.updateComplete;
+    const {dialog, sudokuView} = this;
+    if (dialog && sudokuView) {
+      centerDialog(dialog, sudokuView);
+    }
+    dialog?.showModal();
+  }
+
+  private hideDialog() {
+    this.dialogRenderer = undefined;
+  }
   private undo(_event: Event) {
     this.game?.undo();
     this.requestUpdate();
@@ -654,13 +670,7 @@ export class SolvePage extends LitElement {
   private async notePuzzleSolved() {
     this.game?.markCompleted(CompletionState.SOLVED);
     this.requestUpdate();
-    this.showCongratsDialog = true;
-    await this.updateComplete;
-    const {congratsDialog, sudokuView} = this;
-    if (congratsDialog && sudokuView) {
-      centerDialog(congratsDialog, sudokuView);
-      congratsDialog.showModal();
-    }
+    this.showDialog(this.renderCongratulationsDialog);
   }
 
   private noteCellModified() {
@@ -716,7 +726,7 @@ export class SolvePage extends LitElement {
     this.game?.guessSolutionsCount(this.solutionsCountGuess!);
     this.requestUpdate();
     setTimeout(() => {
-      this.showCongratsDialog = false;
+      this.hideDialog();
     }, 2000);
   }
 
