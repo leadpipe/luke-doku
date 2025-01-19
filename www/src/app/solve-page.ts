@@ -92,11 +92,13 @@ export class SolvePage extends LitElement {
         padding: 8px 0;
       }
 
-      #congrats {
+      dialog {
         display: flex;
         flex-direction: column;
         margin: 0;
+      }
 
+      #congrats {
         #how-many-solutions {
           margin: 16px;
           font-weight: bold;
@@ -128,6 +130,22 @@ export class SolvePage extends LitElement {
         }
         .incorrect {
           color: ${ERROR_COLOR};
+        }
+      }
+
+      #quit {
+        padding: 16px;
+
+        .dialog-buttons {
+          display: flex;
+          justify-content: space-evenly;
+          margin-top: 16px;
+        }
+
+        button {
+          display: flex;
+          align-items: center;
+          gap: 0.25rem;
         }
       }
 
@@ -306,6 +324,12 @@ export class SolvePage extends LitElement {
                     <td @click=${this.setTheme} data-theme=${newTheme}>
                       <icon-button iconName=${newThemeIcon}></icon-button>
                       <span>${newThemeTitle}</span>
+                    </td>
+                  </tr>
+                  <tr>
+                    <td @click=${this.quit}>
+                      <icon-button iconName="stop_circle"></icon-button>
+                      <span>Quit</span>
                     </td>
                   </tr>
                 </table>
@@ -527,7 +551,7 @@ export class SolvePage extends LitElement {
       <dialog id="congrats" @keydown=${this.handleCongratsDialogKey}>
         <h2>Congratulations!</h2>
         Now:
-        <div id="how-many-solutions">
+        <div id="how-many-solutions" tabindex="0">
           How many solutions does this puzzle have?
         </div>
         <div id="solutions-count-buttons">
@@ -563,15 +587,38 @@ export class SolvePage extends LitElement {
     `;
   }
 
+  private renderQuitDialog() {
+    const {game} = this;
+    if (!game) return undefined;
+    return html`
+      <dialog id="quit" @keydown=${this.handleQuitDialogKey}>
+        <h2>Give up?</h2>
+        <p>Are you sure you want to quit this puzzle?</p>
+        <div class="dialog-buttons">
+          <button id="quit-quit" @click=${this.confirmQuit}>
+            <mat-icon name="stop_circle"></mat-icon> Quit
+          </button>
+          <button id="quit-resume" @click=${this.quitResume}>
+            <mat-icon name="play_circle"></mat-icon> Keep playing
+          </button>
+        </div>
+      </dialog>
+    `;
+  }
+
   @property({attribute: false}) game: Game | null = null;
   @state() private trailColors: TrailColors | null = null;
   @state() private theme = getCurrentTheme();
   @state() private solutionsCountGuess?: 1 | 2 | 3;
-  @state() private dialogRenderer?: (this: SolvePage) => TemplateResult | undefined;
+  @state() private dialogRenderer?: (
+    this: SolvePage,
+  ) => TemplateResult | undefined;
   @query('sudoku-view') sudokuView?: SudokuView;
   @query('dialog') dialog?: HTMLDialogElement;
   @query('#guess-solutions-count')
   guessSolutionsCountButton?: HTMLButtonElement;
+  @query('#quit-resume') quitResumeButton?: HTMLButtonElement;
+  @query('#quit-quit') confirmQuitButton?: HTMLButtonElement;
 
   override willUpdate(changedProperties: PropertyValues<this>) {
     if (changedProperties.has('game')) {
@@ -669,8 +716,8 @@ export class SolvePage extends LitElement {
 
   private async notePuzzleSolved() {
     this.game?.markCompleted(CompletionState.SOLVED);
-    this.requestUpdate();
-    this.showDialog(this.renderCongratulationsDialog);
+    await this.showDialog(this.renderCongratulationsDialog);
+    this.dialog?.blur();
   }
 
   private noteCellModified() {
@@ -687,8 +734,19 @@ export class SolvePage extends LitElement {
     this.requestUpdate();
   }
 
-  private quit() {
-    // TODO: implement
+  private async quit() {
+    await this.showDialog(this.renderQuitDialog);
+    this.quitResumeButton?.focus();
+  }
+
+  private confirmQuit() {
+    this.game?.markCompleted(CompletionState.QUIT);
+    this.hideDialog();
+  }
+
+  private quitResume() {
+    this.resumePlay();
+    this.hideDialog();
   }
 
   private handleCongratsDialogKey(event: KeyboardEvent) {
@@ -704,6 +762,24 @@ export class SolvePage extends LitElement {
       case '2':
       case '3':
         this.updateCountAndButton(Number(event.key) as 1 | 2 | 3);
+        break;
+    }
+    event.preventDefault();
+    event.stopImmediatePropagation();
+  }
+
+  private handleQuitDialogKey(event: KeyboardEvent) {
+    // We swallow most keys.
+    switch (event.key) {
+      case 'Tab':
+        return; // Allow the default handling for tabs.
+      case 'Escape':
+        // Don't close the dialog, but do focus the Quit button.
+        this.confirmQuitButton?.focus();
+        break;
+      case 'Enter':
+      case ' ':
+        (event.target as HTMLElement | null)?.click(); // Treat the same as a click.
         break;
     }
     event.preventDefault();
