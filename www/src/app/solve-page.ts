@@ -551,7 +551,7 @@ export class SolvePage extends LitElement {
       <dialog id="congrats" @keydown=${this.handleCongratsDialogKey}>
         <h2>Congratulations!</h2>
         Now:
-        <div id="how-many-solutions" tabindex="0">
+        <div id="how-many-solutions">
           How many solutions does this puzzle have?
         </div>
         <div id="solutions-count-buttons">
@@ -595,11 +595,11 @@ export class SolvePage extends LitElement {
         <h2>Give up?</h2>
         <p>Are you sure you want to quit this puzzle?</p>
         <div class="dialog-buttons">
-          <button id="quit-quit" @click=${this.confirmQuit}>
-            <mat-icon name="stop_circle"></mat-icon> Quit
-          </button>
           <button id="quit-resume" @click=${this.quitResume}>
             <mat-icon name="play_circle"></mat-icon> Keep playing
+          </button>
+          <button id="quit-quit" @click=${this.confirmQuit}>
+            <mat-icon name="stop_circle"></mat-icon> Quit
           </button>
         </div>
       </dialog>
@@ -717,7 +717,6 @@ export class SolvePage extends LitElement {
   private async notePuzzleSolved() {
     this.game?.markCompleted(CompletionState.SOLVED);
     await this.showDialog(this.renderCongratulationsDialog);
-    this.dialog?.blur();
   }
 
   private noteCellModified() {
@@ -736,7 +735,6 @@ export class SolvePage extends LitElement {
 
   private async quit() {
     await this.showDialog(this.renderQuitDialog);
-    this.quitResumeButton?.focus();
   }
 
   private confirmQuit() {
