@@ -12,6 +12,7 @@ import {PauseReason} from '../game/commands';
 import {Game, PlayState} from '../game/game';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
+import {ensureExhaustiveSwitch} from '../game/utils';
 import {customEvent} from './events';
 import {
   getCurrentSystemTheme,
@@ -642,11 +643,19 @@ export class SolvePage extends LitElement {
   };
 
   private readonly spacebarHandler = (event: KeyboardEvent) => {
-    if (event.key === ' ') {
-      if (this.game?.playState === PlayState.RUNNING) {
-        this.pausePlay();
-      } else {
-        this.resumePlay();
+    if (event.key === ' ' && this.game) {
+      switch (this.game.playState) {
+        case PlayState.UNSTARTED:
+        case PlayState.PAUSED:
+          this.resumePlay();
+          break;
+        case PlayState.RUNNING:
+          this.pausePlay();
+          break;
+        case PlayState.COMPLETED:
+          break;
+        default:
+          ensureExhaustiveSwitch(this.game.playState);
       }
     }
   };
