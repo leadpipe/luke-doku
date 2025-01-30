@@ -641,10 +641,21 @@ export class SolvePage extends LitElement {
     this.pausePlay(PauseReason.AUTO);
   };
 
+  private readonly spacebarHandler = (event: KeyboardEvent) => {
+    if (event.key === ' ') {
+      if (this.game?.playState === PlayState.RUNNING) {
+        this.pausePlay();
+      } else {
+        this.resumePlay();
+      }
+    }
+  };
+
   override connectedCallback(): void {
     super.connectedCallback();
     document.addEventListener('visibilitychange', this.foregroundnessHandler);
     window.addEventListener('blur', this.windowBlurHandler);
+    window.addEventListener('keydown', this.spacebarHandler);
     prefsTarget.addEventListener('current-theme', this.themeHandler);
   }
 
@@ -655,6 +666,7 @@ export class SolvePage extends LitElement {
       this.foregroundnessHandler,
     );
     window.removeEventListener('blur', this.windowBlurHandler);
+    window.removeEventListener('keydown', this.spacebarHandler);
     prefsTarget.removeEventListener('current-theme', this.themeHandler);
   }
 
