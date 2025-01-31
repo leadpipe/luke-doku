@@ -259,8 +259,8 @@ export class SudokuInput implements ReactiveController {
       <svg
         id="multi-input-popup"
         viewBox="${-svgPadding} 0 ${toDevice(gridWidth)} ${popupHeight}"
-        width=""
-        height=""
+        width="100"
+        height="100"
         style="
           width: ${gridWidth}px;
           height: ${toCss(popupHeight)}px;
