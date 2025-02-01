@@ -849,6 +849,7 @@ export class SudokuView extends LitElement implements GridContainer {
         this.pausePatterns = [];
         this.trailColors =
           game ? new TrailColors(game.sudoku.cluesString()) : null;
+        this.updateSymmetries();
       }
     }
   }
@@ -861,7 +862,7 @@ export class SudokuView extends LitElement implements GridContainer {
 
   private updateSymmetries() {
     const {gameWrapper, interactive} = this;
-    if (gameWrapper && !this.pausePatterns.length) {
+    if (gameWrapper && !this.pausePatterns.length && this.centers.length) {
       this.input =
         interactive ? new SudokuInput(this, gameWrapper.game) : undefined;
       this.pausePatterns = gameWrapper.game.sudoku.symmetryMatches.map(
