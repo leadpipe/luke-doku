@@ -4,19 +4,17 @@ import type {IDBPDatabase} from 'idb';
 import {css, html, LitElement} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
-import {CompletionState} from '../game/command';
 import {Game, PlayState} from '../game/game';
 import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
 import {AttemptState, type LukeDokuDb, openDb} from '../system/database';
 import {requestPuzzle} from '../system/puzzle-service';
 import {customEvent} from './events';
-import {CORRECT_COLOR, ERROR_COLOR, LOGO_FONT_FAMILY} from './styles';
+import {LOGO_FONT_FAMILY} from './styles';
 import {
   elapsedTimeString,
   findDataString,
   renderCompletedGameDescription,
-  renderCount,
   renderPuzzleTitle,
   today,
   todayString,
@@ -39,16 +37,22 @@ export class PuzzlesPage extends LitElement {
       display: flex;
       gap: 16px;
       overflow-x: scroll;
-      .puzzle {
-        text-align: center;
-        cursor: pointer;
-        width: min-content;
-      }
-      sudoku-view {
-        width: 144px;
-        height: 144px;
-        margin-bottom: 4px;
-      }
+    }
+    .puzzle-grid {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 16px;
+      overflow-y: scroll;
+    }
+    .puzzle {
+      text-align: center;
+      cursor: pointer;
+      width: min-content;
+    }
+    sudoku-view {
+      width: 144px;
+      height: 144px;
+      margin-bottom: 4px;
     }
   `;
 
@@ -58,45 +62,56 @@ export class PuzzlesPage extends LitElement {
       ${this.ongoingGames.length > 0 ?
         html`
           <h2>Ongoing</h2>
-          ${this.renderPuzzleList(this.ongoingGames)}
+          <div class="puzzle-list">
+            ${this.renderPuzzles(this.ongoingGames)}
+          </div>
         `
       : ''}
       <h2>Today&apos;s puzzles</h2>
-      ${this.renderPuzzleList(this.todaysGames, /*assumeToday=*/ true)}
+      <div class="puzzle-list">
+        ${this.renderPuzzles(this.todaysGames, /*assumeToday=*/ true)}
+        <div>
+          <button @click=${this.generateMore}>Make more</button>
+        </div>
+      </div>
       ${this.recentlyCompletedGames.length > 0 ?
         html`
           <h2>Recently completed</h2>
-          ${this.renderPuzzleList(this.recentlyCompletedGames)}
+          <div class="puzzle-grid">
+            ${this.renderPuzzles(this.recentlyCompletedGames)}
+            ${this.moreCompetedGames ?
+              html`
+                <div>
+                  <button @click=${this.loadMoreCompletedPuzzles}>
+                    Load more
+                  </button>
+                </div>
+              `
+            : ''}
+          </div>
         `
       : ''}
     `;
   }
 
-  private renderPuzzleList(list: readonly Game[], assumeToday = false) {
+  private renderPuzzles(list: readonly Game[], assumeToday = false) {
     return html`
-      <div class="puzzle-list">
-        ${repeat(
-          list,
-          game => game.sudoku.cluesString(),
-          game => html`
-            <div
-              class="puzzle"
-              @click=${this.selectPuzzle}
-              data-clues=${game.sudoku.cluesString() as string}
-            >
-              <sudoku-view .gameWrapper=${game.wrapper}></sudoku-view>
-              <div class="description">
-                ${this.renderPuzzleDescription(game, assumeToday)}
-              </div>
+      ${repeat(
+        list,
+        game => game.sudoku.cluesString(),
+        game => html`
+          <div
+            class="puzzle"
+            @click=${this.selectPuzzle}
+            data-clues=${game.sudoku.cluesString() as string}
+          >
+            <sudoku-view .gameWrapper=${game.wrapper}></sudoku-view>
+            <div class="description">
+              ${this.renderPuzzleDescription(game, assumeToday)}
             </div>
-          `,
-        )}
-        ${assumeToday ?
-          html`<div>
-            <button @click=${this.generateMore}>Make more</button>
-          </div>`
-        : ''}
-      </div>
+          </div>
+        `,
+      )}
     `;
   }
 
@@ -119,6 +134,7 @@ export class PuzzlesPage extends LitElement {
   @state() private todaysGames: Game[] = [];
   private topCounter = 0;
   @state() private recentlyCompletedGames: Game[] = [];
+  @state() private moreCompetedGames = false;
 
   constructor() {
     super();
@@ -193,9 +209,14 @@ export class PuzzlesPage extends LitElement {
     }
   }
 
-  private async loadRecentlyCompletedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+  private async loadRecentlyCompletedPuzzles(
+    db: IDBPDatabase<LukeDokuDb>,
+    maxCount = 10,
+  ) {
+    this.moreCompetedGames = false;
     const a = this.recentlyCompletedGames;
     const b = [...a];
+    let i = 0;
     const index = db.transaction('puzzles').store.index('byStateAndDate');
     for await (const cursor of index.iterate(
       IDBKeyRange.bound(
@@ -204,12 +225,30 @@ export class PuzzlesPage extends LitElement {
       ),
       'prev',
     )) {
+      if (a.length >= maxCount) {
+        this.moreCompetedGames = true;
+        break;
+      }
+      if (i < a.length) {
+        if (a[i++].sudoku.cluesString() === cursor.value.clues) {
+          continue;
+        }
+        a.splice(i);
+        b.splice(i);
+      }
       const game = Game.forDbRecord(db, cursor.value);
       a.push(game);
       b.push(game);
       this.recentlyCompletedGames = this.recentlyCompletedGames === a ? b : a;
-      if (a.length >= 10) break;
     }
+  }
+
+  private async loadMoreCompletedPuzzles() {
+    const db = await openDb();
+    await this.loadRecentlyCompletedPuzzles(
+      db,
+      this.recentlyCompletedGames.length + 10,
+    );
   }
 
   private async cleanOldUnstartedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
