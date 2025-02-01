@@ -190,7 +190,10 @@ export class SudokuInput implements ReactiveController {
       `);
       }
     }
-    const {result, currentNum} = this;
+    let {result, defaultResult, currentNum} = this;
+    if (result === 'default') {
+      result = defaultResult;
+    }
     const previewText =
       result === 'cancel' ?
         (currentNum?.toString() ?? '')
@@ -334,8 +337,9 @@ export class SudokuInput implements ReactiveController {
   private inputCenter?: Point;
   private inputLoc?: Loc;
   private multiInput?: Set<number>;
+  private lastMultiInput?: Set<number>;
   private defaultResult: ClockInputResult = 1;
-  private result: ClockInputResult = 'cancel';
+  private result: ClockInputResult | 'default' = 'default';
   private currentNum: number | null | undefined = null;
   private clockSection = -1;
   private sideCenter = devicePixels(0);
@@ -358,7 +362,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   /** Finds the number, or the close button, on the multi-input popup. */
-  private convertEventToResult(
+  private convertMultiInputEventToResult(
     event: MouseEvent,
   ): ClockInputResult | undefined {
     const {multiInputPopup, padding} = this.host;
@@ -404,7 +408,7 @@ export class SudokuInput implements ReactiveController {
       return;
     }
     if (multiInput) {
-      const result = this.convertEventToResult(event);
+      const result = this.convertMultiInputEventToResult(event);
       if (result !== this.multiHover) {
         this.multiHover = result;
         this.host.requestUpdate();
@@ -439,7 +443,7 @@ export class SudokuInput implements ReactiveController {
   private handlePointerDown(event: PointerEvent) {
     const {multiInput} = this;
     if (multiInput) {
-      const result = this.convertEventToResult(event);
+      const result = this.convertMultiInputEventToResult(event);
       if (result) {
         if (typeof result === 'string') {
           // i.e. result = cancel
@@ -462,15 +466,19 @@ export class SudokuInput implements ReactiveController {
     }
     const {inputLoc, game} = this;
     if (!inputLoc && loc && this.isPossibleInputLoc(loc)) {
+      this.lastMultiInput = multiInput;
       this.fixMultipleDefaultResult();
       this.inputLoc = loc;
       this.hoverLoc = undefined;
       this.host.setPointerCapture(event.pointerId);
       this.inputCenter = toPoint(event);
       this.currentNum = game.getNum(loc);
+      const nums = game.getNums(loc);
       this.result =
         this.currentNum ??
-        (game.getNums(loc) ? 'multiple' : this.defaultResult);
+        (nums && !nums.has(this.defaultResult as number) ?
+          'multiple'
+        : 'default');
       this.clockSection = -1;
       this.host.requestUpdate();
     }
@@ -481,13 +489,25 @@ export class SudokuInput implements ReactiveController {
     if (this.multiInput) return;
     const {inputLoc, game} = this;
     if (inputLoc) {
-      const {result} = this;
+      let {result, defaultResult} = this;
+      if (result === 'default') {
+        result = defaultResult;
+      }
       switch (result) {
         case 'cancel':
           break;
         case 'multiple':
-          this.defaultResult = result;
-          this.multiInput = new Set(game.marks.getNums(inputLoc));
+          if (
+            defaultResult === 'multiple' &&
+            this.lastMultiInput &&
+            !game.getNums(inputLoc)
+          ) {
+            this.multiInput = new Set(this.lastMultiInput);
+            game.setNums(inputLoc, this.multiInput);
+          } else {
+            this.defaultResult = result;
+            this.multiInput = new Set(game.marks.getNums(inputLoc));
+          }
           this.host.requestUpdate();
           return; // Skip the cleanup required for the other results: we're still in input mode.
         case 'clear':
@@ -576,19 +596,26 @@ export class SudokuInput implements ReactiveController {
 
       default:
         // If it's a numeral, change the default input to it.  If we're hovering
-        // over a cell also set the cell to it.  If we're in multi-input mode,
-        // toggle its inclusion.
+        // over a cell also set the cell to it.  Else, if we're in multi-input
+        // mode, toggle its inclusion.
         if (event.key.length === 1 && event.key >= '1' && event.key <= '9') {
           const num = Number(event.key);
-          if (multiInput) {
+          if (
+            hoverLoc &&
+            !game.marks.getClue(hoverLoc) &&
+            (!multiInput || hoverLoc !== this.inputLoc)
+          ) {
+            game.setNum(hoverLoc, num);
+            this.cellModified(hoverLoc);
+            this.checkSolved(game);
+            this.defaultResult = num;
+            if (multiInput) {
+              this.cancelInput();
+            }
+          } else if (multiInput) {
             this.toggleMultiInput(num);
           } else {
             this.defaultResult = num;
-            if (hoverLoc && !game.marks.getClue(hoverLoc)) {
-              game.setNum(hoverLoc, num);
-              this.cellModified(hoverLoc);
-              this.checkSolved(game);
-            }
           }
           update = true;
         }
@@ -643,7 +670,7 @@ export class SudokuInput implements ReactiveController {
     } else {
       // Use the default result, and no clock section (light up the center
       // instead).
-      this.result = this.defaultResult;
+      this.result = 'default';
       this.clockSection = -1;
     }
     host.requestUpdate();
