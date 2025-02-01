@@ -19,7 +19,7 @@ export class LukeDoku extends LitElement {
       display: block;
       > * {
         position: absolute;
-        min-width: 100vw;
+        width: 100vw;
         transform: translateX(0);
       }
       .left {
