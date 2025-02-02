@@ -79,7 +79,7 @@ export class PuzzlesPage extends LitElement {
           <h2>Recently completed</h2>
           <div class="puzzle-grid">
             ${this.renderPuzzles(this.recentlyCompletedGames)}
-            ${this.moreCompetedGames ?
+            ${this.moreCompletedGames ?
               html`
                 <div>
                   <button @click=${this.loadMoreCompletedPuzzles}>
@@ -134,7 +134,7 @@ export class PuzzlesPage extends LitElement {
   @state() private todaysGames: Game[] = [];
   private topCounter = 0;
   @state() private recentlyCompletedGames: Game[] = [];
-  @state() private moreCompetedGames = false;
+  @state() private moreCompletedGames = false;
 
   constructor() {
     super();
@@ -213,7 +213,7 @@ export class PuzzlesPage extends LitElement {
     db: IDBPDatabase<LukeDokuDb>,
     maxCount = 10,
   ) {
-    this.moreCompetedGames = false;
+    this.moreCompletedGames = false;
     const a = this.recentlyCompletedGames;
     const b = [...a];
     let i = 0;
@@ -226,7 +226,7 @@ export class PuzzlesPage extends LitElement {
       'prev',
     )) {
       if (a.length >= maxCount) {
-        this.moreCompetedGames = true;
+        this.moreCompletedGames = true;
         break;
       }
       if (i < a.length) {
