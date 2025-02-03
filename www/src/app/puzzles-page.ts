@@ -2,7 +2,7 @@ import './events';
 
 import type {IDBPDatabase} from 'idb';
 import {css, html, LitElement} from 'lit';
-import {customElement, state} from 'lit/decorators.js';
+import {customElement, queryAll, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {Game, PlayState} from '../game/game';
 import {Sudoku} from '../game/sudoku';
@@ -11,6 +11,7 @@ import {AttemptState, type LukeDokuDb, openDb} from '../system/database';
 import {requestPuzzle} from '../system/puzzle-service';
 import {customEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
+import type {SudokuView} from './sudoku-view';
 import {
   elapsedTimeString,
   findDataString,
@@ -77,7 +78,7 @@ export class PuzzlesPage extends LitElement {
       ${this.recentlyCompletedGames.length > 0 ?
         html`
           <h2>Recently completed</h2>
-          <div class="puzzle-grid">
+          <div id="completed" class="puzzle-grid">
             ${this.renderPuzzles(this.recentlyCompletedGames)}
             ${this.moreCompletedGames ?
               html`
@@ -135,6 +136,8 @@ export class PuzzlesPage extends LitElement {
   private topCounter = 0;
   @state() private recentlyCompletedGames: Game[] = [];
   @state() private moreCompletedGames = false;
+  @queryAll('#completed sudoku-view')
+  private completedSudokuViews?: NodeListOf<SudokuView>;
 
   constructor() {
     super();
@@ -214,6 +217,7 @@ export class PuzzlesPage extends LitElement {
     maxCount = 10,
   ) {
     this.moreCompletedGames = false;
+    const firstSudokuView = this.completedSudokuViews?.[0];
     const a = this.recentlyCompletedGames;
     const b = [...a];
     let i = 0;
@@ -240,6 +244,13 @@ export class PuzzlesPage extends LitElement {
       a.push(game);
       b.push(game);
       this.recentlyCompletedGames = this.recentlyCompletedGames === a ? b : a;
+      if (firstSudokuView) {
+        await this.updateComplete;
+        const newSudokuView = this.completedSudokuViews?.[a.length - 1];
+        if (newSudokuView) {
+          newSudokuView.animationTime = firstSudokuView.animationTime;
+        }
+      }
     }
   }
 

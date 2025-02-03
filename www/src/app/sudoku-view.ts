@@ -38,6 +38,12 @@ const COMPLETED_CYCLE_SEC = 2 * COMPLETED_HALF_CYCLE_SEC;
 const MULTI_SOLUTION_CYCLE_SEC = 1;
 const MULTI_SOLUTION_FILL = css`light-dark(blue, lightblue)`;
 
+declare global {
+  interface Animation {
+    // It's there in Chrome, anyway.  Hopefully elsewhere too
+    readonly animationName: string;
+  }
+}
 /**
  * Displays a Sudoku puzzle, or an overlay that obscures it and illustrates the
  * symmetry of its clues.
@@ -157,42 +163,36 @@ export class SudokuView extends LitElement implements GridContainer {
         }
       }
       :host([playstate='completed']) #pause-background {
-        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-          completed-pause-background;
+        animation: ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
       }
       :host([playstate='completed']) #pause {
-        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-          completed-pause;
+        animation: ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
       }
       :host([playstate='completed']) #pause-background.next {
         animation:
           ${COMPLETED_CYCLE_SEC}s infinite pause-next,
-          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-            completed-pause-background;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
       }
       :host([playstate='completed']) #pause.next {
         animation:
           ${COMPLETED_CYCLE_SEC}s infinite pause-next,
-          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
       }
       :host([playstate='completed']) #next-pause-background {
-        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-          completed-pause-background;
+        animation: ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
       }
       :host([playstate='completed']) #next-pause {
-        animation: ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-          completed-pause;
+        animation: ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
       }
       :host([playstate='completed']) #next-pause-background.next {
         animation:
           ${COMPLETED_CYCLE_SEC}s infinite next-pause,
-          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate
-            completed-pause-background;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
       }
       :host([playstate='completed']) #next-pause.next {
         animation:
           ${COMPLETED_CYCLE_SEC}s infinite next-pause,
-          ${COMPLETED_HALF_CYCLE_SEC}s infinite alternate completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
       }
 
       @keyframes completed-clues {
@@ -322,14 +322,23 @@ export class SudokuView extends LitElement implements GridContainer {
         0% {
           opacity: 0;
         }
-        50% {
+        25% {
           opacity: 0;
         }
-        75% {
+        37.5% {
           opacity: 1;
         }
-        100% {
+        50% {
           opacity: 1;
+        }
+        62.5% {
+          opacity: 1;
+        }
+        75% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
         }
       }
 
@@ -337,14 +346,23 @@ export class SudokuView extends LitElement implements GridContainer {
         0% {
           opacity: 0;
         }
-        10% {
+        5% {
           opacity: 0;
         }
-        60% {
+        30% {
           opacity: 1;
         }
-        100% {
+        50% {
           opacity: 1;
+        }
+        70% {
+          opacity: 1;
+        }
+        95% {
+          opacity: 0;
+        }
+        100% {
+          opacity: 0;
         }
       }
 
@@ -884,15 +902,30 @@ export class SudokuView extends LitElement implements GridContainer {
     }
   }
 
+  /** The current time in millis of the longest animation cycle in the view. */
+  get animationTime(): number | null {
+    for (const animation of this.shadowRoot?.getAnimations() ?? []) {
+      if (
+        animation.playState === 'running' &&
+        animation.animationName === 'completed-pause'
+      ) {
+        return animation.currentTime as number;
+      }
+    }
+    return null;
+  }
+
+  set animationTime(time: number | null) {
+    for (const animation of this.shadowRoot?.getAnimations() ?? []) {
+      if (animation.playState === 'running') {
+        animation.currentTime = time;
+      }
+    }
+  }
+
   private optionallyShowNextOverlay(event: AnimationEvent) {
     if (event.animationName === 'completed-pause') {
-      const halfCycleCount = Math.round(
-        event.elapsedTime / COMPLETED_HALF_CYCLE_SEC,
-      );
-      const fullCycleComplete = halfCycleCount % 2 === 0;
-      if (fullCycleComplete) {
-        this.showNextOverlay = Math.random() < 0.083; // 1 in 12
-      }
+      this.showNextOverlay = Math.random() < 0.083; // 1 in 12
     }
   }
 
