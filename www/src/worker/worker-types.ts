@@ -52,6 +52,9 @@ export interface PuzzleGeneratedMessage {
   /** The incoming message that this is the result for. */
   readonly toWorkerMessage: GeneratePuzzleMessage;
 
+  /** The version of the generator that generated this puzzle. */
+  readonly generatorVersion: number;
+
   /** The clues in GridString form. */
   readonly clues: string;
 

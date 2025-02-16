@@ -4,10 +4,7 @@ import {
   type DbSymMatch,
   type PuzzleRecord,
 } from '../system/database';
-import type {
-  GeneratePuzzleMessage,
-  PuzzleGeneratedMessage,
-} from '../worker/worker-types';
+import type {PuzzleGeneratedMessage} from '../worker/worker-types';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {DateString, GridString} from './types';
@@ -38,7 +35,7 @@ export class Sudoku {
         numNonconformingLocs: match.num_nonconforming_locs,
         partialOrbits: match.partial_orbits.map(orbitToLocs),
       })),
-      PuzzleId.fromWorker(puzzle.toWorkerMessage),
+      PuzzleId.fromWorker(puzzle),
       source,
     );
   }
@@ -69,7 +66,11 @@ export class Sudoku {
       lastUpdated: new Date(),
     };
     if (this.id) {
-      record.puzzleId = [this.id.date, this.id.counter];
+      record.puzzleId = [
+        this.id.date,
+        this.id.counter,
+        this.id.generatorVersion,
+      ];
     }
     if (this.source) {
       record.source = this.source;
@@ -85,18 +86,25 @@ export class PuzzleId {
   constructor(
     readonly date: DateString,
     readonly counter: number,
+    readonly generatorVersion = 0,
   ) {}
 
-  static fromWorker(message: GeneratePuzzleMessage): PuzzleId {
-    return new PuzzleId(message.date as DateString, message.counter);
+  static fromWorker(message: PuzzleGeneratedMessage): PuzzleId {
+    return new PuzzleId(
+      message.toWorkerMessage.date as DateString,
+      message.toWorkerMessage.counter,
+      message.generatorVersion,
+    );
   }
 
-  static fromDatabase(id: [string, number] | undefined): PuzzleId | undefined {
-    return id ? new PuzzleId(id[0] as DateString, id[1]) : undefined;
+  static fromDatabase(
+    id: [string, number, number?] | undefined,
+  ): PuzzleId | undefined {
+    return id ? new PuzzleId(id[0] as DateString, id[1], id[2]) : undefined;
   }
 
   toString(): string {
-    return `${this.date}:${this.counter}`;
+    return `${this.date}:${this.counter}:${this.generatorVersion ?? 0}`;
   }
 }
 

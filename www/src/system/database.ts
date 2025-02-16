@@ -31,11 +31,11 @@ export interface LukeDokuDb extends DBSchema {
       /** The grid symmetries exhibited by this puzzle's clues. */
       symmetryMatches: DbSymMatch[];
       /**
-       * The puzzle ID, if we generated the puzzle, as [date, counter]: for
-       * example, ['1776-07-04', 10] is the tenth puzzle generated for US
-       * Independence Day.
+       * The puzzle ID, if we generated the puzzle, as [date, counter,
+       * genVersion]: for example, ['1776-07-04', 10, 1] is the tenth puzzle
+       * generated for US Independence Day by version 1 of the puzzle generator.
        */
-      puzzleId?: [string, number];
+      puzzleId?: [string, number, number];
       /**
        * Typically only set for external puzzles: a description of where this
        * puzzle came from.

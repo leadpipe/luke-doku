@@ -398,7 +398,7 @@ pub struct LocPermutation {
 impl LocPermutation {
   pub fn random<R: Rng>(random: &mut R) -> Self {
     Self {
-      transpose: random.gen(),
+      transpose: random.random(),
       row_bands: BandPermutation::random(random),
       col_bands: BandPermutation::random(random),
       rows_in_bands: [
@@ -804,20 +804,20 @@ mod tests {
     assert_eq!(
       p,
       GridPermutation {
-        nums: cycle!(Num; 1, 5, 6, 2, 8, 4, 9, 3),
+        nums: cycle!(Num; 1, 7, 5, 6, 8, 4, 2, 9),
         locs: LocPermutation {
-          transpose: true,
-          row_bands: cycle!(Band; 0, 1),
-          col_bands: cycle!(Band),
+          transpose: false,
+          row_bands: cycle!(Band; 0, 1, 2),
+          col_bands: cycle!(Band; 0, 2, 1),
           rows_in_bands: [
             cycle!(BlkLine; 0, 2, 1),
-            cycle!(BlkLine; 0, 1),
             cycle!(BlkLine; 0, 2),
+            cycle!(BlkLine; 0, 1, 2),
           ],
           cols_in_bands: [
-            cycle!(BlkLine),
-            cycle!(BlkLine; 0, 2, 1),
+            cycle!(BlkLine; 1, 2),
             cycle!(BlkLine; 0, 1, 2),
+            cycle!(BlkLine; 1, 2),
           ],
         }
       }

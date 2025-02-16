@@ -2,7 +2,7 @@ import {html, type HTMLTemplateResult} from 'lit';
 import * as wasm from 'luke-doku-rust';
 import {CompletionState} from '../game/command';
 import type {Game} from '../game/game';
-import type {Sudoku} from '../game/sudoku';
+import type {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
 import {CORRECT_COLOR, ERROR_COLOR} from './styles';
 
@@ -115,6 +115,13 @@ export const today = wasm.LogicalDate.fromDate(new Date());
 /** Today in string form (YYYY-MM-DD). */
 export const todayString = dateString(today);
 
+const generatorVersion = wasm.generatorVersion();
+function titleWithVersion(title: string, id: PuzzleId): string {
+  return id.generatorVersion === generatorVersion ?
+      title
+    : `${title} (generator #${id.generatorVersion})`;
+}
+
 /**
  * Constructs a title for a given Sudoku, based on its Luke-doku ID if it has
  * one, or on its source if it came from elsewhere.
@@ -132,7 +139,8 @@ export function renderPuzzleTitle(sudoku: Sudoku, assumeToday: boolean) {
   const puzzleDate = wasm.LogicalDate.fromString(id.date);
   const days = today.daysSince(puzzleDate);
   if (days === 0 && assumeToday) {
-    return id.counter === 1 ? `Puzzle of the day` : `#${id.counter}`;
+    const title = id.counter === 1 ? `Puzzle of the day` : `#${id.counter}`;
+    return titleWithVersion(title, id);
   }
   let dayName;
   let relative = true;
@@ -157,9 +165,9 @@ export function renderPuzzleTitle(sudoku: Sudoku, assumeToday: boolean) {
         dayName = `${dayName} ${puzzleDate.year()}`;
       }
   }
-  return relative ?
-      `${dayName}'s #${id.counter}`
-    : `#${id.counter} of ${dayName}`;
+  const title =
+    relative ? `${dayName}'s #${id.counter}` : `#${id.counter} of ${dayName}`;
+  return titleWithVersion(title, id);
 }
 
 /**
@@ -171,8 +179,10 @@ export function centerDialog(dialog: HTMLElement, element: HTMLElement) {
   const dialogRect = dialog.getBoundingClientRect();
   const elementRect = element.getBoundingClientRect();
 
-  const dialogTop = elementRect.top + (elementRect.height - dialogRect.height) / 2;
-  const dialogLeft = elementRect.left + (elementRect.width - dialogRect.width) / 2;
+  const dialogTop =
+    elementRect.top + (elementRect.height - dialogRect.height) / 2;
+  const dialogLeft =
+    elementRect.left + (elementRect.width - dialogRect.width) / 2;
 
   dialog.style.top = `${dialogTop}px`;
   dialog.style.left = `${dialogLeft}px`;

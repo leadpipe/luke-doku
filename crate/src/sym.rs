@@ -8,7 +8,6 @@ use std::{
 use num_derive::FromPrimitive;
 use num_traits::FromPrimitive;
 use once_cell::sync::Lazy;
-use rand::prelude::SliceRandom;
 use serde::Serialize;
 use wasm_bindgen::{
   convert::{FromWasmAbi, IntoWasmAbi},

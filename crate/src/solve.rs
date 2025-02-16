@@ -121,13 +121,13 @@ impl<'a, R: Rng> SearchHelper for RandomPivotHelper<'a, R> {
   fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc {
     // Takes anything from twos, or anything from unset.
     if !twos.is_empty() {
-      let n: i32 = self.0.gen_range(0..twos.len());
+      let n: i32 = self.0.random_range(0..twos.len());
       // Safe because we're within twos's range.
       return twos.item_at(n).unwrap();
     }
     // Safe because this is never called with empty `unset`, and we stay in its
     // range.
-    let n: i32 = self.0.gen_range(0..ledger.unset().len());
+    let n: i32 = self.0.random_range(0..ledger.unset().len());
     ledger.unset().item_at(n).unwrap()
   }
 

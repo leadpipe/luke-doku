@@ -41,9 +41,9 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
   let puzzle;
   startTimeMs = performance.now();
   try {
-    puzzle = dailySolution.gen(m.counter);
+    puzzle = dailySolution.generate(m.counter);
   } catch (e: unknown) {
-    return toErrorCaught(m, 'dailySolution.gen', e);
+    return toErrorCaught(m, 'dailySolution.generate', e);
   }
   const elapsedMs = performance.now() - startTimeMs;
   let symmetryMatches;
@@ -60,8 +60,11 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
   const answer = {
     type: FromWorkerMessageType.PUZZLE_GENERATED,
     toWorkerMessage: m,
+    generatorVersion: dailySolution.generator_version,
     clues: puzzle.clues.toFlatString(),
-    solutions: puzzle.solutions.map(s => s.grid().toFlatString()),
+    solutions: puzzle.solutions.map((s: wasm.SolvedGrid) =>
+      s.grid().toFlatString(),
+    ),
     symmetryMatches,
     dailySolutionElapsedMs,
     elapsedMs,

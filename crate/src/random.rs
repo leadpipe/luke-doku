@@ -12,7 +12,7 @@ pub use rand::Rng;
 
 /// Constructs a new Random from a given string seed.
 pub fn new_random(seed: &str) -> Random {
-  rand_seeder::Seeder::from(seed).make_rng()
+  rand_seeder::Seeder::from(seed).into_rng()
 }
 
 /// The alias for Random we expose to JS.
@@ -52,12 +52,12 @@ impl JsRandom {
   /// Generates the next floating-point number in the half-open interval [0,
   /// 1).
   pub fn next(&mut self) -> f64 {
-    self.rng().gen()
+    self.rng().random()
   }
 
   /// Returns true with the given probability.
   pub fn choice(&mut self, p: f64) -> bool {
-    self.rng().gen_bool(p)
+    self.rng().random_bool(p)
   }
 
   /// Generates a floating-point number in the half-open interval [a, b).

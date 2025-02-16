@@ -37,7 +37,7 @@ fn find_puzzle_range(date: NaiveDate, count: i32) -> (Puzzle, Puzzle) {
   let mut smallest = None;
   let mut largest = None;
   for i in 1..=count {
-    let desc = ds.gen(i);
+    let desc = ds.generate(i).unwrap();
     let len = desc.clues.len();
     let mut replace = true;
     if let Some((prev_len, _)) = smallest {
