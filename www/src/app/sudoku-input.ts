@@ -502,8 +502,12 @@ export class SudokuInput implements ReactiveController {
             this.lastMultiInput &&
             !game.getNums(inputLoc)
           ) {
-            this.multiInput = new Set(this.lastMultiInput);
-            game.setNums(inputLoc, this.multiInput);
+            const nums = (this.multiInput = new Set(this.lastMultiInput));
+            if (nums.size) {
+              game.setNums(inputLoc, nums);
+            } else {
+              game.clearCell(inputLoc);
+            }
           } else {
             this.defaultResult = result;
             this.multiInput = new Set(game.marks.getNums(inputLoc));
