@@ -53,7 +53,11 @@ impl LogicalDate {
 
   #[wasm_bindgen(js_name = "toDateAtMidnight")]
   pub fn to_date(&self) -> Date {
-    Date::new_with_year_month_day(self.year() as u32, self.month() as i32 - 1, self.day() as i32)
+    Date::new_with_year_month_day(
+      self.year() as u32,
+      self.month() as i32 - 1,
+      self.day() as i32,
+    )
   }
 
   #[wasm_bindgen(js_name = "daysSince")]

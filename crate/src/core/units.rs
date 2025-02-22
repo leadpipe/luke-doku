@@ -137,7 +137,7 @@ impl Blk {
   }
 
   /// Returns the location within this block that's at the intersection of the
-  /// given block-line and block-column.
+  /// given block-row and block-column.
   pub const fn loc_at(self, blk_row: BlkLine, blk_col: BlkLine) -> Loc {
     Loc::at(self.row(blk_row), self.col(blk_col))
   }

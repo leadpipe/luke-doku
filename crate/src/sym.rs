@@ -2,7 +2,8 @@
 
 use std::{
   cmp::{min, Ordering},
-  convert::TryInto, ptr::addr_of_mut,
+  convert::TryInto,
+  ptr::addr_of_mut,
 };
 
 use num_derive::FromPrimitive;
@@ -331,10 +332,7 @@ type OrbitsLocs = [Loc; 81];
 /// The orbits themselves are slices of the underlying array.
 type Orbits<const N: usize> = [&'static [Loc]; N];
 
-fn new_orbits<const N: usize>(
-  locs: *mut OrbitsLocs,
-  gen: fn(Loc) -> Vec<Loc>,
-) -> Orbits<N> {
+fn new_orbits<const N: usize>(locs: *mut OrbitsLocs, gen: fn(Loc) -> Vec<Loc>) -> Orbits<N> {
   let mut orbit_ranges = Vec::with_capacity(N);
   let mut remaining = LocSet::all();
   let mut index = 0;
@@ -450,7 +448,8 @@ static BLOCKWISE_ANTI: Lazy<Orbits<{ 81 / 3 }>> = Lazy::new(|| unsafe {
   })
 });
 static mut NONE_LOCS: OrbitsLocs = [L11; 81];
-static NONE: Lazy<Orbits<81>> = Lazy::new(|| unsafe { new_orbits(addr_of_mut!(NONE_LOCS), |_| vec![]) });
+static NONE: Lazy<Orbits<81>> =
+  Lazy::new(|| unsafe { new_orbits(addr_of_mut!(NONE_LOCS), |_| vec![]) });
 
 #[cfg(test)]
 mod tests {

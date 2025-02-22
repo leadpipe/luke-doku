@@ -19,7 +19,9 @@ pub fn new_random(seed: &str) -> Random {
 #[derive(Clone, Copy, Debug, Eq, PartialEq)]
 #[repr(C, align(16))]
 #[wasm_bindgen]
-pub struct JsRandom {guts: u128}
+pub struct JsRandom {
+  guts: u128,
+}
 const_assert!(size_of::<Random>() == size_of::<JsRandom>());
 
 impl JsRandom {
@@ -28,7 +30,7 @@ impl JsRandom {
     unsafe {
       let p: *const Random = rng;
       let guts = *(p as *const u128);
-      Self{guts}
+      Self { guts }
     }
   }
 

@@ -22,11 +22,7 @@ fn main() {
     )
   });
   let (min, max) = find_puzzle_range(date, i32::from(count));
-  println!(
-    "Smallest number of clues ({}):\n{:?}",
-    min.clues.len(),
-    min
-  );
+  println!("Smallest number of clues ({}):\n{:?}", min.clues.len(), min);
   println!("Largest number of clues ({}):\n{:?}", max.clues.len(), max);
 }
 

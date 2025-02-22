@@ -103,7 +103,11 @@ impl Grid {
   #[wasm_bindgen(js_name = "brokenLocs")]
   pub fn broken_locs(&self) -> Option<Box<[u8]>> {
     if let GridState::Broken(locs) = self.state() {
-      let bytes = locs.iter().map(|loc| loc.index() as u8).collect::<Vec<u8>>().into_boxed_slice();
+      let bytes = locs
+        .iter()
+        .map(|loc| loc.index() as u8)
+        .collect::<Vec<u8>>()
+        .into_boxed_slice();
       Some(bytes)
     } else {
       None

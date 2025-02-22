@@ -1,4 +1,4 @@
-//! Defines the Sudoku Insight solve function.
+//! Defines the Luke-doku solve function.
 
 use crate::core::*;
 use crate::random::*;
@@ -48,7 +48,7 @@ impl SolutionSummary {
   /// Counts the number of holes in the intersection of all of the solutions.
   pub fn num_holes(&self) -> i32 {
     if self.solutions.len() < 2 {
-      return 0
+      return 0;
     }
     let mut intersection = self.solutions[0].grid();
     for s in self.solutions.iter().skip(1) {

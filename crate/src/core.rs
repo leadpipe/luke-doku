@@ -1,4 +1,4 @@
-//! Defines the core sudoku-insight types.
+//! Defines the core Luke-doku types.
 //!
 //! Among these are:
 //!
