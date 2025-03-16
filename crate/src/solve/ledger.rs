@@ -64,12 +64,12 @@ impl Ledger {
   pub fn apply_implications(&mut self) -> Result<LocSet, Invalid> {
     loop {
       self.eliminate_by_overlaps()?;
-      let (mut ones, twos) = self.asgmts.ones_and_twos()?;
-      ones &= self.unset;
-      if ones.is_empty() {
-        return Ok(twos);
+      let (mut singles, doubles) = self.asgmts.singles_and_doubles()?;
+      singles &= self.unset;
+      if singles.is_empty() {
+        return Ok(doubles);
       }
-      self.eliminate_peers_in_same_band(ones);
+      self.eliminate_peers_in_same_band(singles);
     }
   }
 
@@ -200,7 +200,7 @@ impl Ledger {
 fn eliminate_peers_in_plane(plane: &mut Bits3x27, loc: Loc) {
   let band = loc.row_band().index();
   unsafe {
-    // Safe because loc.row_band() is in 0..3.
+    // Safe because loc.row_band().index() is in 0..3.
     *plane.mut_array().get_unchecked_mut(band) &=
       *loc_to_zeroed_peers(loc).0.array().get_unchecked(band);
   }

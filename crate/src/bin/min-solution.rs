@@ -21,7 +21,7 @@ fn main() {
 struct MinimizingSearchHelper;
 
 impl SearchHelper for MinimizingSearchHelper {
-  fn choose_pivot_loc(&mut self, ledger: &ledger::Ledger, _twos: &LocSet) -> Loc {
+  fn choose_pivot_loc(&mut self, ledger: &ledger::Ledger, _doubles: &LocSet) -> Loc {
     // The solver never calls this with an empty `unset`.
     ledger.unset().smallest_item().unwrap()
   }

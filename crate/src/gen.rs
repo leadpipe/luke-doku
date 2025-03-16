@@ -358,9 +358,9 @@ pub fn improve_puzzle<R: Rng>(
 struct GenHelper<'a, R: Rng>(&'a mut R);
 
 impl<'a, R: Rng> SearchHelper for GenHelper<'a, R> {
-  fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc {
+  fn choose_pivot_loc(&mut self, ledger: &Ledger, doubles: &LocSet) -> Loc {
     let mut helper = JczHelper();
-    helper.choose_pivot_loc(ledger, twos)
+    helper.choose_pivot_loc(ledger, doubles)
   }
 
   fn order_pivot_nums(&mut self, nums: &mut [Option<Num>]) {

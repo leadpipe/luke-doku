@@ -61,7 +61,7 @@ impl SolutionSummary {
 /// Callbacks for searching the Sudoku solution space.
 pub trait SearchHelper {
   /// Decides on a location to search through.
-  fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc;
+  fn choose_pivot_loc(&mut self, ledger: &Ledger, doubles: &LocSet) -> Loc;
 
   /// Optionally puts the given numerals into a different order.
   fn order_pivot_nums(&mut self, nums: &mut [Option<Num>]);
@@ -71,10 +71,10 @@ pub trait SearchHelper {
 pub struct DefaultHelper();
 
 impl SearchHelper for DefaultHelper {
-  fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc {
-    // Replicates Emerentius's algorithm: takes anything from twos, or the best of 3
+  fn choose_pivot_loc(&mut self, ledger: &Ledger, doubles: &LocSet) -> Loc {
+    // Replicates Emerentius's algorithm: takes anything from doubles, or the best of 3
     // unset locations.
-    if let Some(loc) = twos.smallest_item() {
+    if let Some(loc) = doubles.smallest_item() {
       return loc;
     }
     let unset = ledger.unset();
@@ -99,9 +99,9 @@ impl SearchHelper for DefaultHelper {
 pub struct JczHelper();
 
 impl SearchHelper for JczHelper {
-  fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc {
-    // Takes anything from twos, or anything from unset.
-    if let Some(loc) = twos.smallest_item() {
+  fn choose_pivot_loc(&mut self, ledger: &Ledger, doubles: &LocSet) -> Loc {
+    // Takes anything from doubles, or anything from unset.
+    if let Some(loc) = doubles.smallest_item() {
       return loc;
     }
     // Safe because this is never called with empty `unset`.
@@ -112,18 +112,18 @@ impl SearchHelper for JczHelper {
 }
 
 /// A `SearchHelper` that picks pivot points at random.  It still prefers
-/// locations in `twos` when there are any.
+/// locations in `doubles` when there are any.
 ///
 /// Does not touch the order of pivot numerals.
 pub struct RandomPivotHelper<'a, R: Rng>(&'a mut R);
 
 impl<'a, R: Rng> SearchHelper for RandomPivotHelper<'a, R> {
-  fn choose_pivot_loc(&mut self, ledger: &Ledger, twos: &LocSet) -> Loc {
-    // Takes anything from twos, or anything from unset.
-    if !twos.is_empty() {
-      let n: i32 = self.0.random_range(0..twos.len());
-      // Safe because we're within twos's range.
-      return twos.item_at(n).unwrap();
+  fn choose_pivot_loc(&mut self, ledger: &Ledger, doubles: &LocSet) -> Loc {
+    // Takes anything from doubles, or anything from unset.
+    if !doubles.is_empty() {
+      let n: i32 = self.0.random_range(0..doubles.len());
+      // Safe because we're within doubles's range.
+      return doubles.item_at(n).unwrap();
     }
     // Safe because this is never called with empty `unset`, and we stay in its
     // range.
@@ -136,7 +136,7 @@ impl<'a, R: Rng> SearchHelper for RandomPivotHelper<'a, R> {
 
 pub struct SearcherFactory {
   ledger: Option<Ledger>,
-  twos: LocSet,
+  doubles: LocSet,
 }
 
 impl SearcherFactory {
@@ -144,21 +144,21 @@ impl SearcherFactory {
     let result = Ledger::new(clues);
     if let Ok(mut ledger) = result {
       let result = ledger.apply_implications();
-      if let Ok(twos) = result {
+      if let Ok(doubles) = result {
         return SearcherFactory {
           ledger: Some(ledger),
-          twos,
+          doubles,
         };
       }
     }
     SearcherFactory {
       ledger: None,
-      twos: LocSet::new(),
+      doubles: LocSet::new(),
     }
   }
 
   pub fn new_searcher<'a>(&'a self, helper: &'a mut dyn SearchHelper) -> Searcher {
-    Searcher::new(&self.ledger, &self.twos, helper)
+    Searcher::new(&self.ledger, &self.doubles, helper)
   }
 }
 
@@ -200,11 +200,11 @@ impl<'a> Searcher<'a> {
         let result = item
           .ledger
           .assign_and_apply_implications(num, item.pivot_loc);
-        if let Ok(twos) = result {
+        if let Ok(doubles) = result {
           let pivoted = !item.ledger.is_complete();
           if pivoted {
             // We even reuse the item for the following pivot.
-            item.pivot_loc = self.helper.choose_pivot_loc(&item.ledger, &twos);
+            item.pivot_loc = self.helper.choose_pivot_loc(&item.ledger, &doubles);
             item.fill_nums();
             self
               .helper
@@ -222,8 +222,8 @@ impl<'a> Searcher<'a> {
         // ledger so they'll all start from the same place.
         let mut ledger = item.ledger;
         let result = ledger.assign_and_apply_implications(num, item.pivot_loc);
-        if let Ok(twos) = result {
-          let pivoted = self.pivot(&ledger, &twos);
+        if let Ok(doubles) = result {
+          let pivoted = self.pivot(&ledger, &doubles);
           if !pivoted {
             self.found = Self::solution(&ledger);
             break;
@@ -235,7 +235,7 @@ impl<'a> Searcher<'a> {
     count
   }
 
-  fn new(ledger: &Option<Ledger>, twos: &LocSet, helper: &'a mut dyn SearchHelper) -> Self {
+  fn new(ledger: &Option<Ledger>, doubles: &LocSet, helper: &'a mut dyn SearchHelper) -> Self {
     let mut answer = Searcher {
       found: None,
       total_pivots: 0,
@@ -244,7 +244,7 @@ impl<'a> Searcher<'a> {
       helper,
     };
     if let Some(ledger) = ledger {
-      let pivoted = answer.pivot(ledger, twos);
+      let pivoted = answer.pivot(ledger, doubles);
       if !pivoted {
         // We must be done.
         answer.found = Self::solution(ledger);
@@ -255,14 +255,14 @@ impl<'a> Searcher<'a> {
 
   /// Chooses a pivot location and pushes it and its possible numerals onto
   /// the stack; returns false if there are no remaining unset locations.
-  fn pivot(&mut self, ledger: &Ledger, twos: &LocSet) -> bool {
+  fn pivot(&mut self, ledger: &Ledger, doubles: &LocSet) -> bool {
     if ledger.is_complete() {
       return false;
     }
 
     self.stack.push(StackItem {
       ledger: *ledger,
-      pivot_loc: self.helper.choose_pivot_loc(ledger, twos),
+      pivot_loc: self.helper.choose_pivot_loc(ledger, doubles),
       nums: [None; 9],
       count: 0,
       next: 0,

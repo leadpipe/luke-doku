@@ -51,7 +51,7 @@ impl AsgmtSet {
   /// Finds all locations in this set that have either one or two assignments,
   /// and returns those two location sets as a tuple.  Returns an Invalid
   /// error if any locations have no possible assignments.
-  pub fn ones_and_twos(&self) -> Result<(LocSet, LocSet), Invalid> {
+  pub fn singles_and_doubles(&self) -> Result<(LocSet, LocSet), Invalid> {
     // `minN` is locations with at least N assignments in this set.
     let mut min1 = Bits3x27::ZERO;
     let mut min2 = Bits3x27::ZERO;
@@ -165,7 +165,7 @@ mod tests {
   }
 
   #[test]
-  fn ones_and_twos() {
+  fn singles_and_doubles() {
     let s = ".1..5..8.4.89.62.1..6...7....5.3.9.....8.7.....1.4.3....4...1..2.93.16.7.7..6..2.";
     let g = s.parse::<Grid>().unwrap();
     let mut set = AsgmtSet::new();
@@ -179,19 +179,19 @@ mod tests {
         set.insert(Asgmt { loc, num: N2 });
       }
     }
-    let (ones, twos) = set.ones_and_twos().unwrap();
-    assert_eq!(ones, locs);
-    assert_eq!(twos, !locs);
+    let (singles, doubles) = set.singles_and_doubles().unwrap();
+    assert_eq!(singles, locs);
+    assert_eq!(doubles, !locs);
 
     set.insert(Asgmt { loc: L11, num: N3 });
-    let (ones, twos) = set.ones_and_twos().unwrap();
-    assert_eq!(ones, locs);
-    assert_ne!(twos, !locs);
-    assert_eq!(twos.len() + 1, (!locs).len());
-    assert!(!ones.contains(L11));
-    assert!(!twos.contains(L11));
+    let (singles, doubles) = set.singles_and_doubles().unwrap();
+    assert_eq!(singles, locs);
+    assert_ne!(doubles, !locs);
+    assert_eq!(doubles.len() + 1, (!locs).len());
+    assert!(!singles.contains(L11));
+    assert!(!doubles.contains(L11));
 
     set.remove(Asgmt { loc: L12, num: N1 });
-    assert!(set.ones_and_twos().is_err());
+    assert!(set.singles_and_doubles().is_err());
   }
 }
