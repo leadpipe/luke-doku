@@ -14,6 +14,6 @@ criterion_main!(benches);
 /// Generates N puzzles for the given day.
 fn gen_puzzles(ds: &DailySolution, count: i32) -> () {
   for i in 1..=count {
-    ds.generate(i);
+    let _ = ds.generate(i);
   }
 }
