@@ -9,8 +9,8 @@ import {
 import {EventType, logEvent} from './analytics';
 
 /**
- * The web worker that holds the trie and generates grids.  Note that webpack
- * sees this code and handles it specially.
+ * The web worker that generates puzzles.  Note that webpack sees this code and
+ * handles it specially.
  */
 const worker = new Worker(
   /* webpackChunkName: 'worker' */ new URL(
