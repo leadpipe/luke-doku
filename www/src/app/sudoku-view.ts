@@ -170,13 +170,13 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       :host([playstate='completed']) #pause-background.next {
         animation:
-          ${COMPLETED_CYCLE_SEC}s infinite pause-next,
-          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background,
+          ${COMPLETED_CYCLE_SEC}s infinite pause-next;
       }
       :host([playstate='completed']) #pause.next {
         animation:
-          ${COMPLETED_CYCLE_SEC}s infinite pause-next,
-          ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause,
+          ${COMPLETED_CYCLE_SEC}s infinite pause-next;
       }
       :host([playstate='completed']) #next-pause-background {
         animation: ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
@@ -186,13 +186,13 @@ export class SudokuView extends LitElement implements GridContainer {
       }
       :host([playstate='completed']) #next-pause-background.next {
         animation:
-          ${COMPLETED_CYCLE_SEC}s infinite next-pause,
-          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause-background,
+          ${COMPLETED_CYCLE_SEC}s infinite next-pause;
       }
       :host([playstate='completed']) #next-pause.next {
         animation:
-          ${COMPLETED_CYCLE_SEC}s infinite next-pause,
-          ${COMPLETED_CYCLE_SEC}s infinite completed-pause;
+          ${COMPLETED_CYCLE_SEC}s infinite completed-pause,
+          ${COMPLETED_CYCLE_SEC}s infinite next-pause;
       }
 
       @keyframes completed-clues {
