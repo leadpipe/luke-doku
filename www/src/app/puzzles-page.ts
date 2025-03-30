@@ -28,7 +28,9 @@ export class PuzzlesPage extends LitElement {
   static override styles = css`
     :host {
       display: block;
-      margin: 0 20px;
+      & > * {
+        margin: 20px;
+      }
     }
     h1 {
       font-family: ${LOGO_FONT_FAMILY};
