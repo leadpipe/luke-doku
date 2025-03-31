@@ -923,9 +923,15 @@ export class SudokuView extends LitElement implements GridContainer {
     }
   }
 
-  private optionallyShowNextOverlay(event: AnimationEvent) {
+  private async optionallyShowNextOverlay(event: AnimationEvent) {
     if (event.animationName === 'completed-pause') {
       this.showNextOverlay = Math.random() < 0.083; // 1 in 12
+      if (this.showNextOverlay) {
+        await this.updateComplete;
+        // This will cause the next overlay to start at the same time as the
+        // current one:
+        this.animationTime = this.animationTime;
+      }
     }
   }
 
