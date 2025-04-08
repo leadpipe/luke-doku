@@ -4,6 +4,7 @@
 pub mod core;
 pub mod date;
 pub mod deduce;
+pub mod evaluate;
 pub mod gen;
 pub mod permute;
 pub mod random;
