@@ -1,7 +1,7 @@
 //! Defines the Ledger struct that's at the heart of the row-band-based solver.
 
-use super::masks::*;
 use crate::core::bits::*;
+use crate::core::masks::*;
 use crate::core::*;
 
 /// Tracks possible Sudoku assignments during solving.
@@ -22,22 +22,17 @@ impl Ledger {
   /// all other possibilities still open.  Returns `Err(Invalid)` if the
   /// puzzle's clues are inconsistent with the rules of Sudoku.
   pub fn new(clues: &Grid) -> Result<Ledger, Invalid> {
-    let mut answer = Ledger {
-      asgmts: AsgmtSet::all(),
+    let asgmts = AsgmtSet::from_grid(clues)?;
+    Ok(Self {
+      asgmts,
       old_asgmts: AsgmtSet::all(),
       unset: LocSet::all(),
-    };
-    for asgmt in clues.iter() {
-      if !answer.assign_from_new(asgmt) {
-        return Err(Invalid);
-      }
-    }
-    Ok(answer)
+    })
   }
 
   /// Renders the possible assignments as a grid, leaving unassigned any
   /// locations that don't have a unique possible numeral.
-  pub fn to_grid(&self) -> Grid {
+  pub fn to_grid(&self) -> Result<Grid, Invalid> {
     self.asgmts.to_grid()
   }
 
@@ -91,25 +86,6 @@ impl Ledger {
     // eliminating the numeral from the remaining peers, and eliminating all
     // the other numerals from this location.
     self.apply_implications()
-  }
-
-  /// Helper for `new`.  Tells whether the assignment was consistent with the
-  /// rules.
-  fn assign_from_new(&mut self, asgmt: Asgmt) -> bool {
-    // Mark the location as having been set.
-    let zero_loc = !LocSet::singleton(asgmt.loc);
-    self.unset &= zero_loc;
-    // Remove possible assignments.  For this numeral, remove all the peer
-    // locations.  For other numerals, remove this location.
-    for num in Num::all() {
-      if num == asgmt.num {
-        *self.asgmts.num_plane(num) &= loc_to_zeroed_peers(asgmt.loc).0;
-      } else {
-        *self.asgmts.num_plane(num) &= zero_loc.0;
-      }
-    }
-    // If the assignment isn't still possible, we have a problem.
-    self.asgmts.contains(asgmt)
   }
 
   /// Removes impossible assignments from `self.asgmts` by finding overlaps:
@@ -257,6 +233,6 @@ mod tests {
 
     ledger.apply_implications().unwrap();
     assert!(!ledger.is_complete());
-    assert_eq!(N6, ledger.to_grid()[L63].unwrap());
+    assert_eq!(N6, ledger.to_grid().unwrap()[L63].unwrap());
   }
 }

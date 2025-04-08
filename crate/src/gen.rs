@@ -434,7 +434,7 @@ mod tests {
     );
     let mut ledger = Ledger::new(&p).unwrap();
     ledger.apply_implications().unwrap();
-    let s = ledger.to_grid();
+    let s = ledger.to_grid().unwrap();
     assert_eq!(s.state(), GridState::Solved(&s));
 
     let p = gen_simple_puzzle(&g, Sym::None, &mut random);
@@ -458,7 +458,7 @@ mod tests {
     );
     let mut ledger = Ledger::new(&p).unwrap();
     ledger.apply_implications().unwrap();
-    let s = ledger.to_grid();
+    let s = ledger.to_grid().unwrap();
     assert_eq!(s.state(), GridState::Solved(&s));
   }
 

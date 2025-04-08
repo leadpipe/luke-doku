@@ -45,6 +45,7 @@ define_id_types! {
 }
 
 /// One of a row, column, or block.
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Unit {
   Row(Row),
   Col(Col),

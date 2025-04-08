@@ -12,6 +12,7 @@ pub mod bits;
 mod grid;
 mod id_types;
 mod loc;
+pub mod masks;
 mod num;
 mod set;
 mod units;

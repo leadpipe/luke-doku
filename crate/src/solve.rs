@@ -4,7 +4,6 @@ use crate::core::*;
 use crate::random::*;
 
 pub mod ledger;
-mod masks;
 
 use ledger::*;
 
@@ -278,8 +277,9 @@ impl<'a> Searcher<'a> {
 
   fn solution(ledger: &Ledger) -> Option<SolvedGrid> {
     Some(unsafe {
-      // Safe because this method is only called when the ledger is complete.
-      SolvedGrid::new(&ledger.to_grid())
+      // Safe because this private function is only called when the ledger is
+      // complete.
+      SolvedGrid::new(&ledger.to_grid().unwrap())
     })
   }
 }
