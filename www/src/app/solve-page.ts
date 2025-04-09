@@ -32,7 +32,6 @@ import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {
-  centerDialog,
   findDataString,
   renderCompletedGameDescription,
   renderCount,
@@ -52,7 +51,7 @@ export class SolvePage extends LitElement {
         align-items: center;
         gap: var(--page-grid-gap);
         --page-grid-gap: 8px;
-        --top-panel-height: calc(25px + 16px);
+        --board-size: 380px;
       }
       h1 {
         font-family: ${LOGO_FONT_FAMILY};
@@ -67,20 +66,21 @@ export class SolvePage extends LitElement {
         margin-top: var(--page-grid-gap);
         margin-bottom: 16px;
         display: flex;
-        justify-content: center;
+        justify-content: space-between;
+        align-items: baseline;
+        width: var(--board-size);
       }
 
-      #top-panel > div {
+      #game-actions {
         flex: 1 1 0;
         display: flex;
         justify-content: center;
-        align-items: baseline;
         gap: 4px 16px;
       }
 
       sudoku-view {
-        width: 380px;
-        height: 380px;
+        width: var(--board-size);
+        height: var(--board-size);
       }
 
       #bottom-panel {
@@ -96,7 +96,12 @@ export class SolvePage extends LitElement {
       dialog {
         display: flex;
         flex-direction: column;
-        margin: 0;
+        margin: 0 auto;
+        max-width: var(--board-size);
+
+        .close-button {
+          align-self: flex-end;
+        }
       }
 
       #congrats {
@@ -255,7 +260,6 @@ export class SolvePage extends LitElement {
       this.renderTopPanel(game, playState),
       this.renderBoard(game),
       this.renderBottomPanel(game, playState, trailColors),
-      this.dialogRenderer?.call(this),
     ];
   }
 
@@ -272,14 +276,14 @@ export class SolvePage extends LitElement {
     const newThemeTitle = `Switch to ${newThemeName} theme`;
     return html`
       <div id="top-panel">
-        <div>
-          <icon-button
-            id="show-puzzles-button"
-            @click=${this.showPuzzlesPage}
-            iconName="arrow_back"
-            title="Show the puzzles page"
-            label="Puzzles"
-          ></icon-button>
+        <icon-button
+          id="show-puzzles-button"
+          @click=${this.showPuzzlesPage}
+          iconName="arrow_back"
+          title="Show the puzzles page"
+          label="Puzzles"
+        ></icon-button>
+        <div id="game-actions">
           ${playState === PlayState.RUNNING ?
             html`
               <icon-button
@@ -296,49 +300,6 @@ export class SolvePage extends LitElement {
                 title="Redo"
                 label="Redo"
               ></icon-button>
-              <div
-                id="game-menu"
-                class="menu"
-                popover
-                @toggle=${this.gameMenuToggled}
-              >
-                <table @click=${this.hideGameMenu}>
-                  <tr>
-                    <td @click=${this.undoToStart}>
-                      <icon-button
-                        iconName="first_page"
-                        ?disabled=${!game?.canUndo()}
-                      ></icon-button>
-                      <span>Undo to start</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td @click=${this.redoToEnd}>
-                      <icon-button
-                        iconName="last_page"
-                        ?disabled=${!game?.canRedo()}
-                      ></icon-button>
-                      <span>Redo to end</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td @click=${this.setTheme} data-theme=${newTheme}>
-                      <icon-button iconName=${newThemeIcon}></icon-button>
-                      <span>${newThemeTitle}</span>
-                    </td>
-                  </tr>
-                  <tr>
-                    <td @click=${this.quit}>
-                      <icon-button iconName="stop_circle"></icon-button>
-                      <span>Quit</span>
-                    </td>
-                  </tr>
-                </table>
-              </div>
-              <icon-button
-                @click=${this.toggleGameMenu}
-                iconName="more_horiz"
-              ></icon-button>
             `
           : html`
               <icon-button
@@ -350,19 +311,97 @@ export class SolvePage extends LitElement {
               ></icon-button>
             `}
         </div>
+        <div>
+          ${this.renderGameMenu(
+            game,
+            playState,
+            newTheme,
+            newThemeIcon,
+            newThemeTitle,
+          )}
+          <icon-button
+            @click=${this.toggleGameMenu}
+            iconName="more_vert"
+          ></icon-button>
+        </div>
+      </div>
+    `;
+  }
+
+  private renderGameMenu(
+    game: Game | null,
+    playState: PlayState,
+    newTheme: ThemeOrAuto,
+    newThemeIcon: string,
+    newThemeTitle: string,
+  ) {
+    return html`
+      <div id="game-menu" class="menu" popover @toggle=${this.gameMenuToggled}>
+        <table @click=${this.hideGameMenu}>
+          ${playState === PlayState.RUNNING ?
+            html` <tr>
+                <td @click=${this.undoToStart}>
+                  <icon-button
+                    iconName="first_page"
+                    ?disabled=${!game?.canUndo()}
+                  ></icon-button>
+                  <span>Undo to Start</span>
+                </td>
+              </tr>
+              <tr>
+                <td @click=${this.redoToEnd}>
+                  <icon-button
+                    iconName="last_page"
+                    ?disabled=${!game?.canRedo()}
+                  ></icon-button>
+                  <span>Redo to End</span>
+                </td>
+              </tr>
+              <tr>
+                <td @click=${this.setTheme} data-theme=${newTheme}>
+                  <icon-button iconName=${newThemeIcon}></icon-button>
+                  <span>${newThemeTitle}</span>
+                </td>
+              </tr>
+              <tr>
+                <td @click=${this.quit}>
+                  <icon-button iconName="stop_circle"></icon-button>
+                  <span>Quit</span>
+                </td>
+              </tr>`
+          : playState === PlayState.COMPLETED ?
+            html`
+              <tr>
+                <td @click=${this.playAgain}>
+                  <icon-button iconName="replay"></icon-button>
+                  <span>Play Again</span>
+                </td>
+              </tr>
+            `
+          : ''}
+          <tr>
+            <td @click=${this.showHelp}>
+              <icon-button iconName="help"></icon-button>
+              <span>Help</span>
+            </td>
+          </tr>
+        </table>
       </div>
     `;
   }
 
   private renderBoard(game: Game | null) {
     return html`
-      <sudoku-view
-        .gameWrapper=${game?.wrapper ?? null}
-        .padding=${cssPixels(10)}
-        interactive
-        @cell-modified=${this.noteCellModified}
-        @puzzle-solved=${this.notePuzzleSolved}
-      ></sudoku-view>
+      <div id="board">
+        <sudoku-view
+          .gameWrapper=${game?.wrapper ?? null}
+          .padding=${cssPixels(10)}
+          interactive
+          @cell-modified=${this.noteCellModified}
+          @puzzle-solved=${this.notePuzzleSolved}
+        ></sudoku-view>
+        ${this.dialogRenderer?.call(this)}
+      </div>
     `;
   }
 
@@ -535,7 +574,7 @@ export class SolvePage extends LitElement {
         ></icon-button>
         <icon-button
           @click=${this.toggleTrailMenu}
-          iconName="more_horiz"
+          iconName="more_vert"
         ></icon-button>
       </div>
     `;
@@ -548,32 +587,34 @@ export class SolvePage extends LitElement {
     const solutionsCountGuess =
       guessed ? game.solutionsCountGuess : this.solutionsCountGuess;
     const actualCount = game.sudoku.solutions.length;
+    const guessedRight = actualCount === solutionsCountGuess;
     return html`
       <dialog id="congrats" @keydown=${this.handleCongratsDialogKey}>
-        <h2>Congratulations!</h2>
-        Now:
-        <div id="how-many-solutions">
-          How many solutions does this puzzle have?
-        </div>
-        <div id="solutions-count-buttons">
-          ${[1, 2, 3].map(
-            count =>
-              html` <button
-                data-count=${count}
-                class=${classMap({guessed: count === solutionsCountGuess})}
-                @click=${this.setSolutionsCount}
-              >
-                ${count}
-              </button>`,
-          )}
-        </div>
+        ${guessed ?
+          guessedRight ? html`<h2>Congratulations!</h2>`
+          : html`<h2>Oops!</h2>`
+        : html` <div>You found a solution — but is it the only one?</div>
+            <div id="how-many-solutions">
+              How many solutions does this puzzle have?
+            </div>
+            <div id="solutions-count-buttons">
+              ${[1, 2, 3].map(
+                count =>
+                  html` <button
+                    data-count=${count}
+                    class=${classMap({guessed: count === solutionsCountGuess})}
+                    @click=${this.setSolutionsCount}
+                  >
+                    ${count}
+                  </button>`,
+              )}
+            </div>`}
         <div id="solutions-count-guess">
           ${guessed ?
-            actualCount === solutionsCountGuess ?
-              html`<mat-icon class="correct" name="check"></mat-icon> Correct!`
-            : html`<mat-icon class="incorrect" name="close"></mat-icon> Oops, no — it has
-                ${renderCount(actualCount, 'solution')}.
-              </div>`
+            html`${guessedRight ?
+              html`<mat-icon class="correct" name="check"></mat-icon> `
+            : html`<mat-icon class="incorrect" name="close"></mat-icon> `}
+            ${renderCount(actualCount, 'solution')}`
           : html` <button
               id="guess-solutions-count"
               ?disabled=${!solutionsCountGuess}
@@ -603,6 +644,25 @@ export class SolvePage extends LitElement {
             <mat-icon name="stop_circle"></mat-icon> Quit
           </button>
         </div>
+      </dialog>
+    `;
+  }
+
+  private renderHelpDialog() {
+    return html`
+      <dialog id="help" @keydown=${this.handleStandardDialogKey}>
+        <icon-button
+          @click=${this.hideDialog}
+          class="close-button"
+          iconName="close"
+          title="Close"
+        >
+        </icon-button>
+        <h2>Luke-doku</h2>
+        <p>
+          This is a Sudoku puzzle. The goal is to fill in the grid so that every
+          row, column, and 3x3 block contains the digits 1-9 exactly once.
+        </p>
       </dialog>
     `;
   }
@@ -703,7 +763,14 @@ export class SolvePage extends LitElement {
     await this.updateComplete;
     const {dialog, sudokuView} = this;
     if (dialog && sudokuView) {
-      centerDialog(dialog, sudokuView);
+      // Center the dialog vertically over the Sudoku view.
+      const dialogRect = dialog.getBoundingClientRect();
+      const sudokuRect = sudokuView.getBoundingClientRect();
+
+      const dialogTop =
+        sudokuRect.top + (sudokuRect.height - dialogRect.height) / 2;
+
+      dialog.style.top = `${dialogTop}px`;
     }
     dialog?.showModal();
   }
@@ -768,7 +835,15 @@ export class SolvePage extends LitElement {
     this.hideDialog();
   }
 
-  private handleCongratsDialogKey(event: KeyboardEvent) {
+  private playAgain() {
+    this.game = this.game?.playAgain() ?? null;
+    this.requestUpdate();
+  }
+
+  private handleDialogKey(
+    event: KeyboardEvent,
+    specialHandling: (key: string) => void,
+  ) {
     // We swallow most keys.
     switch (event.key) {
       case 'Tab':
@@ -777,32 +852,45 @@ export class SolvePage extends LitElement {
       case ' ':
         (event.target as HTMLElement | null)?.click(); // Treat the same as a click.
         break;
-      case '1':
-      case '2':
-      case '3':
-        this.updateCountAndButton(Number(event.key) as 1 | 2 | 3);
+      default:
+        specialHandling(event.key);
         break;
     }
     event.preventDefault();
     event.stopImmediatePropagation();
   }
 
+  private handleCongratsDialogKey(event: KeyboardEvent) {
+    this.handleDialogKey(event, key => {
+      switch (key) {
+        case '1':
+        case '2':
+        case '3':
+          this.updateCountAndButton(Number(key) as 1 | 2 | 3);
+          break;
+      }
+    });
+  }
+
   private handleQuitDialogKey(event: KeyboardEvent) {
-    // We swallow most keys.
-    switch (event.key) {
-      case 'Tab':
-        return; // Allow the default handling for tabs.
-      case 'Escape':
-        // Don't close the dialog, but do focus the Quit button.
-        this.confirmQuitButton?.focus();
-        break;
-      case 'Enter':
-      case ' ':
-        (event.target as HTMLElement | null)?.click(); // Treat the same as a click.
-        break;
-    }
-    event.preventDefault();
-    event.stopImmediatePropagation();
+    this.handleDialogKey(event, key => {
+      switch (key) {
+        case 'Escape':
+          // Don't close the dialog, but do focus the Quit button.
+          this.confirmQuitButton?.focus();
+          break;
+      }
+    });
+  }
+
+  private handleStandardDialogKey(event: KeyboardEvent) {
+    this.handleDialogKey(event, key => {
+      switch (key) {
+        case 'Escape':
+          this.hideDialog();
+          break;
+      }
+    });
   }
 
   private setSolutionsCount(event: Event) {
@@ -862,6 +950,10 @@ export class SolvePage extends LitElement {
     if (event.newState === 'closed') {
       this.gameMenuShowing = false;
     }
+  }
+
+  private showHelp() {
+    this.showDialog(this.renderHelpDialog);
   }
 
   private createTrail() {

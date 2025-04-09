@@ -403,6 +403,35 @@ export class Game extends BaseGame {
     await this.db.put('puzzles', record);
   }
 
+  /**
+   * Returns a new unstarted Game object for the same puzzle.  The current
+   * game's history is saved as a previous attempt in the new game's database
+   * record, but that record is not saved to the database until the new game is
+   * started.
+   */
+  playAgain(): Game {
+    if (
+      this.playState !== PlayState.COMPLETED ||
+      this.record.history === undefined
+    ) {
+      return this;
+    }
+    const record = this.sudoku.toDatabaseRecord();
+    record.previousAttempts = [
+      ...(this.record.previousAttempts ?? []),
+      this.record.history,
+    ];
+    Game.instances.delete(record.clues);
+    return Game.forDbRecord(this.db, record);
+  }
+
+  /**
+   * The number of previous attempts to solve this puzzle.
+   */
+  get previousAttemptCount(): number {
+    return this.record.previousAttempts?.length ?? 0;
+  }
+
   /** An object containing this game that is recreated on every command. */
   get wrapper(): GameWrapper {
     return this.#wrapper;

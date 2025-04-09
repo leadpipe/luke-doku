@@ -90,6 +90,12 @@ export function renderCompletedGameDescription(
       </div>`,
     );
   }
+  const {previousAttemptCount} = game;
+  if (previousAttemptCount) {
+    parts.push(
+      html`<div>${renderCount(previousAttemptCount, 'previous attempt')}</div>`,
+    );
+  }
   return parts;
 }
 
@@ -168,24 +174,6 @@ export function renderPuzzleTitle(sudoku: Sudoku, assumeToday: boolean) {
   const title =
     relative ? `${dayName}'s #${id.counter}` : `#${id.counter} of ${dayName}`;
   return titleWithVersion(title, id);
-}
-
-/**
- * Centers a dialog over an element.  Written by Gemini.
- * @param dialog The dialog to center
- * @param element The element to center over
- */
-export function centerDialog(dialog: HTMLElement, element: HTMLElement) {
-  const dialogRect = dialog.getBoundingClientRect();
-  const elementRect = element.getBoundingClientRect();
-
-  const dialogTop =
-    elementRect.top + (elementRect.height - dialogRect.height) / 2;
-  const dialogLeft =
-    elementRect.left + (elementRect.width - dialogRect.width) / 2;
-
-  dialog.style.top = `${dialogTop}px`;
-  dialog.style.left = `${dialogLeft}px`;
 }
 
 function weekdayName(date: wasm.LogicalDate): string {
