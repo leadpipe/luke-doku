@@ -203,6 +203,21 @@ class BaseGame {
   }
 
   /**
+   * Resumes the game if it was automatically paused.
+   */
+  autoResume() {
+    const {history} = this;
+    const last = history[history.length - 1];
+    if (
+      last &&
+      last.command instanceof Pause &&
+      last.command.reason !== PauseReason.MANUAL
+    ) {
+      this.resume();
+    }
+  }
+
+  /**
    * Stops the clock for this game, if it was previously running.
    */
   pause(reason = PauseReason.MANUAL) {
