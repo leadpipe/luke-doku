@@ -819,19 +819,55 @@ export class SolvePage extends LitElement {
     this.requestUpdate();
   }
 
+  private wakeLock: WakeLockSentinel | null = null;
+  private acquiringWakeLock = false;
+  private async manageWakeLock() {
+    const {game, wakeLock} = this;
+    if (!game) return;
+    if (game.playState === PlayState.RUNNING) {
+      if (!navigator.wakeLock) {
+        // Wake lock not supported.
+        return;
+      }
+      if (document.visibilityState !== 'visible') {
+        // This can happen on window focus.  The wake lock will be denied if the
+        // page is not visible.
+        return;
+      }
+      if (wakeLock == null && !this.acquiringWakeLock) {
+        try {
+          this.acquiringWakeLock = true;
+          this.wakeLock = await navigator.wakeLock.request('screen');
+          this.wakeLock.addEventListener('release', () => {
+            this.wakeLock = null;
+          });
+        } catch (e) {
+          // Nothing to do
+        } finally {
+          this.acquiringWakeLock = false;
+        }
+      }
+    } else if (wakeLock) {
+      await wakeLock.release();
+    }
+  }
+
   private resumePlay() {
     this.game?.resume();
     this.requestUpdate();
+    this.manageWakeLock();
   }
 
   private autoResume() {
     this.game?.autoResume();
     this.requestUpdate();
+    this.manageWakeLock();
   }
 
   private pausePlay(reason?: PauseReason) {
     this.game?.pause(reason);
     this.requestUpdate();
+    this.manageWakeLock();
   }
 
   private async quit() {
