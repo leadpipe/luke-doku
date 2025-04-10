@@ -7,6 +7,7 @@ import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
 import {Game} from '../game/game';
+import {dateString} from '../game/types';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import {
   iterateDatePuzzlesAsc,
@@ -119,6 +120,20 @@ export class LukeDoku extends LitElement {
     }
   }
 
+  override connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('focus', this.reloadOnNewDay);
+    window.addEventListener('blur', this.reloadOnNewDay);
+    document.addEventListener('visibilitychange', this.reloadOnNewDay);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    window.removeEventListener('focus', this.reloadOnNewDay);
+    window.removeEventListener('blur', this.reloadOnNewDay);
+    document.removeEventListener('visibilitychange', this.reloadOnNewDay);
+  }
+
   private selectPuzzle(event: CustomEvent<Game>) {
     this.game = event.detail;
     this.showPage('solve', 'right');
@@ -127,6 +142,15 @@ export class LukeDoku extends LitElement {
   private showPuzzlesPage() {
     this.showPage('puzzles', 'left');
   }
+
+  private readonly reloadOnNewDay = () => {
+    // Note we check for strictly greater than, not just "not equals," to handle
+    // the case where local time goes backwards during fast travel westwards.
+    if (dateString(new Date()) > todayString) {
+      this.showPage('loading', 'left');
+      location.reload();
+    }
+  };
 
   private async loadPuzzleOfTheDay() {
     const db = await openDb();
