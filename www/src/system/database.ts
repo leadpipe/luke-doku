@@ -1,4 +1,9 @@
-import {type DBSchema, type IDBPDatabase, openDB} from 'idb';
+import {
+  type DBSchema,
+  type IDBPCursorWithValueIteratorValue,
+  type IDBPDatabase,
+  openDB,
+} from 'idb';
 import * as wasm from 'luke-doku-rust';
 
 /**
@@ -12,6 +17,82 @@ export function openDb(): Promise<IDBPDatabase<LukeDokuDb>> {
       store.createIndex('byStateAndDate', ['attemptState', 'lastUpdated']);
     },
   });
+}
+
+const INFINITE_DATE = 8640000000000000;
+
+/**
+ * Returns an async iterable of all the puzzles in the database that haven't
+ * been started, ordered by last updated time.
+ */
+export function iterateUnstartedPuzzlesAsc(
+  db: IDBPDatabase<LukeDokuDb>,
+): AsyncIterableIterator<
+  IDBPCursorWithValueIteratorValue<
+    LukeDokuDb,
+    ['puzzles'],
+    'puzzles',
+    'byStateAndDate',
+    'readonly'
+  >
+> {
+  const index = db.transaction('puzzles').store.index('byStateAndDate');
+  return index.iterate(
+    IDBKeyRange.bound(
+      [AttemptState.UNSTARTED, new Date(-INFINITE_DATE)],
+      [AttemptState.UNSTARTED, new Date(INFINITE_DATE)],
+    ),
+  );
+}
+
+/**
+ * Returns an async iterable of all the puzzles in the database that have been started
+ * but not yet completed, ordered by last updated time descending.
+ */
+export function iterateOngoingPuzzlesDesc(
+  db: IDBPDatabase<LukeDokuDb>,
+): AsyncIterableIterator<
+  IDBPCursorWithValueIteratorValue<
+    LukeDokuDb,
+    ['puzzles'],
+    'puzzles',
+    'byStateAndDate',
+    'readonly'
+  >
+> {
+  const index = db.transaction('puzzles').store.index('byStateAndDate');
+  return index.iterate(
+    IDBKeyRange.bound(
+      [AttemptState.ONGOING, new Date(-INFINITE_DATE)],
+      [AttemptState.ONGOING, new Date(INFINITE_DATE)],
+    ),
+    'prev',
+  );
+}
+
+/**
+ * Returns an async iterable of all the puzzles in the database that have been
+ * completed, ordered by last updated time descending.
+ */
+export function iterateCompletedPuzzlesDesc(
+  db: IDBPDatabase<LukeDokuDb>,
+): AsyncIterableIterator<
+  IDBPCursorWithValueIteratorValue<
+    LukeDokuDb,
+    ['puzzles'],
+    'puzzles',
+    'byStateAndDate',
+    'readonly'
+  >
+> {
+  const index = db.transaction('puzzles').store.index('byStateAndDate');
+  return index.iterate(
+    IDBKeyRange.bound(
+      [AttemptState.COMPLETED, new Date(-INFINITE_DATE)],
+      [AttemptState.COMPLETED, new Date(INFINITE_DATE)],
+    ),
+    'prev',
+  );
 }
 
 /**

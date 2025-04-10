@@ -6,10 +6,13 @@ import './sudoku-view';
 import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
-import type {Game} from '../game/game';
+import {Game} from '../game/game';
 import {ensureExhaustiveSwitch} from '../game/utils';
+import {iterateOngoingPuzzlesDesc, openDb} from '../system/database';
+import {getPuzzleDate, setPuzzleDateToToday} from './prefs';
+import {todayString} from './utils';
 
-type Page = 'solve' | 'puzzles';
+type Page = 'loading' | 'solve' | 'puzzles';
 
 /** Top-level component. */
 @customElement('luke-doku')
@@ -27,6 +30,13 @@ export class LukeDoku extends LitElement {
       }
       .right {
         transform: translateX(100%);
+      }
+      .loading {
+        font-style: italic;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        height: 100vh;
       }
     }
     :host(.transition) {
@@ -52,6 +62,7 @@ export class LukeDoku extends LitElement {
       [nextPage, nextPageClass],
     ]);
     return [
+      this.renderPage('loading', pageClasses),
       this.renderPage('puzzles', pageClasses),
       this.renderPage('solve', pageClasses),
     ];
@@ -63,6 +74,10 @@ export class LukeDoku extends LitElement {
   ): TemplateResult {
     if (!pageClasses.has(page)) return html``;
     switch (page) {
+      case 'loading':
+        return html`<div class="loading ${ifDefined(pageClasses.get(page))}">
+          Loading...
+        </div>`;
       case 'solve':
         return html`
           <solve-page
@@ -84,7 +99,7 @@ export class LukeDoku extends LitElement {
   }
 
   @state() private game: Game | null = null;
-  @state() private page: Page = 'puzzles';
+  @state() private page: Page = 'loading';
   @state() private nextPage?: Page;
   @state() private nextPageClass?: 'left' | 'right';
 
@@ -92,6 +107,12 @@ export class LukeDoku extends LitElement {
     super();
     this.addEventListener('play-puzzle', e => this.selectPuzzle(e));
     this.addEventListener('show-puzzles-page', () => this.showPuzzlesPage());
+
+    if (getPuzzleDate() < todayString) {
+      this.loadPuzzleOfTheDay();
+    } else {
+      this.loadOngoingGameOrPuzzles();
+    }
   }
 
   private selectPuzzle(event: CustomEvent<Game>) {
@@ -101,6 +122,35 @@ export class LukeDoku extends LitElement {
 
   private showPuzzlesPage() {
     this.showPage('puzzles', 'left');
+  }
+
+  private async loadPuzzleOfTheDay() {
+    const db = await openDb();
+    const index = db.transaction('puzzles').store.index('byPuzzleId');
+    let game: Game | null = null;
+    for await (const cursor of index.iterate(
+      // The puzzle of the day is the first puzzle of the day.
+      IDBKeyRange.bound([todayString, 1], [todayString, 2]),
+    )) {
+      game = Game.forDbRecord(db, cursor.value);
+      break;
+    }
+    if (!game) {
+      game = await Game.createGame(db, todayString, 1);
+    }
+    this.game = game;
+    this.showPage('solve', 'right');
+    setPuzzleDateToToday();
+  }
+
+  private async loadOngoingGameOrPuzzles() {
+    const db = await openDb();
+    for await (const cursor of iterateOngoingPuzzlesDesc(db)) {
+      this.game = Game.forDbRecord(db, cursor.value);
+      this.showPage('solve', 'right');
+      return;
+    }
+    this.showPage('puzzles', 'right');
   }
 
   private async showPage(page: Page, pageClass: 'left' | 'right') {

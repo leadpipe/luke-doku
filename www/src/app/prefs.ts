@@ -1,6 +1,7 @@
 import './events';
 import {prefsEvent, PrefsEventTarget} from './events';
 import {Theme, ThemeOrAuto} from './types';
+import {todayString} from './utils';
 
 /**
  * The event target for prefs events.
@@ -105,4 +106,24 @@ export function getSeenHelp(): boolean {
 export function setSeenHelp() {
   seenHelp = true;
   window.localStorage.setItem('seenHelp', 'true');
+}
+
+let puzzleDate = '';
+{
+  const stored = window.localStorage.getItem('puzzleDate');
+  if (stored) {
+    puzzleDate = stored;
+  }
+}
+
+/**
+ * Returns the date (in YYYY-MM-DD form) of the last puzzle-of-the-day shown to the user.
+ */
+export function getPuzzleDate(): string {
+  return puzzleDate;
+}
+
+export function setPuzzleDateToToday() {
+  puzzleDate = todayString;
+  window.localStorage.setItem('puzzleDate', todayString);
 }

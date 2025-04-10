@@ -1,5 +1,6 @@
 import type {IDBPDatabase} from 'idb';
 import {AttemptState, LukeDokuDb, PuzzleRecord} from '../system/database';
+import {requestPuzzle} from '../system/puzzle-service';
 import {
   Command,
   CompletionState,
@@ -37,7 +38,7 @@ import {
 import {Sudoku} from './sudoku';
 import {ReadonlyTrail} from './trail';
 import {ReadonlyTrails, Trails} from './trails';
-import type {GridString} from './types';
+import type {DateString, GridString} from './types';
 import {UndoStack} from './undo-stack';
 import {ensureExhaustiveSwitch} from './utils';
 
@@ -351,6 +352,22 @@ export class Game extends BaseGame {
    */
   static forCluesString(clues: string | GridString): Game | undefined {
     return this.instances.get(clues)?.deref();
+  }
+
+  /**
+   * Creates a new game for the given date string and counter, and saves it to
+   * the database.
+   */
+  static async createGame(
+    db: IDBPDatabase<LukeDokuDb>,
+    dateString: DateString,
+    counter: number,
+  ): Promise<Game> {
+    const puzzle = await requestPuzzle(dateString, counter);
+    const sudoku = Sudoku.fromWorker(puzzle);
+    const record = sudoku.toDatabaseRecord();
+    await db.add('puzzles', record);
+    return Game.forDbRecord(db, record);
   }
 
   private static readonly instances = new Map<string, WeakRef<Game>>();

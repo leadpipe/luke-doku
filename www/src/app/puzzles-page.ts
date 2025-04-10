@@ -5,10 +5,14 @@ import {css, html, LitElement} from 'lit';
 import {customElement, queryAll, state} from 'lit/decorators.js';
 import {repeat} from 'lit/directives/repeat.js';
 import {Game, PlayState} from '../game/game';
-import {Sudoku} from '../game/sudoku';
 import {GridString} from '../game/types';
-import {AttemptState, type LukeDokuDb, openDb} from '../system/database';
-import {requestPuzzle} from '../system/puzzle-service';
+import {
+  iterateCompletedPuzzlesDesc,
+  iterateOngoingPuzzlesDesc,
+  iterateUnstartedPuzzlesAsc,
+  type LukeDokuDb,
+  openDb,
+} from '../system/database';
 import {customEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
 import type {SudokuView} from './sudoku-view';
@@ -17,11 +21,8 @@ import {
   findDataString,
   renderCompletedGameDescription,
   renderPuzzleTitle,
-  today,
   todayString,
 } from './utils';
-
-const INFINITE_DATE = 8640000000000000;
 
 @customElement('puzzles-page')
 export class PuzzlesPage extends LitElement {
@@ -183,11 +184,7 @@ export class PuzzlesPage extends LitElement {
         ++index;
         continue;
       }
-      const puzzle = await requestPuzzle(todayString, counter);
-      const sudoku = Sudoku.fromWorker(puzzle);
-      const record = sudoku.toDatabaseRecord();
-      await db.add('puzzles', record);
-      const game = Game.forDbRecord(db, record);
+      const game = await Game.createGame(db, todayString, counter);
       a.splice(counter - 1, 0, game);
       b.splice(counter - 1, 0, game);
       ++index;
@@ -199,14 +196,7 @@ export class PuzzlesPage extends LitElement {
   private async loadOngoingPuzzles(db: IDBPDatabase<LukeDokuDb>) {
     const a = this.ongoingGames;
     const b = [...a];
-    const index = db.transaction('puzzles').store.index('byStateAndDate');
-    for await (const cursor of index.iterate(
-      IDBKeyRange.bound(
-        [AttemptState.ONGOING, new Date(-INFINITE_DATE)],
-        [AttemptState.ONGOING, new Date(INFINITE_DATE)],
-      ),
-      'prev',
-    )) {
+    for await (const cursor of iterateOngoingPuzzlesDesc(db)) {
       const game = Game.forDbRecord(db, cursor.value);
       a.push(game);
       b.push(game);
@@ -223,14 +213,7 @@ export class PuzzlesPage extends LitElement {
     const a = this.recentlyCompletedGames;
     const b = [...a];
     let i = 0;
-    const index = db.transaction('puzzles').store.index('byStateAndDate');
-    for await (const cursor of index.iterate(
-      IDBKeyRange.bound(
-        [AttemptState.COMPLETED, new Date(-INFINITE_DATE)],
-        [AttemptState.COMPLETED, new Date(INFINITE_DATE)],
-      ),
-      'prev',
-    )) {
+    for await (const cursor of iterateCompletedPuzzlesDesc(db)) {
       if (a.length >= maxCount) {
         this.moreCompletedGames = true;
         break;
@@ -266,15 +249,10 @@ export class PuzzlesPage extends LitElement {
 
   private async cleanOldUnstartedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
     const toDelete = [];
-    const index = db.transaction('puzzles').store.index('byStateAndDate');
-    for await (const cursor of index.iterate(
-      IDBKeyRange.bound(
-        [AttemptState.UNSTARTED, new Date(-INFINITE_DATE)],
-        [AttemptState.UNSTARTED, today.toDateAtMidnight()],
-        false,
-        true,
-      ),
-    )) {
+    for await (const cursor of iterateUnstartedPuzzlesAsc(db)) {
+      if ((cursor.value.puzzleId?.[0] ?? todayString) >= todayString) {
+        continue;
+      }
       toDelete.push(cursor.primaryKey);
     }
     for (const cluesString of toDelete) {
