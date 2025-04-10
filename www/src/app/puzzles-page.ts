@@ -8,6 +8,7 @@ import {Game, PlayState} from '../game/game';
 import {GridString} from '../game/types';
 import {
   iterateCompletedPuzzlesDesc,
+  iterateDatePuzzlesAsc,
   iterateOngoingPuzzlesDesc,
   iterateUnstartedPuzzlesAsc,
   type LukeDokuDb,
@@ -159,12 +160,7 @@ export class PuzzlesPage extends LitElement {
   private async loadTodaysPuzzles(db: IDBPDatabase<LukeDokuDb>) {
     const a = this.todaysGames;
     const b = [...a];
-    const index = db.transaction('puzzles').store.index('byPuzzleId');
-    for await (const cursor of index.iterate(
-      // Puzzle IDs in the db are `[date, counter]`, so this gets all of today's
-      // puzzles that are in the DB (starting at 1).
-      IDBKeyRange.bound([todayString, 1], [todayString, Infinity]),
-    )) {
+    for await (const cursor of iterateDatePuzzlesAsc(db, todayString)) {
       const game = Game.forDbRecord(db, cursor.value);
       a.push(game);
       b.push(game);

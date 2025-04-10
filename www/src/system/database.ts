@@ -5,6 +5,7 @@ import {
   openDB,
 } from 'idb';
 import * as wasm from 'luke-doku-rust';
+import type {DateString} from '../game/types';
 
 /**
  * Opens the IndexedDB that Luke-doku stores puzzles in.
@@ -17,6 +18,28 @@ export function openDb(): Promise<IDBPDatabase<LukeDokuDb>> {
       store.createIndex('byStateAndDate', ['attemptState', 'lastUpdated']);
     },
   });
+}
+
+/**
+ * Returns an async iterable of all of the given date's puzzles that are in the
+ * database, ordered by puzzle counter.
+ */
+export function iterateDatePuzzlesAsc(
+  db: IDBPDatabase<LukeDokuDb>,
+  dateString: DateString,
+): AsyncIterableIterator<
+  IDBPCursorWithValueIteratorValue<
+    LukeDokuDb,
+    ['puzzles'],
+    'puzzles',
+    'byPuzzleId',
+    'readonly'
+  >
+> {
+  const index = db.transaction('puzzles').store.index('byPuzzleId');
+  return index.iterate(
+    IDBKeyRange.bound([dateString, 1], [dateString, Infinity]),
+  );
 }
 
 const INFINITE_DATE = 8640000000000000;

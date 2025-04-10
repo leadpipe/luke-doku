@@ -8,7 +8,11 @@ import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
 import {Game} from '../game/game';
 import {ensureExhaustiveSwitch} from '../game/utils';
-import {iterateOngoingPuzzlesDesc, openDb} from '../system/database';
+import {
+  iterateDatePuzzlesAsc,
+  iterateOngoingPuzzlesDesc,
+  openDb,
+} from '../system/database';
 import {getPuzzleDate, setPuzzleDateToToday} from './prefs';
 import {todayString} from './utils';
 
@@ -126,13 +130,11 @@ export class LukeDoku extends LitElement {
 
   private async loadPuzzleOfTheDay() {
     const db = await openDb();
-    const index = db.transaction('puzzles').store.index('byPuzzleId');
     let game: Game | null = null;
-    for await (const cursor of index.iterate(
-      // The puzzle of the day is the first puzzle of the day.
-      IDBKeyRange.bound([todayString, 1], [todayString, 2]),
-    )) {
-      game = Game.forDbRecord(db, cursor.value);
+    for await (const cursor of iterateDatePuzzlesAsc(db, todayString)) {
+      if (cursor.value.puzzleId?.[1] === 1) {
+        game = Game.forDbRecord(db, cursor.value);
+      }
       break;
     }
     if (!game) {
