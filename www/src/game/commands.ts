@@ -26,7 +26,7 @@ export class Resume extends Command<CommandTag.RESUME> {
 
 /** How a game can be paused. */
 export enum PauseReason {
-  /** 
+  /**
    * The user clicked the pause button or took another action that implied a
    * pause.
    */
@@ -390,7 +390,10 @@ export class CopyFromTrail extends TrailIdCommand<CommandTag.COPY_FROM_TRAIL> {
   }
 
   protected override makeUndo(internals: GameInternals): Operation {
-    if (internals.trails.activeTrail?.id !== this.trailId) {
+    if (
+      internals.trails.activeTrail &&
+      internals.trails.activeTrail.id !== this.trailId
+    ) {
       return new RestoreActiveTrailOperation(internals);
     }
     return new RestoreMarksAndTrailsOperation(internals);
