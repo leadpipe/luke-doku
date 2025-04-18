@@ -2,13 +2,16 @@
 
 use crate::core::*;
 
+mod internals;
+
 /// A fact that can be deduced from a Sudoku grid.
-#[derive(Clone, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
 pub enum Fact {
   /// Assignment: the given numeral has only one possible location in the given
-  /// unit.
+  /// unit.  (Also known as a "hidden single.")
   SingleLoc { num: Num, unit: Unit, loc: Loc },
-  /// Assignment: the given location has only one possible numeral.
+  /// Assignment: the given location has only one possible numeral.  (Also known
+  /// as a "naked single.")
   SingleNum { loc: Loc, num: Num },
   /// Assignment: the given numeral is assigned to the given location, with no
   /// justification.
@@ -59,9 +62,9 @@ impl Fact {
 
   pub fn as_eliminations(&self) -> AsgmtSet {
     match self {
-      Fact::SingleLoc { num, loc, .. } => Asgmt::new(*num, *loc).to_eliminations(),
-      Fact::SingleNum { loc, num } => Asgmt::new(*num, *loc).to_eliminations(),
-      Fact::SpeculativeAssignment { loc, num } => Asgmt::new(*num, *loc).to_eliminations(),
+      Fact::SingleLoc { .. } | Fact::SingleNum { .. } | Fact::SpeculativeAssignment { .. } => {
+        self.as_asgmt().unwrap().to_eliminations()
+      }
       Fact::Overlap {
         num,
         unit,
@@ -91,7 +94,17 @@ impl Fact {
         }
         answer
       }
-      Fact::Implication { consequent, .. } => consequent.as_eliminations(),
+      Fact::Implication {
+        antecedents,
+        consequent,
+        ..
+      } => {
+        let mut answer = consequent.as_eliminations();
+        for antecedent in antecedents {
+          answer |= antecedent.as_eliminations();
+        }
+        answer
+      }
       _ => AsgmtSet::new(),
     }
   }
@@ -117,54 +130,54 @@ impl Fact {
 
 /// A stateful object that can deduce facts about a Sudoku grid.
 pub struct FactFinder {
-  /// The remaining possible assignments.
+  /// The remaining possible assignments: all possible assignments that haven't
+  /// already happened.
+  remaining_asgmts: AsgmtSet,
+
+  /// The assignments that have been made.
   asgmts: AsgmtSet,
-
-  /// The current state of the grid.
-  grid: Grid,
-
-  /// The latent facts that have been deduced.
-  facts: Vec<Fact>,
 }
 
 impl FactFinder {
   /// Creates a new `FactFinder` with the given grid.
-  ///
-  /// ## Panics
-  ///
-  /// Panics if the grid is invalid.
   pub fn new(grid: Grid) -> Self {
-    let asgmts = AsgmtSet::from_grid(&grid).unwrap();
+    let possible_asgmts = AsgmtSet::possibles_from_grid(&grid);
+    let simple_asgmts = AsgmtSet::simple_from_grid(&grid);
     Self {
-      asgmts,
-      grid,
-      facts: Vec::new(),
+      remaining_asgmts: possible_asgmts - simple_asgmts,
+      asgmts: simple_asgmts,
     }
   }
 
   /// Returns the current set of possible assignments.
-  pub fn asgmts(&self) -> &AsgmtSet {
-    &self.asgmts
+  pub fn possible_asgmts(&self) -> &AsgmtSet {
+    &self.remaining_asgmts
   }
 
   /// Returns the current state of the grid.
-  pub fn grid(&self) -> &Grid {
-    &self.grid
+  pub fn grid(&self) -> &AsgmtSet {
+    &self.asgmts
   }
 
-  /// Returns the list of deduced facts.
-  pub fn facts(&self) -> &[Fact] {
-    &self.facts
+  /// Returns the facts deducible from the current state of the grid.
+  pub fn deduce(&self) -> Vec<Fact> {
+    let mut facts = Vec::new();
+    internals::find_overlaps(&self.remaining_asgmts, &mut facts);
+    internals::find_hidden_singles(&self.remaining_asgmts, &mut facts);
+    internals::find_naked_singles(&self.remaining_asgmts, &mut facts);
+    facts
   }
 
   /// Applies the given fact to the grid and updates the possible assignments.
+  /// Only facts that are consistent with the current state of the game (such as
+  /// those returned from `deduce`) should be applied.
   pub fn apply_fact(&mut self, fact: &Fact) {
     if let Some(asgmt) = fact.as_asgmt() {
-      self.asgmts.apply(asgmt);
-      self.grid[asgmt.loc] = Some(asgmt.num);
+      self.remaining_asgmts.apply(asgmt);
+      self.remaining_asgmts.remove(asgmt);
+      self.asgmts.insert(asgmt);
     } else {
-      self.asgmts -= fact.as_eliminations();
+      self.remaining_asgmts -= fact.as_eliminations();
     }
-    self.facts.push(fact.clone());
   }
 }

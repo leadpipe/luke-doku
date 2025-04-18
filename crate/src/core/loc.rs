@@ -252,6 +252,10 @@ impl IntoWasmAbi for Loc {
   }
 }
 
+pub const BAND1: Band = Band(0);
+pub const BAND2: Band = Band(1);
+pub const BAND3: Band = Band(2);
+
 impl WasmDescribe for Band {
   fn describe() {
     inform(I8)
