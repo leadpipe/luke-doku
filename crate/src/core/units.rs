@@ -3,7 +3,9 @@
 
 use super::bits::*;
 use super::loc::*;
+use super::Set;
 use crate::define_id_types;
+use crate::define_set_operators;
 use paste::paste;
 use seq_macro::seq;
 use serde::Serialize;
@@ -35,6 +37,7 @@ define_id_types! {
     /// The units of a Sudoku (not to be confused with Rust's unit type) are
     /// all the subregions of the grid that must contain all 9 numerals in a
     /// valid solution.
+    #[derive(Debug)]
     UnitId: i8[27];
 
     /// Identifies one of the mini-rows or -columns within a block.
@@ -45,11 +48,11 @@ define_id_types! {
 }
 
 /// One of a row, column, or block.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub enum Unit {
+  Blk(Blk),
   Row(Row),
   Col(Col),
-  Blk(Blk),
 }
 
 pub trait UnitTrait {
@@ -85,6 +88,11 @@ impl Row {
     Col(self.0)
   }
 }
+impl std::fmt::Debug for Row {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "R{}", self.ordinal())
+  }
+}
 
 impl Col {
   /// Tells which column band this column inhabits.
@@ -106,6 +114,11 @@ impl Col {
   /// Returns the transposition of this column.
   pub const fn t(self) -> Row {
     Row(self.0)
+  }
+}
+impl std::fmt::Debug for Col {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+    write!(f, "C{}", self.ordinal())
   }
 }
 
@@ -153,6 +166,11 @@ impl Blk {
     Self::from_bands(self.col_band(), self.row_band())
   }
 }
+impl std::fmt::Debug for Blk {
+  fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "B{}", self.ordinal())
+  }
+}
 
 // Constant unit values: R1 through R9 (rows, top to bottom); C1 through C9
 // (columns, left to right); and B1 through B9 (blocks, top left going in
@@ -168,17 +186,38 @@ seq!(N in 1..=9 {
     }
 });
 
+pub const BL1: BlkLine = BlkLine(0);
+pub const BL2: BlkLine = BlkLine(1);
+pub const BL3: BlkLine = BlkLine(2);
+
 impl UnitId {
+  pub const fn from_blk(blk: Blk) -> Self {
+    Self(blk.get())
+  }
+
   pub const fn from_row(row: Row) -> Self {
-    Self(row.get())
+    Self(9 + row.get())
   }
 
   pub const fn from_col(col: Col) -> Self {
-    Self(9 + col.get())
+    Self(18 + col.get())
   }
 
-  pub const fn from_blk(blk: Blk) -> Self {
-    Self(18 + blk.get())
+  pub const fn to_unit(self) -> Unit {
+    match self.get() {
+      0..=8 => unsafe {
+        // Safe because it's in 0..9.
+        Unit::Blk(Blk::new_unchecked(self.get()))
+      },
+      9..=17 => unsafe {
+        // Safe because the result is in 0..9.
+        Unit::Row(Row::new_unchecked(self.get() - 9))
+      },
+      _ => unsafe {
+        // Safe because self.get() is in 0..27.
+        Unit::Col(Col::new_unchecked(self.get() - 18))
+      },
+    }
   }
 }
 
@@ -195,9 +234,9 @@ impl BlkLine {
 impl UnitTrait for Unit {
   fn unit_id(self) -> UnitId {
     match self {
+      Self::Blk(blk) => UnitId::from_blk(blk),
       Self::Row(row) => UnitId::from_row(row),
       Self::Col(col) => UnitId::from_col(col),
-      Self::Blk(blk) => UnitId::from_blk(blk),
     }
   }
 
@@ -207,9 +246,9 @@ impl UnitTrait for Unit {
 
   fn locs(self) -> LocSet {
     match self {
+      Self::Blk(blk) => blk.locs(),
       Self::Row(row) => row.locs(),
       Self::Col(col) => col.locs(),
-      Self::Blk(blk) => blk.locs(),
     }
   }
 }
@@ -272,15 +311,15 @@ impl UnitTrait for UnitId {
     match self.get() {
       0..=8 => unsafe {
         // Safe because it's in 0..9.
-        Unit::Row(Row::new_unchecked(self.get()))
+        Unit::Blk(Blk::new_unchecked(self.get()))
       },
       9..=17 => unsafe {
         // Safe because the result is in 0..9.
-        Unit::Col(Col::new_unchecked(self.get() - 9))
+        Unit::Row(Row::new_unchecked(self.get() - 9))
       },
       _ => unsafe {
         // Safe because self.get() is in 0..27.
-        Unit::Blk(Blk::new_unchecked(self.get() - 18))
+        Unit::Col(Col::new_unchecked(self.get() - 18))
       },
     }
   }
@@ -333,6 +372,32 @@ impl IntoWasmAbi for BlkLine {
   }
 }
 
+/// A set of units.
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
+pub struct UnitSet(Bits27);
+
+impl<'a> Set<'a> for UnitSet {
+  type Item = Unit;
+  type Bits = Bits27;
+
+  fn bits(&self) -> &Self::Bits {
+    &self.0
+  }
+
+  fn mut_bits(&mut self) -> &mut Self::Bits {
+    &mut self.0
+  }
+
+  fn to_bits_value(&self, item: Self::Item) -> i32 {
+    item.unit_id().get() as i32
+  }
+
+  fn from_bits_value(&self, value: i32) -> Self::Item {
+    UnitId::new(value as i8).unwrap().to_unit()
+  }
+}
+define_set_operators!(UnitSet);
+
 #[cfg(test)]
 mod tests {
   use super::super::*;
@@ -352,6 +417,15 @@ mod tests {
         loc.peers(),
         (loc.row().locs() | loc.col().locs() | loc.blk().locs()) - loc.as_set()
       );
+    }
+  }
+
+  #[test]
+  fn test_unit_id() {
+    for i in 0..27 {
+      let unit_id = UnitId::new(i).unwrap();
+      assert_eq!(unit_id.get(), i);
+      assert_eq!(unit_id.to_unit().unit_id(), unit_id);
     }
   }
 }

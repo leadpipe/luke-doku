@@ -14,7 +14,7 @@ mod id_types;
 mod loc;
 pub mod masks;
 mod num;
-mod set;
+pub mod set;
 mod units;
 
 pub use asgmt::*;
