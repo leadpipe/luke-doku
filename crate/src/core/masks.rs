@@ -60,8 +60,8 @@ pub fn blk_cols_to_masks(blk_cols: Bits9) -> BlkLineMasks {
 
 /// Converts bits representing block-rows within a band into a mask for
 /// that band's locations that will zero out the unsolved ones.
-pub fn solved_blk_rows_to_band_locs_mask(solved_band_locs: Bits9) -> Bits27 {
-  let rows: Bits3 = or_triples(solved_band_locs);
+pub fn solved_blk_rows_to_band_locs_mask(solved_blk_rows: Bits9) -> Bits27 {
+  let rows: Bits3 = or_triples(solved_blk_rows);
   seq!(B in 0..8 {
       static ROWS_TO_BAND_MASK: [Bits27; 8] = [
           #( rows_to_band_mask(B), )*
@@ -118,14 +118,15 @@ fn or_triples(bits: Bits9) -> Bits3 {
 const fn blk_rows_same_band_mask_for_row(blk_rows: Bits9, row: u16) -> u32 {
   let row_bits = (0b111 << (3 * row)) & blk_rows.backing_int();
   match row_bits.count_ones() {
-    0 => 0,
+    0 => 0, // the row can't contain this numeral: it's an error
     1 => match row_bits >> (3 * row) {
+      // this numeral is confined to a single block-row within this row: it's an overlap or hidden single
       0b001 => 0o_770_770_770 | (0o_007 << (9 * row)),
       0b010 => 0o_707_707_707 | (0o_070 << (9 * row)),
       0b100 => 0o_077_077_077 | (0o_700 << (9 * row)),
-      _ => panic!("unreachable"),
+      _ => unreachable!(),
     },
-    _ => 0o_777_777_777,
+    _ => 0o_777_777_777, // this numeral can be in more than one block-row within this row
   }
 }
 
@@ -134,14 +135,15 @@ const fn blk_rows_same_band_mask_for_row(blk_rows: Bits9, row: u16) -> u32 {
 const fn blk_rows_same_band_mask_for_blk(blk_rows: Bits9, blk: u16) -> u32 {
   let blk_bits = (0o_111 << blk) & blk_rows.backing_int();
   match blk_bits.count_ones() {
-    0 => 0,
+    0 => 0, // the block can't contain this numeral: it's an error
     1 => match blk_bits >> blk {
+      // this numeral is confined to a single block-row within this block: it's an overlap or hidden single
       0o_001 => 0o_777_777_000 | (0o_000_000_007 << (3 * blk)),
       0o_010 => 0o_777_000_777 | (0o_000_007_000 << (3 * blk)),
       0o_100 => 0o_000_777_777 | (0o_007_000_000 << (3 * blk)),
-      _ => panic!("unreachable"),
+      _ => unreachable!(),
     },
-    _ => 0o_777_777_777,
+    _ => 0o_777_777_777, // this numeral can be in more than one block-row within this block
   }
 }
 
@@ -229,7 +231,7 @@ const fn blk_cols_diff_band_mask_for_blk(blk_cols: Bits9, blk: u16) -> u32 {
       0b001 => 0o_777_777_777 ^ (0o_001_001_001 << (3 * blk)),
       0b010 => 0o_777_777_777 ^ (0o_002_002_002 << (3 * blk)),
       0b100 => 0o_777_777_777 ^ (0o_004_004_004 << (3 * blk)),
-      _ => panic!("unreachable"),
+      _ => unreachable!(),
     },
     _ => 0o_777_777_777,
   }
