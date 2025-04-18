@@ -44,7 +44,7 @@ impl Asgmt {
 /// `Bits3x27`s, one for each numeral. Each of the nested Bits objects
 /// corresponds to the 81 locations of the Sudoku grid, split into 27-location
 /// row-bands.
-/// 
+///
 /// Some of the operations on this type require that the set be valid, meaning
 /// that all locations have at least one possible assignment.  If the set is
 /// invalid, these operations will return an `Invalid` error.
@@ -64,7 +64,7 @@ impl AsgmtSet {
 
   /// Makes a new AsgmtSet containing all assignments that are consistent with
   /// the given grid.  Returns `Err(Invalid)` if the grid is invalid.
-  pub fn from_grid(grid: &Grid) -> Result<Self, Invalid> {
+  pub fn valid_possibles_from_grid(grid: &Grid) -> Result<Self, Invalid> {
     let mut answer = Self::all();
     for asgmt in grid.iter() {
       if !answer.contains(asgmt) {
@@ -75,26 +75,46 @@ impl AsgmtSet {
     Ok(answer)
   }
 
+  /// Makes a new AsgmtSet containing all assignments that are consistent with
+  /// the given grid, even if the grid is invalid.
+  pub fn possibles_from_grid(grid: &Grid) -> Self {
+    let mut answer = Self::all();
+    for asgmt in grid.iter() {
+      answer.apply(asgmt)
+    }
+    answer
+  }
+
+  /// Makes a new AsgmtSet containing just those assignments that appear in the
+  /// given grid.  This is a simple conversion from a grid to an AsgmtSet,
+  /// without checking for validity.
+  pub fn simple_from_grid(grid: &Grid) -> Self {
+    let mut answer = Self::new();
+    for asgmt in grid.iter() {
+      answer.insert(asgmt);
+    }
+    answer
+  }
+
   /// Converts this set into a grid, with any location having multiple
-  /// assignments left blank.  Returns `Err(Invalid)` if any location has no
-  /// possible assignments.
-  /// 
-  /// Note that this is not a precise inverse of `from_grid`.  The grid returned
-  /// by this method may not be the same as the grid passed to `from_grid`, because
-  /// this method will fill in any locations that have only one possible assignment.
-  pub fn to_grid(&self) -> Result<Grid, Invalid> {
-    let (singles, _) = self.singles_and_doubles()?;
+  /// assignments (or no assignments) left blank.  This is the inverse of
+  /// `simple_from_grid`, but not the inverse of `possibles_from_grid` because
+  /// this method will fill in any locations that have only one possible
+  /// assignment.
+  pub fn to_grid(&self) -> Grid {
+    let singles = self.naked_singles();
     let mut answer = Grid::new();
     for num in Num::all() {
       for loc in (singles & self.num_locs(num)).iter() {
         answer[loc] = Some(num);
       }
     }
-    Ok(answer)
+    answer
   }
 
-  /// Applies the given assignment to this set, by removing all assignments
-  /// that are inconsistent with it.
+  /// Applies the given assignment to this set, by removing all assignments that
+  /// are inconsistent with it.  Does not check for validity: if the set doesn't
+  /// already include the given assignment, this method will not add it.
   pub fn apply(&mut self, asgmt: Asgmt) {
     let zero_loc = !LocSet::singleton(asgmt.loc);
     // Remove possible assignments.  For this numeral, remove all the peer
@@ -111,7 +131,7 @@ impl AsgmtSet {
   /// Finds all locations in this set that have either one or two assignments,
   /// and returns those two location sets as a tuple.  Returns an Invalid
   /// error if any locations have no possible assignments.
-  pub fn singles_and_doubles(&self) -> Result<(LocSet, LocSet), Invalid> {
+  pub fn valid_singles_and_doubles(&self) -> Result<(LocSet, LocSet), Invalid> {
     // `minN` is locations with at least N assignments in this set.
     let mut min1 = Bits3x27::ZERO;
     let mut min2 = Bits3x27::ZERO;
@@ -128,6 +148,20 @@ impl AsgmtSet {
     let exactly1 = LocSet(min1 ^ min2);
     let exactly2 = LocSet(min2 ^ min3);
     Ok((exactly1, exactly2))
+  }
+
+  /// Finds all locations in this set that have exactly one assignment.
+  pub fn naked_singles(&self) -> LocSet {
+    // `minN` is locations with at least N assignments in this set.
+    let mut min1 = Bits3x27::ZERO;
+    let mut min2 = Bits3x27::ZERO;
+    for bits in *self.0.array() {
+      min2 |= bits & min1;
+      min1 |= bits;
+    }
+    // Works like min1 & !min2, because min1 is a superset of min2.
+    let exactly1 = LocSet(min1 ^ min2);
+    exactly1
   }
 
   /// Modifies this set in place to remove all assignments for the given
@@ -225,13 +259,20 @@ mod tests {
   fn to_grid() {
     let s = ".1..5..8.4.89.62.1..6...7....5.3.9.....8.7.....1.4.3....4...1..2.93.16.7.7..6..2.";
     let g = s.parse::<Grid>().unwrap();
-    let mut set = AsgmtSet::from_grid(&g).unwrap();
+
+    let set = AsgmtSet::simple_from_grid(&g);
+    for a in g.iter() {
+      assert!(set.contains(a));
+    }
+    assert_eq!(g, set.to_grid());
+
+    let mut set = AsgmtSet::possibles_from_grid(&g);
     for a in g.iter() {
       assert!(set.contains(a));
     }
     let s = ".1..5.48.4.89762.1..6...7....5.329.....8.7.....1.4.3....4...1..2.93816.7.73.6..2.";
     let g = s.parse::<Grid>().unwrap();
-    assert_eq!(g, set.to_grid().unwrap());
+    assert_eq!(g, set.to_grid());
 
     for loc in Loc::all() {
       if g[loc] == None {
@@ -239,11 +280,11 @@ mod tests {
         set.insert(Asgmt { loc, num: N2 });
       }
     }
-    assert_eq!(g, set.to_grid().unwrap());
+    assert_eq!(g, set.to_grid());
   }
 
   #[test]
-  fn singles_and_doubles() {
+  fn valid_singles_and_doubles() {
     let s = ".1..5..8.4.89.62.1..6...7....5.3.9.....8.7.....1.4.3....4...1..2.93.16.7.7..6..2.";
     let g = s.parse::<Grid>().unwrap();
     let mut set = AsgmtSet::new();
@@ -257,12 +298,12 @@ mod tests {
         set.insert(Asgmt { loc, num: N2 });
       }
     }
-    let (singles, doubles) = set.singles_and_doubles().unwrap();
+    let (singles, doubles) = set.valid_singles_and_doubles().unwrap();
     assert_eq!(singles, locs);
     assert_eq!(doubles, !locs);
 
     set.insert(Asgmt { loc: L11, num: N3 });
-    let (singles, doubles) = set.singles_and_doubles().unwrap();
+    let (singles, doubles) = set.valid_singles_and_doubles().unwrap();
     assert_eq!(singles, locs);
     assert_ne!(doubles, !locs);
     assert_eq!(doubles.len() + 1, (!locs).len());
@@ -270,6 +311,6 @@ mod tests {
     assert!(!doubles.contains(L11));
 
     set.remove(Asgmt { loc: L12, num: N1 });
-    assert!(set.singles_and_doubles().is_err());
+    assert!(set.valid_singles_and_doubles().is_err());
   }
 }

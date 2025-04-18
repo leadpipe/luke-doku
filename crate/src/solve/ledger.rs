@@ -22,7 +22,7 @@ impl Ledger {
   /// all other possibilities still open.  Returns `Err(Invalid)` if the
   /// puzzle's clues are inconsistent with the rules of Sudoku.
   pub fn new(clues: &Grid) -> Result<Ledger, Invalid> {
-    let asgmts = AsgmtSet::from_grid(clues)?;
+    let asgmts = AsgmtSet::valid_possibles_from_grid(clues)?;
     Ok(Self {
       asgmts,
       old_asgmts: AsgmtSet::all(),
@@ -32,7 +32,7 @@ impl Ledger {
 
   /// Renders the possible assignments as a grid, leaving unassigned any
   /// locations that don't have a unique possible numeral.
-  pub fn to_grid(&self) -> Result<Grid, Invalid> {
+  pub fn to_grid(&self) -> Grid {
     self.asgmts.to_grid()
   }
 
@@ -59,7 +59,7 @@ impl Ledger {
   pub fn apply_implications(&mut self) -> Result<LocSet, Invalid> {
     loop {
       self.eliminate_by_overlaps()?;
-      let (mut singles, doubles) = self.asgmts.singles_and_doubles()?;
+      let (mut singles, doubles) = self.asgmts.valid_singles_and_doubles()?;
       singles &= self.unset;
       if singles.is_empty() {
         return Ok(doubles);
@@ -233,6 +233,6 @@ mod tests {
 
     ledger.apply_implications().unwrap();
     assert!(!ledger.is_complete());
-    assert_eq!(N6, ledger.to_grid().unwrap()[L63].unwrap());
+    assert_eq!(N6, ledger.to_grid()[L63].unwrap());
   }
 }

@@ -279,7 +279,7 @@ impl<'a> Searcher<'a> {
     Some(unsafe {
       // Safe because this private function is only called when the ledger is
       // complete.
-      SolvedGrid::new(&ledger.to_grid().unwrap())
+      SolvedGrid::new(&ledger.to_grid())
     })
   }
 }
