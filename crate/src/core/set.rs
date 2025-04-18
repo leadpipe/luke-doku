@@ -182,3 +182,43 @@ where
     }
   }
 }
+
+/// A set of integers, backed by a Bits object.  The integers are in the range
+/// `0..(1 << Self::Bits::CAPACITY)`.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct IntSet<T: Bits + BitsIterable>(pub T);
+impl<'a, T: Bits + BitsIterable + 'a> Set<'a> for IntSet<T>
+where
+  &'a T: BitsIterable,
+{
+  type Item = i32;
+  type Bits = T;
+
+  fn bits(&self) -> &Self::Bits {
+    &self.0
+  }
+
+  fn mut_bits(&mut self) -> &mut Self::Bits {
+    &mut self.0
+  }
+
+  fn to_bits_value(&self, item: Self::Item) -> i32 {
+    item
+  }
+  fn from_bits_value(&self, value: i32) -> Self::Item {
+    value
+  }
+}
+
+define_set_operators!(IntSet<u32>);
+define_set_operators!(IntSet<u16>);
+define_set_operators!(IntSet<u8>);
+
+impl<T: Bits + BitsIterable + 'static> Default for IntSet<T>
+where
+  &'static T: BitsIterable,
+{
+  fn default() -> Self {
+    Self(T::ZERO)
+  }
+}

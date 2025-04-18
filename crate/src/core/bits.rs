@@ -236,6 +236,19 @@ macro_rules! impl_int_bits {
       }
     }
 
+    impl BitsIterable for $int {
+      type Item = $int;
+      type BitIterator = BitIter<$int>;
+      type ValueIterator = ValueIter<$int>;
+
+      fn bit_iter(self) -> BitIter<$int> {
+        BitIter(self)
+      }
+      fn value_iter(self) -> ValueIter<$int> {
+        ValueIter(self.bit_iter())
+      }
+    }
+
     impl BitsIterable for &$int {
       type Item = $int;
       type BitIterator = BitIter<$int>;
@@ -265,7 +278,7 @@ macro_rules! define_wrapped_bits_types {
         )*
     ) => {
         $(
-        #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+        #[derive(Clone, Copy, Default, Eq, Hash, PartialEq)]
         $(#[$outer])*
         pub struct $type_name($int);
 
@@ -386,6 +399,11 @@ macro_rules! define_wrapped_bits_types {
                 self.const_not()
             }
         }
+        impl Debug for $type_name {
+            fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+              write!(f, "{}({:#o})", stringify!($type_name), self.0)  // octal
+            }
+        }
         impl WasmDescribe for $type_name {
             fn describe() {
                 inform($wasm_desc)
@@ -419,6 +437,10 @@ define_wrapped_bits_types! {
     /// takes up almost all of 32 bits, so it's an efficient way to divide up
     /// 81 bits.
     Bits27: u32[27], U32;
+
+    /// An 18-bit set.  This is used for the 18 ways to form an overlap within a
+    /// band.
+    Bits18: u32[18], U32;
 }
 
 impl Bits9 {
