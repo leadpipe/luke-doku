@@ -32,10 +32,15 @@ pub fn find_hidden_singles(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
       units_to_check |=
         blk_line_bits_to_possible_hidden_single_units(blk_row_bits, blk_col_bits, band);
     }
+    let mut locs_found = LocSet::default();
     for unit in units_to_check.iter() {
       let unit_locs = num_locs & unit.locs();
       if unit_locs.len() == 1 {
         let loc = unit_locs.smallest_item().unwrap();
+        if locs_found.contains(loc) {
+          continue;
+        }
+        locs_found.insert(loc);
         facts.push(Fact::SingleLoc { num, unit, loc });
       }
     }
@@ -600,8 +605,6 @@ mod tests {
         make_hidden_single(N2, C7, L37),
         make_hidden_single(N5, B3, L19),
         make_hidden_single(N5, B8, L74),
-        make_hidden_single(N5, R1, L19),
-        make_hidden_single(N5, C9, L19),
       ]
     );
   }
