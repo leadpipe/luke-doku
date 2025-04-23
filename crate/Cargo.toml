@@ -10,6 +10,7 @@ license = "Apache-2.0"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
+itertools = "0.14.0"
 js-sys = "0.3.77"
 num-derive = "0.4"
 num-traits = "0.2.19"
