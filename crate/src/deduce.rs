@@ -40,6 +40,7 @@ pub enum Fact {
     unit: Unit,
     locs: LocSet,
     cross_unit: Option<Unit>,
+    is_naked: bool,
   },
   /// A fact that is implied by other facts.
   Implication {
@@ -79,6 +80,7 @@ impl Fact {
         unit,
         locs,
         cross_unit,
+        ..
       } => {
         let mut answer = AsgmtSet::new();
         let mut outside_locs = unit.locs() - *locs;
@@ -163,6 +165,7 @@ impl FactFinder {
   pub fn deduce(&self) -> Vec<Fact> {
     let mut facts = Vec::new();
     internals::find_overlaps(&self.remaining_asgmts, &mut facts);
+    internals::find_locked_sets(&self.remaining_asgmts, &mut facts);
     internals::find_hidden_singles(&self.remaining_asgmts, &mut facts);
     internals::find_naked_singles(&self.remaining_asgmts, &mut facts);
     facts

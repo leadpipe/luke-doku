@@ -1,9 +1,12 @@
+use std::collections::HashMap;
+
 ///! Defines low-level functions and lookup tables for the deduce module.
 use crate::core::bits::*;
 use crate::core::masks::*;
 use crate::core::set::*;
 use crate::core::*;
 use crate::define_set_operators;
+use itertools::Itertools;
 use seq_macro::seq;
 
 use super::Fact;
@@ -17,6 +20,34 @@ pub fn find_overlaps(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
       let blk_col_bits = locs_to_blk_cols(num_locs, band);
       blk_row_bits_to_overlaps(blk_row_bits, num, band, facts);
       blk_col_bits_to_overlaps(blk_col_bits, num, band, facts);
+    }
+  }
+}
+
+pub const MAX_SET_SIZE: i32 = 4;
+
+pub fn find_locked_sets(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
+  let mut set_state = SetState::new();
+  for size in 2..=MAX_SET_SIZE {
+    for unit_id in UnitId::all() {
+      find_hidden_sets(
+        remaining_asgmts,
+        facts,
+        &mut set_state,
+        unit_id.to_unit(),
+        size,
+      );
+    }
+  }
+  for size in 2..=MAX_SET_SIZE {
+    for unit_id in UnitId::all() {
+      find_naked_sets(
+        remaining_asgmts,
+        facts,
+        &mut set_state,
+        unit_id.to_unit(),
+        size,
+      );
     }
   }
 }
@@ -327,6 +358,12 @@ impl BandOverlapSpec {
 #[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 struct BandOverlapSpecSet(Bits18);
 
+impl Default for BandOverlapSpecSet {
+  fn default() -> Self {
+    Self(Bits18::default())
+  }
+}
+
 impl<'a> Set<'a> for BandOverlapSpecSet {
   type Item = BandOverlapSpec;
   type Bits = Bits18;
@@ -413,12 +450,159 @@ const fn blk_line_bits_to_band_units_impl_unrolled_line(bits: Bits9, line: i32) 
   answer
 }
 
+/// Manages the state of the deduction process for locked sets by tracking which
+/// numerals and locations have been allocated to sets in each unit.
+struct SetState {
+  nums: HashMap<Unit, NumSet>,
+  locs: HashMap<Unit, LocSet>,
+}
+
+impl SetState {
+  fn new() -> Self {
+    Self {
+      nums: HashMap::new(),
+      locs: HashMap::new(),
+    }
+  }
+
+  fn get_nums(&mut self, unit: Unit) -> NumSet {
+    *self.nums.entry(unit).or_default()
+  }
+
+  fn get_locs(&mut self, unit: Unit) -> LocSet {
+    *self.locs.entry(unit).or_default()
+  }
+
+  fn add(&mut self, unit: Unit, nums: NumSet, locs: LocSet) {
+    *self.nums.entry(unit).or_default() |= nums;
+    *self.locs.entry(unit).or_default() |= locs;
+  }
+}
+
+fn find_hidden_sets(
+  remaining_asgmts: &AsgmtSet,
+  facts: &mut Vec<Fact>,
+  set_state: &mut SetState,
+  unit: Unit,
+  size: i32,
+) {
+  let unit_locs = unit.locs();
+  let mut nums_in_sets = set_state.get_nums(unit);
+  let mut nums_to_check = NumSet::default();
+  let mut unset_count = 0;
+  for num in Num::all() {
+    let possible_size = (remaining_asgmts.num_locs(num) & unit_locs).len();
+    if possible_size > 1 {
+      unset_count += 1;
+      if possible_size <= size && !nums_in_sets.contains(num) {
+        nums_to_check.insert(num);
+      }
+    }
+  }
+  if nums_to_check.len() >= size && unset_count > size {
+    'outer: for combination in nums_to_check.iter().combinations(size as usize) {
+      let mut locs = LocSet::default();
+      let mut nums = NumSet::default();
+      for num in combination.iter() {
+        if nums_in_sets.contains(*num) {
+          continue 'outer;
+        }
+        locs |= remaining_asgmts.num_locs(*num) & unit_locs;
+        nums.insert(*num);
+      }
+      if locs.len() == size {
+        let cross_unit = find_overlapping_unit(unit, locs);
+        facts.push(Fact::LockedSet {
+          nums,
+          unit,
+          locs,
+          cross_unit,
+          is_naked: false,
+        });
+        set_state.add(unit, nums, locs);
+        nums_in_sets |= nums;
+        if let Some(unit) = cross_unit {
+          set_state.add(unit, nums, locs);
+        }
+      }
+    }
+  }
+}
+
+fn find_naked_sets(
+  remaining_asgmts: &AsgmtSet,
+  facts: &mut Vec<Fact>,
+  set_state: &mut SetState,
+  unit: Unit,
+  size: i32,
+) {
+}
+
+fn find_overlapping_unit(unit: Unit, locs: LocSet) -> Option<Unit> {
+  let mut overlapping_unit = None;
+  match unit {
+    Unit::Blk(blk) => {
+      let band_locs = locs.band_locs(blk.row_band());
+      let blk_row_bits = band_locs_to_blk_rows(band_locs).backing_int();
+      if blk_row_bits.count_ones() == 1 {
+        let blk_line = match blk_row_bits >> blk.col_band().index() {
+          0o001 => BL1,
+          0o010 => BL2,
+          0o100 => BL3,
+          _ => unreachable!(),
+        };
+        overlapping_unit = Some(blk.row(blk_line).to_unit());
+      } else {
+        let blk_col_bits = locs_to_blk_cols(locs, blk.col_band()).backing_int();
+        if blk_col_bits.count_ones() == 1 {
+          let blk_line = match blk_col_bits >> blk.row_band().index() {
+            0o001 => BL1,
+            0o010 => BL2,
+            0o100 => BL3,
+            _ => unreachable!(),
+          };
+          overlapping_unit = Some(blk.col(blk_line).to_unit());
+        }
+      }
+    }
+    Unit::Row(row) => {
+      let band_locs = locs.band_locs(row.band());
+      let blk_row_bits = band_locs_to_blk_rows(band_locs).backing_int();
+      if blk_row_bits.count_ones() == 1 {
+        let col_band = match blk_row_bits >> (3 * row.blk_row().index()) {
+          0b001 => BAND1,
+          0b010 => BAND2,
+          0b100 => BAND3,
+          _ => unreachable!(),
+        };
+        overlapping_unit = Some(Blk::from_bands(row.band(), col_band).to_unit());
+      }
+    }
+    Unit::Col(col) => {
+      let blk_col_bits = locs_to_blk_cols(locs, col.band()).backing_int();
+      if blk_col_bits.count_ones() == 1 {
+        let row_band = match blk_col_bits >> (3 * col.blk_col().index()) {
+          0b001 => BAND1,
+          0b010 => BAND2,
+          0b100 => BAND3,
+          _ => unreachable!(),
+        };
+        overlapping_unit = Some(Blk::from_bands(row_band, col.band()).to_unit());
+      }
+    }
+  };
+  overlapping_unit
+}
+
 #[cfg(test)]
 mod tests {
   use std::str::FromStr;
 
   use super::*;
-  use crate::core::bits::Bits3x27;
+  use crate::{
+    loc_set, num_set,
+    permute::{GridPermutation, GroupElement, LocPermutation, NumPermutation},
+  };
 
   #[test]
   fn test_locs_to_blk_cols() {
@@ -567,6 +751,82 @@ mod tests {
         make_overlap(N5, R9, B7),
         make_overlap(N9, B1, C2),
         make_overlap(N9, C3, B7),
+      ]
+    );
+  }
+
+  fn make_locked_set(
+    nums: NumSet,
+    unit: impl UnitTrait,
+    locs: LocSet,
+    cross_unit: Option<impl UnitTrait>,
+    is_naked: bool,
+  ) -> Fact {
+    Fact::LockedSet {
+      nums,
+      unit: unit.to_unit(),
+      locs,
+      cross_unit: cross_unit.map(|u| u.to_unit()),
+      is_naked,
+    }
+  }
+
+  #[test]
+  fn test_find_locked_sets() {
+    let grid = Grid::from_str(
+      r"
+         . 1 4 | . 9 . | . 5 . 
+         . . . | 6 . . | . . 1 
+         2 9 6 | 5 1 4 | 7 8 3 
+        -------+-------+-------
+         . 4 . | . 5 1 | 3 6 . 
+         8 . 1 | 3 . 2 | . 7 . 
+         . . 3 | . 7 . | . 1 . 
+        -------+-------+-------
+         . . 5 | . . . | 1 . 7 
+         . . 9 | 1 . 5 | . . . 
+         1 3 . | . . . | 5 . . 
+        ",
+    )
+    .unwrap();
+    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
+    let mut facts = Vec::new();
+    find_locked_sets(&asgmts, &mut facts);
+    assert_eq!(
+      facts,
+      vec![
+        make_locked_set(num_set! {N4, N9}, B3, loc_set! {L27, L28}, Some(R2), false),
+        make_locked_set(
+          num_set! {N3, N7, N8},
+          R1,
+          loc_set! {L11, L14, L16},
+          None::<Blk>,
+          false
+        ),
+      ]
+    );
+
+    let mut transpose = LocPermutation::identity();
+    transpose.transpose = true;
+    let grid = GridPermutation {
+      nums: NumPermutation::identity(),
+      locs: transpose,
+    }
+    .apply(&grid);
+    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
+    let mut facts = Vec::new();
+    find_locked_sets(&asgmts, &mut facts);
+    assert_eq!(
+      facts,
+      vec![
+        make_locked_set(num_set! {N4, N9}, B7, loc_set! {L72, L82}, Some(C2), false),
+        make_locked_set(
+          num_set! {N3, N7, N8},
+          C1,
+          loc_set! {L11, L41, L61},
+          None::<Blk>,
+          false
+        ),
       ]
     );
   }
