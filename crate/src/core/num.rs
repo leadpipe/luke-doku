@@ -3,6 +3,7 @@
 use super::bits::{Bits, Bits9};
 use super::set::Set;
 use crate::define_set_operators;
+use core::fmt;
 use paste::paste;
 use seq_macro::seq;
 use std::num::NonZeroI8;
@@ -11,7 +12,7 @@ use wasm_bindgen::describe::{inform, WasmDescribe, I8};
 
 /// Identifies one of the 9 numerals that can can occupy a location of a
 /// Sudoku grid.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
 pub struct Num(NonZeroI8);
 
 // Constant Num values, N1 through N9.
@@ -89,38 +90,7 @@ impl Num {
     NumSet::singleton(self)
   }
 }
-/*
-impl TryFrom<i8> for Num {
-    type Error = &'static str;
 
-    /// Converts from ints between 1 and 9 inclusive into the corresponding Num.
-    fn try_from(value: i8) -> Result<Self, Self::Error> {
-        Num::new(value).ok_or("Out of bounds: Num is in 1..=9")
-    }
-}
-
-impl TryFrom<usize> for Num {
-    type Error = &'static str;
-
-    /// Converts from an index value between 0 and 8 inclusive into the Num
-    /// whose value is one greater than the index.
-    fn try_from(value: usize) -> Result<Self, Self::Error> {
-        Num::from_index(value).ok_or("Out of bounds: Num as an index is in 0..9")
-    }
-}
-
-impl From<Num> for i8 {
-    fn from(n: Num) -> Self {
-        n.get()
-    }
-}
-
-impl From<Num> for usize {
-    fn from(n: Num) -> Self {
-        n.index()
-    }
-}
-*/
 impl WasmDescribe for Num {
   fn describe() {
     inform(I8)
@@ -155,8 +125,20 @@ impl OptionIntoWasmAbi for Num {
   }
 }
 
+impl fmt::Debug for Num {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "N{}", self.get())
+  }
+}
+
+impl fmt::Display for Num {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    write!(f, "{}", self.get())
+  }
+}
+
 /// A set of `Num`s.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
 pub struct NumSet(pub Bits9);
 
 impl NumSet {
@@ -182,6 +164,24 @@ impl Default for NumSet {
   }
 }
 
+impl FromIterator<Num> for NumSet {
+  fn from_iter<I: IntoIterator<Item = Num>>(iter: I) -> Self {
+    let mut set = Self::new();
+    for num in iter {
+      set.insert(num);
+    }
+    set
+  }
+}
+
+#[macro_export]
+/// Returns a NumSet containing the given numerals.
+macro_rules! num_set {
+  ($($num:expr),*) => {
+    NumSet::from_iter([$($num),*])
+  };
+}
+
 impl<'a> Set<'a> for NumSet {
   type Item = Num;
   type Bits = Bits9;
@@ -205,6 +205,22 @@ impl<'a> Set<'a> for NumSet {
 }
 
 define_set_operators!(NumSet);
+
+impl fmt::Debug for NumSet {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let mut first = true;
+    write!(f, "{{")?;
+    for num in self.iter() {
+      if first {
+        first = false;
+      } else {
+        write!(f, ", ")?;
+      }
+      write!(f, "{:?}", num)?;
+    }
+    write!(f, "}}")
+  }
+}
 
 #[cfg(test)]
 mod tests {

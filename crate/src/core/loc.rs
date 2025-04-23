@@ -325,6 +325,32 @@ impl LocSet {
   }
 }
 
+impl Default for LocSet {
+  /// Returns an empty set.
+  fn default() -> Self {
+    Self::new()
+  }
+}
+
+#[macro_export]
+/// Returns a LocSet containing the given locations.
+macro_rules! loc_set {
+  ($($loc:expr),*) => {
+    LocSet::from_iter([$($loc),*])
+  };
+}
+
+impl FromIterator<Loc> for LocSet {
+  /// Makes a new LocSet from the given iterator of locations.
+  fn from_iter<I: IntoIterator<Item = Loc>>(iter: I) -> Self {
+    let mut set = Self::new();
+    for loc in iter {
+      set.insert(loc);
+    }
+    set
+  }
+}
+
 impl<'a> Set<'a> for LocSet {
   type Item = Loc;
   type Bits = Bits3x27;
@@ -351,7 +377,7 @@ define_set_operators!(LocSet);
 impl fmt::Debug for LocSet {
   /// Prints this set as a list of locations.
   fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-    write!(f, "LocSet(")?;
+    write!(f, "{{")?;
     let mut prev = false;
     for loc in self.iter() {
       if prev {
@@ -360,7 +386,7 @@ impl fmt::Debug for LocSet {
       write!(f, "{:?}", loc)?;
       prev = true;
     }
-    write!(f, ")")
+    write!(f, "}}")
   }
 }
 
