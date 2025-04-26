@@ -1,4 +1,6 @@
 use std::collections::HashMap;
+use std::ops::Index;
+use std::ops::IndexMut;
 
 ///! Defines low-level functions and lookup tables for the deduce module.
 use crate::core::bits::*;
@@ -26,7 +28,11 @@ pub fn find_overlaps(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
 
 pub const MAX_SET_SIZE: i32 = 4;
 
-pub fn find_locked_sets(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
+pub fn find_locked_sets(
+  remaining_asgmts: &AsgmtSet,
+  sukaku_map: &SukakuMap,
+  facts: &mut Vec<Fact>,
+) {
   let mut set_state = SetState::new();
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
@@ -41,13 +47,7 @@ pub fn find_locked_sets(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
   }
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
-      find_naked_sets(
-        remaining_asgmts,
-        facts,
-        &mut set_state,
-        unit_id.to_unit(),
-        size,
-      );
+      find_naked_sets(sukaku_map, facts, &mut set_state, unit_id.to_unit(), size);
     }
   }
 }
@@ -78,10 +78,13 @@ pub fn find_hidden_singles(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
   }
 }
 
-pub fn find_naked_singles(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
-  let naked_singles = remaining_asgmts.naked_singles();
-  for num in Num::all() {
-    for loc in (remaining_asgmts.num_locs(num) & naked_singles).iter() {
+pub fn find_naked_singles(sukaku_map: &SukakuMap, facts: &mut Vec<Fact>) {
+  for loc in Loc::all() {
+    let nums = sukaku_map[loc];
+    if nums.len() != 1 {
+      continue;
+    }
+    for num in nums.iter() {
       facts.push(Fact::SingleNum { loc, num });
     }
   }
@@ -479,6 +482,80 @@ impl SetState {
   }
 }
 
+/// A map of locations to sets of numerals.  Mimics a Sukaku puzzle, like a
+/// fully marked up Sudoku, with each location containing the numerals that are
+/// possible for that location.  This is the same information that is
+/// represented in the `AsgmtSet`, but indexed the other way around.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub struct SukakuMap {
+  grid: [NumSet; 81],
+  has_error: bool,
+}
+
+impl SukakuMap {
+  pub fn from_grid(grid: &Grid) -> Self {
+    let mut answer = Self {
+      grid: [NumSet::all(); 81],
+      has_error: false,
+    };
+    for asgmt in grid.iter() {
+      answer.apply(asgmt);
+    }
+    answer
+  }
+
+  pub fn has_error(&self) -> bool {
+    self.has_error
+  }
+
+  pub fn apply(&mut self, asgmt: Asgmt) {
+    if !self[asgmt.loc].contains(asgmt.num) {
+      self.has_error = true;
+    }
+    self[asgmt.loc] = NumSet::new(); // Leave the location empty.
+    for peer in asgmt.loc.peers().iter() {
+      self.eliminate_one(peer, asgmt.num);
+    }
+  }
+
+  pub fn eliminate(&mut self, eliminations: &AsgmtSet) {
+    for asgmt in eliminations.iter() {
+      self.eliminate_one(asgmt.loc, asgmt.num);
+    }
+  }
+
+  fn eliminate_one(&mut self, loc: Loc, num: Num) {
+    let nums = &mut self[loc];
+    if nums.contains(num) {
+      nums.remove(num);
+      if nums.is_empty() {
+        self.has_error = true;
+      }
+    }
+  }
+}
+
+impl Index<Loc> for SukakuMap {
+  type Output = NumSet;
+  fn index(&self, loc: Loc) -> &NumSet {
+    unsafe {
+      // Safe because `loc.index()` is in 0..81.
+      debug_assert_eq!(Loc::COUNT, 81);
+      self.grid.get_unchecked(loc.index())
+    }
+  }
+}
+
+impl IndexMut<Loc> for SukakuMap {
+  fn index_mut(&mut self, loc: Loc) -> &mut NumSet {
+    unsafe {
+      // Safe because `loc.index()` is in 0..81.
+      debug_assert_eq!(Loc::COUNT, 81);
+      self.grid.get_unchecked_mut(loc.index())
+    }
+  }
+}
+
 fn find_hidden_sets(
   remaining_asgmts: &AsgmtSet,
   facts: &mut Vec<Fact>,
@@ -530,12 +607,53 @@ fn find_hidden_sets(
 }
 
 fn find_naked_sets(
-  remaining_asgmts: &AsgmtSet,
+  sukaku_map: &SukakuMap,
   facts: &mut Vec<Fact>,
   set_state: &mut SetState,
   unit: Unit,
   size: i32,
 ) {
+  let unit_locs = unit.locs();
+  let mut locs_in_sets = set_state.get_locs(unit);
+  let mut locs_to_check = LocSet::default();
+  let mut unset_count = 0;
+  for loc in unit_locs.iter() {
+    let possible_size = sukaku_map[loc].len();
+    if possible_size > 1 {
+      unset_count += 1;
+      if possible_size <= size && !locs_in_sets.contains(loc) {
+        locs_to_check.insert(loc);
+      }
+    }
+  }
+  if locs_to_check.len() >= size && unset_count > size {
+    'outer: for combination in locs_to_check.iter().combinations(size as usize) {
+      let mut locs = LocSet::default();
+      let mut nums = NumSet::default();
+      for loc in combination.iter() {
+        if locs_in_sets.contains(*loc) {
+          continue 'outer;
+        }
+        locs.insert(*loc);
+        nums |= sukaku_map[*loc];
+      }
+      if nums.len() == size {
+        let cross_unit = find_overlapping_unit(unit, locs);
+        facts.push(Fact::LockedSet {
+          nums,
+          unit,
+          locs,
+          cross_unit,
+          is_naked: true,
+        });
+        set_state.add(unit, nums, locs);
+        locs_in_sets |= locs;
+        if let Some(unit) = cross_unit {
+          set_state.add(unit, nums, locs);
+        }
+      }
+    }
+  }
 }
 
 fn find_overlapping_unit(unit: Unit, locs: LocSet) -> Option<Unit> {
@@ -790,8 +908,9 @@ mod tests {
     )
     .unwrap();
     let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
+    let map = SukakuMap::from_grid(&grid);
     let mut facts = Vec::new();
-    find_locked_sets(&asgmts, &mut facts);
+    find_locked_sets(&asgmts, &map, &mut facts);
     assert_eq!(
       facts,
       vec![
@@ -803,6 +922,14 @@ mod tests {
           None::<Blk>,
           false
         ),
+        make_locked_set(num_set! {N2, N6}, B3, loc_set! {L17, L19}, Some(R1), true),
+        make_locked_set(
+          num_set! {N3, N5, N7, N8},
+          R2,
+          loc_set! {L21, L22, L23, L26},
+          None::<Blk>,
+          true
+        )
       ]
     );
 
@@ -814,8 +941,9 @@ mod tests {
     }
     .apply(&grid);
     let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
+    let map = SukakuMap::from_grid(&grid);
     let mut facts = Vec::new();
-    find_locked_sets(&asgmts, &mut facts);
+    find_locked_sets(&asgmts, &map, &mut facts);
     assert_eq!(
       facts,
       vec![
@@ -827,6 +955,14 @@ mod tests {
           None::<Blk>,
           false
         ),
+        make_locked_set(num_set! {N2, N6}, B7, loc_set! {L71, L91}, Some(C1), true),
+        make_locked_set(
+          num_set! {N3, N5, N7, N8},
+          C2,
+          loc_set! {L12, L22, L32, L62},
+          None::<Blk>,
+          true
+        )
       ]
     );
   }
@@ -890,9 +1026,9 @@ mod tests {
             . . . | 1 . 6 | 8 . .",
     )
     .unwrap();
-    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
+    let map = SukakuMap::from_grid(&grid);
     let mut facts = Vec::new();
-    find_naked_singles(&asgmts, &mut facts);
+    find_naked_singles(&map, &mut facts);
     assert_eq!(facts, vec![make_naked_single(L64, N3),]);
   }
 }

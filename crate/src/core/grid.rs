@@ -197,6 +197,7 @@ impl Index<Loc> for Grid {
   fn index(&self, loc: Loc) -> &Option<Num> {
     unsafe {
       // Safe because `loc.index()` is in 0..81.
+      debug_assert_eq!(Loc::COUNT, 81);
       self.0.get_unchecked(loc.index())
     }
   }
@@ -206,6 +207,7 @@ impl IndexMut<Loc> for Grid {
   fn index_mut(&mut self, loc: Loc) -> &mut Option<Num> {
     unsafe {
       // Safe because `loc.index()` is in 0..81.
+      debug_assert_eq!(Loc::COUNT, 81);
       self.0.get_unchecked_mut(loc.index())
     }
   }

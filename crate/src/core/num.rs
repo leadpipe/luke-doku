@@ -143,7 +143,7 @@ pub struct NumSet(pub Bits9);
 
 impl NumSet {
   /// Makes a new empty NumSet.
-  pub fn new() -> Self {
+  pub const fn new() -> Self {
     NumSet(Bits9::ZERO)
   }
 
@@ -153,7 +153,7 @@ impl NumSet {
   }
 
   /// Makes a new NumSet containing all numerals.
-  pub fn all() -> Self {
+  pub const fn all() -> Self {
     NumSet(Bits9::ONES)
   }
 }
