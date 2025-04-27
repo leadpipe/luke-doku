@@ -13,6 +13,37 @@ use seq_macro::seq;
 
 use super::Fact;
 
+pub fn find_errors(
+  remaining_asgmts: &AsgmtSet,
+  actual_asgmts: &AsgmtSet,
+  sukaku_map: &SukakuMap,
+  facts: &mut Vec<Fact>,
+) {
+  let possible_asgmts = *remaining_asgmts | *actual_asgmts;
+  for unit in Unit::all() {
+    let unit_locs = unit.locs();
+    for num in Num::all() {
+      let actual_locs = actual_asgmts.num_locs(num) & unit_locs;
+      if actual_locs.len() > 1 {
+        facts.push(Fact::Conflict {
+          num,
+          unit,
+          locs: actual_locs,
+        });
+      }
+      let possible_locs = possible_asgmts.num_locs(num) & unit_locs;
+      if possible_locs.is_empty() {
+        facts.push(Fact::NoLoc { num, unit });
+      }
+    }
+  }
+  for loc in (!actual_asgmts.naked_singles()).iter() {
+    if sukaku_map[loc].is_empty() {
+      facts.push(Fact::NoNum { loc });
+    }
+  }
+}
+
 pub fn find_overlaps(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
   for num in Num::all() {
     let num_locs = remaining_asgmts.num_locs(num);
@@ -825,6 +856,87 @@ mod tests {
         unit: C9.to_unit(),
         cross_unit: B3.to_unit(),
       }
+    );
+  }
+
+  #[test]
+  fn test_sukaku_map_has_error() {
+    let mut grid = Grid::from_str(
+      r"
+            . . . | 8 . 9 | . . 6
+            . 2 3 | . . . | . . .
+            . . . | 6 . 5 | . . .
+            - - - + - - - + - - -
+            7 . . | . . 1 | . . 2
+            . . . | 4 5 . | . . 9
+            . . . | . . . | 6 . .
+            - - - + - - - + - - -
+            . . . | . 7 . | . . .
+            . . 1 | . 4 6 | . . .
+            . . 4 | . . . | . . .
+        ",
+    )
+    .unwrap();
+    let sukaku_map = SukakuMap::from_grid(&grid);
+    assert!(!sukaku_map.has_error());
+
+    grid[L36] = Some(N8);
+    grid[L93] = Some(N3);
+    let sukaku_map = SukakuMap::from_grid(&grid);
+    assert!(sukaku_map.has_error());
+  }
+
+  #[test]
+  fn test_find_errors() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 8 . 9 | . . 6
+            1 2 3 | . . . | . . .
+            . . . | 6 . 8 | . . .
+            - - - + - - - + - - -
+            7 . . | . . 1 | . . 2
+            . . . | 4 5 . | . . 9
+            . . . | . . . | 6 . .
+            - - - + - - - + - - -
+            . . . | . 7 . | . . .
+            . . 1 | . 4 6 | . . .
+            . . 3 | . . . | . . .
+        ",
+    )
+    .unwrap();
+    let actual_asgmts = AsgmtSet::simple_from_grid(&grid);
+    let remaining_asgmts = AsgmtSet::possibles_from_grid(&grid) - actual_asgmts;
+    let sukaku_map = SukakuMap::from_grid(&grid);
+    let mut facts = Vec::new();
+    assert!(sukaku_map.has_error());
+    find_errors(&remaining_asgmts, &actual_asgmts, &sukaku_map, &mut facts);
+    assert_eq!(
+      facts,
+      vec![
+        Fact::NoLoc {
+          num: N6,
+          unit: B1.to_unit()
+        },
+        Fact::NoLoc {
+          num: N8,
+          unit: B1.to_unit()
+        },
+        Fact::Conflict {
+          num: N8,
+          unit: B2.to_unit(),
+          locs: loc_set![L14, L36]
+        },
+        Fact::NoLoc {
+          num: N6,
+          unit: R2.to_unit()
+        },
+        Fact::Conflict {
+          num: N3,
+          unit: C3.to_unit(),
+          locs: loc_set![L23, L93]
+        },
+        Fact::NoNum { loc: L25 }
+      ]
     );
   }
 

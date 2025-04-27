@@ -137,7 +137,7 @@ pub struct FactFinder {
   remaining_asgmts: AsgmtSet,
 
   /// The assignments that have been made.
-  asgmts: AsgmtSet,
+  actual_asgmts: AsgmtSet,
 
   /// An alternate view of `remaining_asgmts` that is more efficient for some
   /// operations.  Also tracks errors.
@@ -152,24 +152,27 @@ impl FactFinder {
     let sukaku_map = internals::SukakuMap::from_grid(grid);
     Self {
       remaining_asgmts: possible_asgmts - simple_asgmts,
-      asgmts: simple_asgmts,
+      actual_asgmts: simple_asgmts,
       sukaku_map,
     }
   }
 
-  /// Returns the current set of possible assignments.
-  pub fn possible_asgmts(&self) -> &AsgmtSet {
-    &self.remaining_asgmts
-  }
-
   /// Returns the current state of the grid.
-  pub fn grid(&self) -> &AsgmtSet {
-    &self.asgmts
+  pub fn to_grid(&self) -> Grid {
+    self.actual_asgmts.to_grid()
   }
 
   /// Returns the facts deducible from the current state of the grid.
   pub fn deduce(&self) -> Vec<Fact> {
     let mut facts = Vec::new();
+    if self.sukaku_map.has_error() {
+      internals::find_errors(
+        &self.remaining_asgmts,
+        &self.actual_asgmts,
+        &self.sukaku_map,
+        &mut facts,
+      );
+    }
     internals::find_overlaps(&self.remaining_asgmts, &mut facts);
     internals::find_locked_sets(&self.remaining_asgmts, &self.sukaku_map, &mut facts);
     internals::find_hidden_singles(&self.remaining_asgmts, &mut facts);
@@ -184,7 +187,7 @@ impl FactFinder {
     if let Some(asgmt) = fact.as_asgmt() {
       self.remaining_asgmts.apply(asgmt);
       self.remaining_asgmts.remove(asgmt);
-      self.asgmts.insert(asgmt);
+      self.actual_asgmts.insert(asgmt);
       self.sukaku_map.apply(asgmt);
     } else {
       let eliminations = fact.as_eliminations();

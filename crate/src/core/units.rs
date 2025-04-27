@@ -55,6 +55,12 @@ pub enum Unit {
   Col(Col),
 }
 
+impl Unit {
+  pub fn all() -> impl Iterator<Item = Self> {
+    UnitId::all().map(|id| id.to_unit())
+  }
+}
+
 pub trait UnitTrait {
   /// Tells which generic unit this is.
   fn unit_id(self) -> UnitId;

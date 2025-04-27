@@ -135,17 +135,14 @@ impl Grid {
   /// This grid's state: solved, incomplete, or broken.
   pub fn state(&self) -> GridState {
     let mut broken = LocSet::new();
-    // Look for repeated numerals in every unit.
-    for id in UnitId::all() {
-      let mut where_seen: [Option<Loc>; 9] = [None; 9];
-      for loc in id.locs().iter() {
-        if let Some(num) = self[loc] {
-          if let Some(first_loc) = where_seen[num.index()] {
-            broken.insert(loc);
-            broken.insert(first_loc);
-          } else {
-            where_seen[num.index()] = Some(loc);
-          }
+    let asgmts = AsgmtSet::simple_from_grid(self);
+    for unit in Unit::all() {
+      let unit_locs = unit.locs();
+      for num in Num::all() {
+        let locs = asgmts.num_locs(num) & unit_locs;
+        if locs.len() > 1 {
+          // More than one assignment for this numeral in this unit.
+          broken |= locs;
         }
       }
     }
@@ -372,6 +369,8 @@ impl fmt::Debug for SolvedGrid {
 
 #[cfg(test)]
 mod tests {
+  use crate::loc_set;
+
   use super::*;
   use std::str::FromStr;
 
@@ -460,10 +459,7 @@ mod tests {
             . . 3 | . . . | . . .",
     )
     .unwrap();
-    assert_eq!(
-      GridState::Broken(L14.as_set() | L36.as_set() | L23.as_set() | L93.as_set()),
-      g.state()
-    );
+    assert_eq!(GridState::Broken(loc_set! {L14, L36, L23, L93}), g.state());
     let g = Grid::from_str(
       r"
             . . . | 8 . 9 | . . 6
