@@ -89,9 +89,9 @@ impl Fact {
         }
         for num in Num::all() {
           if nums.contains(num) {
-            answer.union_in_place(num, *locs);
-          } else {
             answer.union_in_place(num, outside_locs);
+          } else {
+            answer.union_in_place(num, *locs);
           }
         }
         answer
@@ -99,7 +99,6 @@ impl Fact {
       Fact::Implication {
         antecedents,
         consequent,
-        ..
       } => {
         let mut answer = consequent.as_eliminations();
         for antecedent in antecedents {
@@ -126,6 +125,15 @@ impl Fact {
       Fact::NoLoc { .. } | Fact::NoNum { .. } | Fact::Conflict { .. } => true,
       Fact::Implication { consequent, .. } => consequent.is_error(),
       _ => false,
+    }
+  }
+
+  /// Finds the "nub" of this fact, which is the fact itself if it is not an
+  /// implication, or the nub of the consequent.
+  pub fn nub(&self) -> &Fact {
+    match self {
+      Fact::Implication { consequent, .. } => consequent.nub(),
+      _ => self,
     }
   }
 }
@@ -164,20 +172,10 @@ impl FactFinder {
 
   /// Returns the facts deducible from the current state of the grid.
   pub fn deduce(&self) -> Vec<Fact> {
-    let mut facts = Vec::new();
-    if self.sukaku_map.has_error() {
-      internals::find_errors(
-        &self.remaining_asgmts,
-        &self.actual_asgmts,
-        &self.sukaku_map,
-        &mut facts,
-      );
-    }
-    internals::find_overlaps(&self.remaining_asgmts, &mut facts);
-    internals::find_locked_sets(&self.remaining_asgmts, &self.sukaku_map, &mut facts);
-    internals::find_hidden_singles(&self.remaining_asgmts, &mut facts);
-    internals::find_naked_singles(&self.sukaku_map, &mut facts);
-    facts
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.collect();
+    collector.facts
   }
 
   /// Applies the given fact to the grid and updates the possible assignments.

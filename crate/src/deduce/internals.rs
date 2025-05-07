@@ -13,19 +13,78 @@ use seq_macro::seq;
 
 use super::Fact;
 
-pub fn find_errors(
-  remaining_asgmts: &AsgmtSet,
-  actual_asgmts: &AsgmtSet,
-  sukaku_map: &SukakuMap,
-  facts: &mut Vec<Fact>,
-) {
-  let possible_asgmts = *remaining_asgmts | *actual_asgmts;
+pub struct Collector {
+  pub remaining_asgmts: AsgmtSet,
+  pub actual_asgmts: AsgmtSet,
+  pub sukaku_map: SukakuMap,
+  pub facts: Vec<Fact>,
+  pub found: HashMap<Fact, ()>,
+}
+
+impl Collector {
+  pub fn new(remaining_asgmts: AsgmtSet, actual_asgmts: AsgmtSet, sukaku_map: SukakuMap) -> Self {
+    Self {
+      remaining_asgmts,
+      actual_asgmts,
+      sukaku_map,
+      facts: Vec::new(),
+      found: HashMap::new(),
+    }
+  }
+
+  pub fn add_fact(&mut self, fact: Fact) {
+    self
+      .found
+      .entry(fact)
+      .or_insert_with_key(|fact| self.facts.push(fact.clone()));
+  }
+
+  pub fn collect(&mut self) {
+    let mut antecedent_range = 0..0;
+    loop {
+      let start = self.facts.len();
+      if self.sukaku_map.has_error() {
+        find_errors(self);
+      }
+      let eliminations_start = self.facts.len();
+      find_overlaps(self);
+      find_locked_sets(self);
+      let eliminations_end = self.facts.len();
+      find_hidden_singles(self);
+      find_naked_singles(self);
+
+      let mut eliminations = AsgmtSet::new();
+      for fact in self.facts[eliminations_start..eliminations_end].iter() {
+        eliminations |= fact.as_eliminations();
+      }
+
+      if !antecedent_range.is_empty() {
+        let antecedents = self.facts[antecedent_range].to_vec();
+        for fact in self.facts[start..].iter_mut() {
+          *fact = Fact::Implication {
+            antecedents: antecedents.clone(),
+            consequent: Box::new(fact.clone()),
+          };
+        }
+      }
+      if eliminations_start == eliminations_end {
+        break;
+      }
+      antecedent_range = eliminations_start..eliminations_end;
+      self.remaining_asgmts -= eliminations;
+      self.sukaku_map.eliminate(&eliminations);
+    }
+  }
+}
+
+pub fn find_errors(collector: &mut Collector) {
+  let possible_asgmts = collector.remaining_asgmts | collector.actual_asgmts;
   for unit in Unit::all() {
     let unit_locs = unit.locs();
     for num in Num::all() {
-      let actual_locs = actual_asgmts.num_locs(num) & unit_locs;
+      let actual_locs = collector.actual_asgmts.num_locs(num) & unit_locs;
       if actual_locs.len() > 1 {
-        facts.push(Fact::Conflict {
+        collector.add_fact(Fact::Conflict {
           num,
           unit,
           locs: actual_locs,
@@ -33,59 +92,49 @@ pub fn find_errors(
       }
       let possible_locs = possible_asgmts.num_locs(num) & unit_locs;
       if possible_locs.is_empty() {
-        facts.push(Fact::NoLoc { num, unit });
+        collector.add_fact(Fact::NoLoc { num, unit });
       }
     }
   }
-  for loc in (!actual_asgmts.naked_singles()).iter() {
-    if sukaku_map[loc].is_empty() {
-      facts.push(Fact::NoNum { loc });
+  for loc in (!collector.actual_asgmts.naked_singles()).iter() {
+    if collector.sukaku_map[loc].is_empty() {
+      collector.add_fact(Fact::NoNum { loc });
     }
   }
 }
 
-pub fn find_overlaps(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
+pub fn find_overlaps(collector: &mut Collector) {
   for num in Num::all() {
-    let num_locs = remaining_asgmts.num_locs(num);
+    let num_locs = collector.remaining_asgmts.num_locs(num);
     for band in Band::all() {
       let band_locs = num_locs.band_locs(band);
       let blk_row_bits = band_locs_to_blk_rows(band_locs);
       let blk_col_bits = locs_to_blk_cols(num_locs, band);
-      blk_row_bits_to_overlaps(blk_row_bits, num, band, facts);
-      blk_col_bits_to_overlaps(blk_col_bits, num, band, facts);
+      blk_row_bits_to_overlaps(blk_row_bits, num, band, collector);
+      blk_col_bits_to_overlaps(blk_col_bits, num, band, collector);
     }
   }
 }
 
 pub const MAX_SET_SIZE: i32 = 4;
 
-pub fn find_locked_sets(
-  remaining_asgmts: &AsgmtSet,
-  sukaku_map: &SukakuMap,
-  facts: &mut Vec<Fact>,
-) {
+pub fn find_locked_sets(collector: &mut Collector) {
   let mut set_state = SetState::new();
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
-      find_hidden_sets(
-        remaining_asgmts,
-        facts,
-        &mut set_state,
-        unit_id.to_unit(),
-        size,
-      );
+      find_hidden_sets(collector, &mut set_state, unit_id.to_unit(), size);
     }
   }
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
-      find_naked_sets(sukaku_map, facts, &mut set_state, unit_id.to_unit(), size);
+      find_naked_sets(collector, &mut set_state, unit_id.to_unit(), size);
     }
   }
 }
 
-pub fn find_hidden_singles(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
+pub fn find_hidden_singles(collector: &mut Collector) {
   for num in Num::all() {
-    let num_locs = remaining_asgmts.num_locs(num);
+    let num_locs = collector.remaining_asgmts.num_locs(num);
     let mut units_to_check = UnitSet::default();
     for band in Band::all() {
       let band_locs = num_locs.band_locs(band);
@@ -103,20 +152,20 @@ pub fn find_hidden_singles(remaining_asgmts: &AsgmtSet, facts: &mut Vec<Fact>) {
           continue;
         }
         locs_found.insert(loc);
-        facts.push(Fact::SingleLoc { num, unit, loc });
+        collector.add_fact(Fact::SingleLoc { num, unit, loc });
       }
     }
   }
 }
 
-pub fn find_naked_singles(sukaku_map: &SukakuMap, facts: &mut Vec<Fact>) {
+pub fn find_naked_singles(collector: &mut Collector) {
   for loc in Loc::all() {
-    let nums = sukaku_map[loc];
+    let nums = collector.sukaku_map[loc];
     if nums.len() != 1 {
       continue;
     }
     for num in nums.iter() {
-      facts.push(Fact::SingleNum { loc, num });
+      collector.add_fact(Fact::SingleNum { loc, num });
     }
   }
 }
@@ -153,9 +202,9 @@ fn blk_col_bit(locs: LocSet, row_band: Band, col_band: Band, blk_line: BlkLine) 
 /// in the given vector.  The bitmap represents the block-rows of the given
 /// row-band; the ones mean that at least one of the locations in the
 /// corresponding block-row is assignable to the given numeral.  
-fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, facts: &mut Vec<Fact>) {
+fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, collector: &mut Collector) {
   for spec in blk_line_bits_to_overlap_specs(blk_row_bits).iter() {
-    facts.push(spec.to_row_band_overlap(num, band));
+    collector.add_fact(spec.to_row_band_overlap(num, band));
   }
 }
 
@@ -163,9 +212,9 @@ fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, facts: &m
 /// facts in the given vector.  The bitmap represents the block-columns of the
 /// given column-band; the ones mean that at least one of the locations in the
 /// corresponding block-column is assignable to the given numeral.
-fn blk_col_bits_to_overlaps(blk_col_bits: Bits9, num: Num, band: Band, facts: &mut Vec<Fact>) {
+fn blk_col_bits_to_overlaps(blk_col_bits: Bits9, num: Num, band: Band, collector: &mut Collector) {
   for spec in blk_line_bits_to_overlap_specs(blk_col_bits).iter() {
-    facts.push(spec.to_col_band_overlap(num, band));
+    collector.add_fact(spec.to_col_band_overlap(num, band));
   }
 }
 
@@ -587,19 +636,13 @@ impl IndexMut<Loc> for SukakuMap {
   }
 }
 
-fn find_hidden_sets(
-  remaining_asgmts: &AsgmtSet,
-  facts: &mut Vec<Fact>,
-  set_state: &mut SetState,
-  unit: Unit,
-  size: i32,
-) {
+fn find_hidden_sets(collector: &mut Collector, set_state: &mut SetState, unit: Unit, size: i32) {
   let unit_locs = unit.locs();
   let mut nums_in_sets = set_state.get_nums(unit);
   let mut nums_to_check = NumSet::default();
   let mut unset_count = 0;
   for num in Num::all() {
-    let possible_size = (remaining_asgmts.num_locs(num) & unit_locs).len();
+    let possible_size = (collector.remaining_asgmts.num_locs(num) & unit_locs).len();
     if possible_size > 1 {
       unset_count += 1;
       if possible_size <= size && !nums_in_sets.contains(num) {
@@ -615,12 +658,12 @@ fn find_hidden_sets(
         if nums_in_sets.contains(*num) {
           continue 'outer;
         }
-        locs |= remaining_asgmts.num_locs(*num) & unit_locs;
+        locs |= collector.remaining_asgmts.num_locs(*num) & unit_locs;
         nums.insert(*num);
       }
       if locs.len() == size {
         let cross_unit = find_overlapping_unit(unit, locs);
-        facts.push(Fact::LockedSet {
+        collector.add_fact(Fact::LockedSet {
           nums,
           unit,
           locs,
@@ -637,19 +680,13 @@ fn find_hidden_sets(
   }
 }
 
-fn find_naked_sets(
-  sukaku_map: &SukakuMap,
-  facts: &mut Vec<Fact>,
-  set_state: &mut SetState,
-  unit: Unit,
-  size: i32,
-) {
+fn find_naked_sets(collector: &mut Collector, set_state: &mut SetState, unit: Unit, size: i32) {
   let unit_locs = unit.locs();
   let mut locs_in_sets = set_state.get_locs(unit);
   let mut locs_to_check = LocSet::default();
   let mut unset_count = 0;
   for loc in unit_locs.iter() {
-    let possible_size = sukaku_map[loc].len();
+    let possible_size = collector.sukaku_map[loc].len();
     if possible_size > 1 {
       unset_count += 1;
       if possible_size <= size && !locs_in_sets.contains(loc) {
@@ -666,11 +703,11 @@ fn find_naked_sets(
           continue 'outer;
         }
         locs.insert(*loc);
-        nums |= sukaku_map[*loc];
+        nums |= collector.sukaku_map[*loc];
       }
       if nums.len() == size {
         let cross_unit = find_overlapping_unit(unit, locs);
-        facts.push(Fact::LockedSet {
+        collector.add_fact(Fact::LockedSet {
           nums,
           unit,
           locs,
@@ -886,6 +923,13 @@ mod tests {
     assert!(sukaku_map.has_error());
   }
 
+  fn make_collector(grid: &Grid) -> Collector {
+    let actual_asgmts = AsgmtSet::simple_from_grid(&grid);
+    let remaining_asgmts = AsgmtSet::possibles_from_grid(&grid) - actual_asgmts;
+    let sukaku_map = SukakuMap::from_grid(&grid);
+    Collector::new(remaining_asgmts, actual_asgmts, sukaku_map)
+  }
+
   #[test]
   fn test_find_errors() {
     let grid = Grid::from_str(
@@ -904,14 +948,11 @@ mod tests {
         ",
     )
     .unwrap();
-    let actual_asgmts = AsgmtSet::simple_from_grid(&grid);
-    let remaining_asgmts = AsgmtSet::possibles_from_grid(&grid) - actual_asgmts;
-    let sukaku_map = SukakuMap::from_grid(&grid);
-    let mut facts = Vec::new();
-    assert!(sukaku_map.has_error());
-    find_errors(&remaining_asgmts, &actual_asgmts, &sukaku_map, &mut facts);
+    let mut collector = make_collector(&grid);
+    assert!(collector.sukaku_map.has_error());
+    find_errors(&mut collector);
     assert_eq!(
-      facts,
+      collector.facts,
       vec![
         Fact::NoLoc {
           num: N6,
@@ -965,11 +1006,10 @@ mod tests {
             . . . | 1 . 6 | 8 . .",
     )
     .unwrap();
-    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
-    let mut facts = Vec::new();
-    find_overlaps(&asgmts, &mut facts);
+    let mut collector = make_collector(&grid);
+    find_overlaps(&mut collector);
     assert_eq!(
-      facts,
+      collector.facts,
       vec![
         make_overlap(N2, B4, C2),
         make_overlap(N2, C1, B7),
@@ -1019,12 +1059,10 @@ mod tests {
         ",
     )
     .unwrap();
-    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
-    let map = SukakuMap::from_grid(&grid);
-    let mut facts = Vec::new();
-    find_locked_sets(&asgmts, &map, &mut facts);
+    let mut collector = make_collector(&grid);
+    find_locked_sets(&mut collector);
     assert_eq!(
-      facts,
+      collector.facts,
       vec![
         make_locked_set(num_set! {N4, N9}, B3, loc_set! {L27, L28}, Some(R2), false),
         make_locked_set(
@@ -1052,12 +1090,10 @@ mod tests {
       locs: transpose,
     }
     .apply(&grid);
-    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
-    let map = SukakuMap::from_grid(&grid);
-    let mut facts = Vec::new();
-    find_locked_sets(&asgmts, &map, &mut facts);
+    let mut collector = make_collector(&grid);
+    find_locked_sets(&mut collector);
     assert_eq!(
-      facts,
+      collector.facts,
       vec![
         make_locked_set(num_set! {N4, N9}, B7, loc_set! {L72, L82}, Some(C2), false),
         make_locked_set(
@@ -1104,11 +1140,10 @@ mod tests {
             . . . | 1 . 6 | 8 . .",
     )
     .unwrap();
-    let asgmts = AsgmtSet::possibles_from_grid(&grid) - AsgmtSet::simple_from_grid(&grid);
-    let mut facts = Vec::new();
-    find_hidden_singles(&asgmts, &mut facts);
+    let mut collector = make_collector(&grid);
+    find_hidden_singles(&mut collector);
     assert_eq!(
-      facts,
+      collector.facts,
       vec![
         make_hidden_single(N2, C7, L37),
         make_hidden_single(N5, B3, L19),
@@ -1138,9 +1173,31 @@ mod tests {
             . . . | 1 . 6 | 8 . .",
     )
     .unwrap();
-    let map = SukakuMap::from_grid(&grid);
-    let mut facts = Vec::new();
-    find_naked_singles(&map, &mut facts);
-    assert_eq!(facts, vec![make_naked_single(L64, N3),]);
+    let mut collector = make_collector(&grid);
+    find_naked_singles(&mut collector);
+    assert_eq!(collector.facts, vec![make_naked_single(L64, N3),]);
+  }
+
+  //#[test]
+  fn test_collector() {
+    let grid = Grid::from_str(
+      r"
+            . . 2 | 6 . . | . . .
+            1 6 . | . 5 . | 9 . .
+            5 . 3 | 4 . . | . . .
+            - - - + - - - + - - -
+            4 . . | . . . | . . 3
+            . . . | 7 . . | . 2 .
+            9 . . | . . . | 5 . 8
+            - - - + - - - + - - -
+            . . . | . . 4 | 1 . .
+            6 . . | 2 . . | . 5 .
+            . . . | 1 . 6 | 8 . .
+        ",
+    )
+    .unwrap();
+    let mut collector = make_collector(&grid);
+    collector.collect();
+    assert_eq!(collector.facts, vec![],)
   }
 }
