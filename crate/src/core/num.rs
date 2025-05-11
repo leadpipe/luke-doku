@@ -256,4 +256,21 @@ mod tests {
     set2 ^= N8.as_set();
     check_eq(NumSet::all() & !(set1 ^ set2), &[N3, N4, N5, N6, N9]);
   }
+
+  #[test]
+  fn partial_cmp() {
+    let set1 = num_set!(N1, N2, N3);
+    let set2 = num_set!(N1, N2, N3, N4);
+    assert!(set1 < set2);
+    assert!(set1 <= set2);
+    assert!(set2 > set1);
+    assert!(set2 >= set1);
+    assert_eq!(set1.partial_cmp(&set2), Some(std::cmp::Ordering::Less));
+    assert_eq!(set2.partial_cmp(&set1), Some(std::cmp::Ordering::Greater));
+    let set3 = num_set!(N1, N2, N4);
+    assert_eq!(set1.partial_cmp(&set3), None);
+    assert_eq!(set3.partial_cmp(&set1), None);
+    assert!(!(set1 < set3));
+    assert!(!(set3 < set1));
+  }
 }

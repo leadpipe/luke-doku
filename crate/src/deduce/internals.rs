@@ -40,7 +40,10 @@ impl Collector {
   }
 
   pub fn collect(&mut self) {
-    let mut antecedent_range = 0..0;
+    let mut antecedents: Vec<Fact> = vec![];
+    let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
+    let mut remaining_asgmts = self.remaining_asgmts;
+    let mut sukaku_map = self.sukaku_map;
     loop {
       let start = self.facts.len();
       if self.sukaku_map.has_error() {
@@ -53,16 +56,21 @@ impl Collector {
       find_hidden_singles(self);
       find_naked_singles(self);
 
-      let mut eliminations = AsgmtSet::new();
-      for fact in self.facts[eliminations_start..eliminations_end].iter() {
-        eliminations |= fact.as_eliminations();
-      }
+      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
 
-      if !antecedent_range.is_empty() {
-        let antecedents = self.facts[antecedent_range].to_vec();
+      if !antecedents.is_empty() {
         for fact in self.facts[start..].iter_mut() {
           *fact = Fact::Implication {
-            antecedents: antecedents.clone(),
+            antecedents: narrow_antecedents(
+              &fact,
+              antecedents.as_slice(),
+              &antecedent_eliminations,
+              remaining_asgmts,
+              sukaku_map,
+            ),
             consequent: Box::new(fact.clone()),
           };
         }
@@ -70,9 +78,143 @@ impl Collector {
       if eliminations_start == eliminations_end {
         break;
       }
-      antecedent_range = eliminations_start..eliminations_end;
-      self.remaining_asgmts -= eliminations;
-      self.sukaku_map.eliminate(&eliminations);
+      antecedents = self.facts[eliminations_start..eliminations_end].to_vec();
+      antecedent_eliminations = eliminations.clone();
+      remaining_asgmts = self.remaining_asgmts;
+      sukaku_map = self.sukaku_map;
+      let all_eliminated_asgmts = eliminations.iter().fold(AsgmtSet::new(), |acc, x| acc | *x);
+      self.remaining_asgmts -= all_eliminated_asgmts;
+      self.sukaku_map.eliminate(&all_eliminated_asgmts);
+    }
+  }
+}
+
+fn narrow_antecedents(
+  consequent: &Fact,
+  antecedents: &[Fact],
+  antecedent_eliminations: &[AsgmtSet],
+  remaining_asgmts: AsgmtSet,
+  sukaku_map: SukakuMap,
+) -> Vec<Fact> {
+  let mut result = Vec::new();
+  let mut result_eliminations = AsgmtSet::new();
+  let uses_sukaku_map = consequent.uses_sukaku_map();
+  for index in (0..antecedents.len()).rev() {
+    let antecedent = &antecedents[index];
+    if consequent.might_be_revealed_by_eliminations(&antecedent_eliminations[index]) {
+      let prior_antecedents_eliminations = antecedent_eliminations[0..index]
+        .iter()
+        .fold(result_eliminations, |acc, x| acc | *x);
+      let remaining_asgmts = remaining_asgmts - prior_antecedents_eliminations;
+      let mut sukaku_map = sukaku_map;
+      if uses_sukaku_map {
+        sukaku_map.eliminate(&prior_antecedents_eliminations);
+      }
+      if !consequent.is_implied_by(&remaining_asgmts, &sukaku_map) {
+        // The consequent requires this antecedent.
+        result.push(antecedent.clone());
+        result_eliminations |= antecedent_eliminations[index];
+      }
+    }
+  }
+  result.reverse();
+  result
+}
+
+impl Fact {
+  fn might_be_revealed_by_eliminations(&self, eliminations: &AsgmtSet) -> bool {
+    match self {
+      Fact::SingleLoc { num, unit, .. }
+      | Fact::NoLoc { num, unit }
+      | Fact::Overlap { num, unit, .. } => {
+        return !(eliminations.num_locs(*num) & unit.locs()).is_empty();
+      }
+      Fact::SingleNum { loc, .. } | Fact::NoNum { loc } => {
+        for num in Num::all() {
+          if eliminations.num_locs(num).contains(*loc) {
+            return true;
+          }
+        }
+      }
+      Fact::LockedSet {
+        nums,
+        unit,
+        locs,
+        is_naked,
+        ..
+      } => {
+        // For naked sets, we check if the _other_ numerals are eliminated from _these_ locations.
+        // For hidden sets, we check if _these_ numerals are eliminated from the _other_ locations.
+        let nums_to_check = if *is_naked { !*nums } else { *nums };
+        let locs_to_check = if *is_naked {
+          *locs
+        } else {
+          unit.locs() - *locs
+        };
+        for num in nums_to_check.iter() {
+          if !(eliminations.num_locs(num) & locs_to_check).is_empty() {
+            return true;
+          }
+        }
+      }
+
+      Fact::SpeculativeAssignment { .. } | Fact::Conflict { .. } | Fact::Implication { .. } => (),
+    }
+    false
+  }
+
+  fn uses_sukaku_map(&self) -> bool {
+    match self {
+      Fact::SingleNum { .. } | Fact::NoNum { .. } => true,
+      Fact::LockedSet { is_naked, .. } => *is_naked,
+      _ => false,
+    }
+  }
+
+  fn is_implied_by(&self, remaining_asgmts: &AsgmtSet, sukaku_map: &SukakuMap) -> bool {
+    match self {
+      Fact::SingleLoc { num, unit, loc } => {
+        (remaining_asgmts.num_locs(*num) & unit.locs()) == loc.as_set()
+      }
+      Fact::SingleNum { loc, num } => sukaku_map[*loc] == num.as_set(),
+      Fact::SpeculativeAssignment { .. } => false,
+      Fact::NoLoc { num, unit } => (remaining_asgmts.num_locs(*num) & unit.locs()).is_empty(),
+      Fact::NoNum { loc } => sukaku_map[*loc].is_empty(),
+      Fact::Conflict { .. } => {
+        // Conflicts are only implied by actual assignments.
+        false
+      }
+      Fact::Overlap {
+        num,
+        unit,
+        cross_unit,
+      } => ((remaining_asgmts.num_locs(*num) & unit.locs()) - cross_unit.locs()).is_empty(),
+      Fact::LockedSet {
+        nums,
+        unit,
+        locs,
+        is_naked,
+        ..
+      } => {
+        if *is_naked {
+          for loc in locs.iter() {
+            if !(sukaku_map[loc] <= *nums) {
+              return false;
+            }
+          }
+        } else {
+          for num in nums.iter() {
+            if !((remaining_asgmts.num_locs(num) & unit.locs()) <= *locs) {
+              return false;
+            }
+          }
+        }
+        true
+      }
+      Fact::Implication { .. } => {
+        // We don't call this method on implications.
+        false
+      }
     }
   }
 }
@@ -1178,7 +1320,17 @@ mod tests {
     assert_eq!(collector.facts, vec![make_naked_single(L64, N3),]);
   }
 
-  //#[test]
+  fn make_implication(
+    antecedents: Vec<Fact>,
+    consequent: Fact,
+  ) -> Fact {
+    Fact::Implication {
+      antecedents,
+      consequent: Box::new(consequent),
+    }
+  }
+
+  #[test]
   fn test_collector() {
     let grid = Grid::from_str(
       r"
@@ -1198,6 +1350,55 @@ mod tests {
     .unwrap();
     let mut collector = make_collector(&grid);
     collector.collect();
-    assert_eq!(collector.facts, vec![],)
+    let set1 = make_locked_set(
+          num_set! {N5, N9},
+          C4,
+          loc_set! {L44, L74},
+          None::<Blk>,
+          false
+        );
+    let set2 = make_locked_set(
+          num_set! {N3, N7, N8, N9},
+          B8,
+          loc_set! {L75, L85, L86, L95},
+          None::<Row>,
+          true
+        );
+    let set3 = make_locked_set(
+          num_set! {N3, N4, N6, N7},
+          C7,
+          loc_set! {L17, L47, L57, L87},
+          None::<Blk>,
+          true
+        );
+    assert_eq!(
+      collector.facts,
+      vec![
+        make_overlap(N2, B4, C2),
+        make_overlap(N2, C1, B7),
+        make_overlap(N2, B9, C9),
+        make_overlap(N2, C7, B3),
+        make_overlap(N5, B8, C4),
+        make_overlap(N5, C6, B5),
+        make_overlap(N5, B8, R7),
+        make_overlap(N5, R9, B7),
+        make_overlap(N9, B1, C2),
+        make_overlap(N9, C3, B7),
+        set1.clone(),
+        set2.clone(),
+        set3.clone(),
+        make_hidden_single(N2, C7, L37),
+        make_hidden_single(N5, B3, L19),
+        make_hidden_single(N5, B8, L74),
+        make_naked_single(L64, N3),
+        make_implication(vec![set3.clone()], make_overlap(N6, C7, B6)),
+        make_implication(vec![set1.clone()], make_overlap(N8, C4, B2)),
+        make_implication(vec![set2.clone()], make_overlap(N9, C4, B5)),
+        make_implication(vec![set1.clone()], make_hidden_single(N8, C4, L24)),
+        make_implication(vec![set2.clone()], make_hidden_single(N9, C4, L44)),
+        make_implication(vec![set3.clone()], make_naked_single(L37, N2)),
+        make_implication(vec![set2.clone()], make_naked_single(L74, N5)),
+      ],
+    )
   }
 }
