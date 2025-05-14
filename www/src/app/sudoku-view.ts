@@ -510,6 +510,9 @@ export class SudokuView extends LitElement implements GridContainer {
       .multi .solution {
         opacity: 40%;
       }
+      .multi .solution.with-trail {
+        opacity: 10%;
+      }
       svg:not(.trail-active) .multi .solution {
         opacity: 90%;
       }
@@ -700,7 +703,7 @@ export class SudokuView extends LitElement implements GridContainer {
     }
     const answer = this.input?.renderHoverLoc() ?? [];
     const brokenLocs = game.marks.asGrid().brokenLocs();
-    this.pushSolutionCells(game.marks, brokenLocs, answer);
+    this.pushSolutionCells(game.marks, brokenLocs, game.trails, answer);
     this.pushTrails(game.trails, answer);
     return answer;
   }
@@ -736,6 +739,7 @@ export class SudokuView extends LitElement implements GridContainer {
   private pushSolutionCells(
     marks: ReadonlyMarks,
     brokenLocs: Set<Loc>,
+    trails: ReadonlyTrails,
     answer: TemplateResult[],
   ): void {
     const {cellCenter} = this;
@@ -751,17 +755,22 @@ export class SudokuView extends LitElement implements GridContainer {
           })}">${nums.values().next().value}</text>`);
       } else {
         const {cellSize} = this;
-        const cls =
+        const sizeClass =
           size > 5 ? 'xsmall'
           : size > 3 ? 'small'
           : size > 2 ? 'medium'
           : 'large';
+        const cls = {
+          solution: true,
+          [sizeClass]: true,
+          'with-trail': !!trails.activeTrail?.get(loc),
+        };
         answer.push(svg`
           <foreignObject
             x=${x - cellSize / 2} y=${y - cellSize / 2}
             width=${cellSize} height=${cellSize}>
             <div class="multi">
-              <div class="solution ${cls}">${[...nums].join('')}</div>
+              <div class=${classMap(cls)}>${[...nums].join('')}</div>
             </div>
           </foreignObject>
         `);
