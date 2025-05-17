@@ -9,6 +9,7 @@ use crate::define_set_operators;
 use paste::paste;
 use seq_macro::seq;
 use serde::Serialize;
+use wasm_bindgen::prelude::wasm_bindgen;
 use std::fmt;
 use wasm_bindgen::convert::FromWasmAbi;
 use wasm_bindgen::convert::IntoWasmAbi;
@@ -252,6 +253,12 @@ impl IntoWasmAbi for Loc {
   }
 }
 
+/// Returns a location's peers as a boxed array of indices.
+#[wasm_bindgen(js_name = locPeers)]
+pub fn loc_peers(loc: Loc) -> Box<[u8]> {
+  loc.peers().as_boxed_indices()
+}
+
 pub const BAND1: Band = Band(0);
 pub const BAND2: Band = Band(1);
 pub const BAND3: Band = Band(2);
@@ -322,6 +329,16 @@ impl LocSet {
         .smallest_value()
         .map(|value| Loc::new_unchecked(27 * band.get() + value as i8))
     }
+  }
+
+  /// Converts this set into a form that can be returned to JS as an array of
+  /// loc indices.
+  pub fn as_boxed_indices(&self) -> Box<[u8]> {
+    self
+      .iter()
+      .map(|loc| loc.index() as u8)
+      .collect::<Vec<_>>()
+      .into_boxed_slice()
   }
 }
 

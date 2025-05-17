@@ -528,6 +528,9 @@ export class SudokuView extends LitElement implements GridContainer {
       .solution.xsmall {
         font-size: 0.48em;
       }
+      .solution .negated {
+        text-decoration: underline;
+      }
     `,
   ];
 
@@ -742,7 +745,7 @@ export class SudokuView extends LitElement implements GridContainer {
     trails: ReadonlyTrails,
     answer: TemplateResult[],
   ): void {
-    const {cellCenter} = this;
+    const {cellCenter, input} = this;
     for (const loc of Loc.ALL) {
       const nums = marks.getNums(loc);
       if (!nums) continue;
@@ -770,7 +773,11 @@ export class SudokuView extends LitElement implements GridContainer {
             x=${x - cellSize / 2} y=${y - cellSize / 2}
             width=${cellSize} height=${cellSize}>
             <div class="multi">
-              <div class=${classMap(cls)}>${[...nums].join('')}</div>
+              <div class=${classMap(cls)}>${[...nums].map(num =>
+                input?.isNegated(num, loc) ?
+                  svg`<span class="negated">${num}</span>`
+                : num,
+              )}</div>
             </div>
           </foreignObject>
         `);

@@ -94,11 +94,7 @@ export class Grid {
     const grid = this.toWasm();
     try {
       const broken = grid.brokenLocs();
-      if (!broken) return new Set();
-      const locs = Array.prototype.map.apply(broken, [
-        index => Loc.of(index),
-      ]) as Loc[];
-      return new Set(locs);
+      return broken ? new Set(Loc.arrayFromWasm(broken)) : new Set();
     } finally {
       grid.free();
     }

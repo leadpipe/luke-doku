@@ -1,3 +1,4 @@
+import * as wasm from 'luke-doku-rust';
 import {checkIntRange} from './ints';
 import {iota} from './iota';
 
@@ -22,6 +23,11 @@ export class Loc extends Object {
     return `(${this.row + 1}, ${this.col + 1})`;
   }
 
+  /** The "peer" locations, that belong to the same row, column, or block. */
+  getPeers(): readonly Loc[] {
+    return Loc.arrayFromWasm(wasm.locPeers(this.index));
+  }
+
   /**
    * The 81 locations of a Sudoku grid, in row-major order.
    */
@@ -38,5 +44,12 @@ export class Loc extends Object {
     const row = checkIntRange(rowOrIndex, 0, 9);
     const index = row * 9 + checkIntRange(col, 0, 9);
     return Loc.ALL[index];
+  }
+
+  static arrayFromWasm(indices: Uint8Array): Loc[] {
+    return Array.prototype.map.call(
+      indices,
+      (i: number) => Loc.ALL[i],
+    ) as Loc[];
   }
 }
