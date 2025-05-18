@@ -924,7 +924,7 @@ fn find_overlapping_unit(unit: Unit, locs: LocSet) -> Option<Unit> {
 
 #[cfg(test)]
 mod tests {
-  use std::str::FromStr;
+  use std::{fmt, str::FromStr};
 
   use super::*;
   use crate::{
@@ -1320,10 +1320,7 @@ mod tests {
     assert_eq!(collector.facts, vec![make_naked_single(L64, N3),]);
   }
 
-  fn make_implication(
-    antecedents: Vec<Fact>,
-    consequent: Fact,
-  ) -> Fact {
+  fn make_implication(antecedents: Vec<Fact>, consequent: Fact) -> Fact {
     Fact::Implication {
       antecedents,
       consequent: Box::new(consequent),
@@ -1351,26 +1348,26 @@ mod tests {
     let mut collector = make_collector(&grid);
     collector.collect();
     let set1 = make_locked_set(
-          num_set! {N5, N9},
-          C4,
-          loc_set! {L44, L74},
-          None::<Blk>,
-          false
-        );
+      num_set! {N5, N9},
+      C4,
+      loc_set! {L44, L74},
+      None::<Blk>,
+      false,
+    );
     let set2 = make_locked_set(
-          num_set! {N3, N7, N8, N9},
-          B8,
-          loc_set! {L75, L85, L86, L95},
-          None::<Row>,
-          true
-        );
+      num_set! {N3, N7, N8, N9},
+      B8,
+      loc_set! {L75, L85, L86, L95},
+      None::<Row>,
+      true,
+    );
     let set3 = make_locked_set(
-          num_set! {N3, N4, N6, N7},
-          C7,
-          loc_set! {L17, L47, L57, L87},
-          None::<Blk>,
-          true
-        );
+      num_set! {N3, N4, N6, N7},
+      C7,
+      loc_set! {L17, L47, L57, L87},
+      None::<Blk>,
+      true,
+    );
     assert_eq!(
       collector.facts,
       vec![
@@ -1400,5 +1397,148 @@ mod tests {
         make_implication(vec![set2.clone()], make_naked_single(L74, N5)),
       ],
     )
+  }
+
+  impl fmt::Display for Fact {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+      match self {
+        Fact::SingleLoc { .. } => write!(f, "SingleLoc"),
+        Fact::SingleNum { .. } => write!(f, "SingleNum"),
+        Fact::SpeculativeAssignment { .. } => write!(f, "SpeculativeAssignment"),
+        Fact::NoNum { .. } => write!(f, "NoNum"),
+        Fact::NoLoc { .. } => write!(f, "NoLoc"),
+        Fact::Conflict { .. } => write!(f, "Conflict"),
+        Fact::Overlap { .. } => write!(f, "Overlap"),
+        Fact::LockedSet { .. } => write!(f, "LockedSet"),
+        Fact::Implication {
+          antecedents,
+          consequent,
+        } => {
+          write!(f, "Implication(")?;
+          for (i, antecedent) in antecedents.iter().enumerate() {
+            if i > 0 {
+              write!(f, ", ")?;
+            }
+            write!(f, "{}", antecedent)?;
+          }
+          write!(f, " => {}", consequent)?;
+          write!(f, ")")
+        }
+      }
+    }
+  }
+
+  #[test]
+  fn test_collector_errors() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 8 . 9 | . . 6
+            1 2 3 | . . . | . . .
+            . . . | 6 . 8 | . . .
+            - - - + - - - + - - -
+            7 . . | . . 1 | . . 2
+            . . . | 4 5 . | . . 9
+            . . . | . . . | 6 . .
+            - - - + - - - + - - -
+            . . . | . 7 . | . . .
+            . . 1 | . 4 6 | . . .
+            . . 3 | . . . | . . .
+        ",
+    )
+    .unwrap();
+    let mut collector = make_collector(&grid);
+    collector.collect();
+    assert_eq!(
+      collector.facts.iter().map(|fact| fact.to_string()).collect::<Vec<_>>(),
+      vec![
+        "NoLoc",
+        "NoLoc",
+        "Conflict",
+        "NoLoc",
+        "Conflict",
+        "NoNum",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "Overlap",
+        "LockedSet",
+        "LockedSet",
+        "LockedSet",
+        "LockedSet",
+        "LockedSet",
+        "LockedSet",
+        "SingleLoc",
+        "SingleLoc",
+        "SingleLoc",
+        "Implication(LockedSet => NoLoc)",
+        "Implication(LockedSet => NoLoc)",
+        "Implication(LockedSet, LockedSet => NoLoc)",
+        "Implication(LockedSet => NoLoc)",
+        "Implication(LockedSet, LockedSet => NoNum)",
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => Overlap)",
+        "Implication(LockedSet => Overlap)",
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => Overlap)",
+        "Implication(LockedSet => Overlap)",
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => Overlap)", 
+        "Implication(LockedSet => LockedSet)", 
+        "Implication(LockedSet => LockedSet)", 
+        "Implication(LockedSet, LockedSet => LockedSet)", 
+        "Implication(LockedSet => LockedSet)", 
+        "Implication(LockedSet => LockedSet)", 
+        "Implication(LockedSet => SingleLoc)", 
+        "Implication(LockedSet => SingleLoc)", 
+        "Implication(LockedSet => SingleLoc)", 
+        "Implication(LockedSet => SingleLoc)", 
+        "Implication(LockedSet => SingleNum)", 
+        "Implication(LockedSet => SingleNum)", 
+        "Implication(LockedSet => SingleNum)", 
+        "Implication(LockedSet => SingleNum)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleLoc)", 
+        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleNum)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => NoNum)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => NoNum)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => NoNum)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => LockedSet)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => SingleLoc)", 
+        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => SingleLoc)", 
+        "Implication(Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet) => NoLoc)", 
+        "Implication(Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet) => NoLoc)"
+      ]
+    );
   }
 }
