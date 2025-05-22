@@ -9,13 +9,13 @@ use crate::define_set_operators;
 use paste::paste;
 use seq_macro::seq;
 use serde::Serialize;
-use wasm_bindgen::prelude::wasm_bindgen;
 use std::fmt;
 use wasm_bindgen::convert::FromWasmAbi;
 use wasm_bindgen::convert::IntoWasmAbi;
 use wasm_bindgen::describe::inform;
 use wasm_bindgen::describe::WasmDescribe;
 use wasm_bindgen::describe::I8;
+use wasm_bindgen::prelude::wasm_bindgen;
 
 define_id_types! {
     /// Identifies one of the 81 locations in a Sudoku grid.
