@@ -246,14 +246,49 @@ pub fn find_errors(collector: &mut Collector) {
 }
 
 pub fn find_overlaps(collector: &mut Collector) {
+  // Note: this mimics the logic in `collect` but only for overlaps.
+  let mut remaining_asgmts = collector.remaining_asgmts;
+  let mut prev_remaining_asgmts = collector.remaining_asgmts;
   for num in Num::all() {
-    let num_locs = collector.remaining_asgmts.num_locs(num);
-    for band in Band::all() {
-      let band_locs = num_locs.band_locs(band);
-      let blk_row_bits = band_locs_to_blk_rows(band_locs);
-      let blk_col_bits = locs_to_blk_cols(num_locs, band);
-      blk_row_bits_to_overlaps(blk_row_bits, num, band, collector);
-      blk_col_bits_to_overlaps(blk_col_bits, num, band, collector);
+    let mut antecedents: Vec<Fact> = vec![];
+    let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
+    loop {
+      let start = collector.facts.len();
+      let num_locs = remaining_asgmts.num_locs(num);
+      for band in Band::all() {
+        let band_locs = num_locs.band_locs(band);
+        let blk_row_bits = band_locs_to_blk_rows(band_locs);
+        let blk_col_bits = locs_to_blk_cols(num_locs, band);
+        blk_row_bits_to_overlaps(blk_row_bits, num, band, collector);
+        blk_col_bits_to_overlaps(blk_col_bits, num, band, collector);
+      }
+      let eliminations: Vec<AsgmtSet> = collector.facts[start..]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+      if !antecedents.is_empty() {
+        for fact in collector.facts[start..].iter_mut() {
+          *fact = Fact::Implication {
+            antecedents: narrow_antecedents(
+              &fact,
+              antecedents.as_slice(),
+              &antecedent_eliminations,
+              prev_remaining_asgmts,
+              collector.sukaku_map,
+            ),
+            consequent: Box::new(fact.clone()),
+          };
+        }
+      }
+      if start == collector.facts.len() {
+        break;
+      }
+      antecedents = collector.facts[start..].to_vec();
+      antecedent_eliminations = eliminations.clone();
+      prev_remaining_asgmts = remaining_asgmts;
+      for asgmts in eliminations.iter() {
+        remaining_asgmts -= *asgmts;
+      }
     }
   }
 }
@@ -924,13 +959,12 @@ fn find_overlapping_unit(unit: Unit, locs: LocSet) -> Option<Unit> {
 
 #[cfg(test)]
 mod tests {
-  use std::{fmt, str::FromStr};
-
   use super::*;
   use crate::{
     loc_set, num_set,
     permute::{GridPermutation, GroupElement, LocPermutation, NumPermutation},
   };
+  use std::str::FromStr;
 
   #[test]
   fn test_locs_to_blk_cols() {
@@ -1135,36 +1169,27 @@ mod tests {
   fn test_find_overlaps() {
     let grid = Grid::from_str(
       r"
-            . . 2 | 6 . . | . . .
-            1 6 . | . 5 . | 9 . .
-            5 . 3 | 4 . . | . . .
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
             - - - + - - - + - - -
-            4 . . | . . . | . . 3
-            . . . | 7 . . | . 2 .
-            9 . . | . . . | 5 . 8
+            . 3 . | 2 . 6 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 4 | . . .
             - - - + - - - + - - -
-            . . . | . . 4 | 1 . .
-            6 . . | 2 . . | . 5 .
-            . . . | 1 . 6 | 8 . .",
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
     )
     .unwrap();
     let mut collector = make_collector(&grid);
     find_overlaps(&mut collector);
-    assert_eq!(
-      collector.facts,
-      vec![
-        make_overlap(N2, B4, C2),
-        make_overlap(N2, C1, B7),
-        make_overlap(N2, B9, C9),
-        make_overlap(N2, C7, B3),
-        make_overlap(N5, B8, C4),
-        make_overlap(N5, C6, B5),
-        make_overlap(N5, B8, R7),
-        make_overlap(N5, R9, B7),
-        make_overlap(N9, B1, C2),
-        make_overlap(N9, C3, B7),
-      ]
-    );
+    let o1 = make_overlap(N1, B2, C5);
+    let o2 = make_implication(vec![o1.clone()], make_overlap(N1, B5, R5));
+    let o3 = make_implication(vec![o2.clone()], make_overlap(N1, B4, C3));
+    let o4 = make_implication(vec![o2.clone()], make_overlap(N1, C2, B7));
+    let o5 = make_implication(vec![o3.clone()], make_overlap(N1, B7, R8));
+    assert_eq!(collector.facts, vec![o1, o2, o3, o4, o5,]);
   }
 
   fn make_locked_set(
@@ -1331,214 +1356,101 @@ mod tests {
   fn test_collector() {
     let grid = Grid::from_str(
       r"
-            . . 2 | 6 . . | . . .
-            1 6 . | . 5 . | 9 . .
-            5 . 3 | 4 . . | . . .
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
             - - - + - - - + - - -
-            4 . . | . . . | . . 3
-            . . . | 7 . . | . 2 .
-            9 . . | . . . | 5 . 8
+            . 3 . | 5 . 6 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 9 | . . .
             - - - + - - - + - - -
-            . . . | . . 4 | 1 . .
-            6 . . | 2 . . | . 5 .
-            . . . | 1 . 6 | 8 . .
-        ",
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
     )
     .unwrap();
     let mut collector = make_collector(&grid);
     collector.collect();
-    let set1 = make_locked_set(
-      num_set! {N5, N9},
-      C4,
-      loc_set! {L44, L74},
-      None::<Blk>,
-      false,
-    );
-    let set2 = make_locked_set(
-      num_set! {N3, N7, N8, N9},
-      B8,
-      loc_set! {L75, L85, L86, L95},
-      None::<Row>,
-      true,
-    );
-    let set3 = make_locked_set(
-      num_set! {N3, N4, N6, N7},
-      C7,
-      loc_set! {L17, L47, L57, L87},
-      None::<Blk>,
-      true,
+    let o1 = make_overlap(N1, B2, C5);
+    let o2 = make_implication(vec![o1.clone()], make_overlap(N1, B5, R5));
+    let o3 = make_implication(vec![o2.clone()], make_overlap(N1, B4, C3));
+    let o4 = make_implication(vec![o2.clone()], make_overlap(N1, C2, B7));
+    let o5 = make_implication(vec![o3.clone()], make_overlap(N1, B7, R8));
+    let set = make_implication(
+      vec![o2.clone()],
+      make_locked_set(
+        num_set! {N4, N5, N6, N8},
+        C2,
+        loc_set! {L12, L22, L32, L52},
+        None::<Blk>,
+        true,
+      ),
     );
     assert_eq!(
       collector.facts,
       vec![
-        make_overlap(N2, B4, C2),
-        make_overlap(N2, C1, B7),
-        make_overlap(N2, B9, C9),
-        make_overlap(N2, C7, B3),
-        make_overlap(N5, B8, C4),
-        make_overlap(N5, C6, B5),
-        make_overlap(N5, B8, R7),
-        make_overlap(N5, R9, B7),
-        make_overlap(N9, B1, C2),
-        make_overlap(N9, C3, B7),
-        set1.clone(),
-        set2.clone(),
-        set3.clone(),
-        make_hidden_single(N2, C7, L37),
-        make_hidden_single(N5, B3, L19),
-        make_hidden_single(N5, B8, L74),
-        make_naked_single(L64, N3),
-        make_implication(vec![set3.clone()], make_overlap(N6, C7, B6)),
-        make_implication(vec![set1.clone()], make_overlap(N8, C4, B2)),
-        make_implication(vec![set2.clone()], make_overlap(N9, C4, B5)),
-        make_implication(vec![set1.clone()], make_hidden_single(N8, C4, L24)),
-        make_implication(vec![set2.clone()], make_hidden_single(N9, C4, L44)),
-        make_implication(vec![set3.clone()], make_naked_single(L37, N2)),
-        make_implication(vec![set2.clone()], make_naked_single(L74, N5)),
+        o1.clone(),
+        o2.clone(),
+        o3.clone(),
+        o4.clone(),
+        o5.clone(),
+        set.clone(),
+        make_implication(vec![o3.clone()], make_hidden_single(N1, B7, L82)),
+        make_implication(vec![set.clone()], make_naked_single(L82, N1)),
       ],
     )
-  }
-
-  impl fmt::Display for Fact {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-      match self {
-        Fact::SingleLoc { .. } => write!(f, "SingleLoc"),
-        Fact::SingleNum { .. } => write!(f, "SingleNum"),
-        Fact::SpeculativeAssignment { .. } => write!(f, "SpeculativeAssignment"),
-        Fact::NoNum { .. } => write!(f, "NoNum"),
-        Fact::NoLoc { .. } => write!(f, "NoLoc"),
-        Fact::Conflict { .. } => write!(f, "Conflict"),
-        Fact::Overlap { .. } => write!(f, "Overlap"),
-        Fact::LockedSet { .. } => write!(f, "LockedSet"),
-        Fact::Implication {
-          antecedents,
-          consequent,
-        } => {
-          write!(f, "Implication(")?;
-          for (i, antecedent) in antecedents.iter().enumerate() {
-            if i > 0 {
-              write!(f, ", ")?;
-            }
-            write!(f, "{}", antecedent)?;
-          }
-          write!(f, " => {}", consequent)?;
-          write!(f, ")")
-        }
-      }
-    }
   }
 
   #[test]
   fn test_collector_errors() {
     let grid = Grid::from_str(
       r"
-            . . . | 8 . 9 | . . 6
-            1 2 3 | . . . | . . .
-            . . . | 6 . 8 | . . .
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
             - - - + - - - + - - -
-            7 . . | . . 1 | . . 2
-            . . . | 4 5 . | . . 9
-            . . . | . . . | 6 . .
+            . 3 . | 5 . 5 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 9 | . . .
             - - - + - - - + - - -
-            . . . | . 7 . | . . .
-            . . 1 | . 4 6 | . . .
-            . . 3 | . . . | . . .
-        ",
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
     )
     .unwrap();
     let mut collector = make_collector(&grid);
     collector.collect();
+    let mut nub_counts: HashMap<String, i32> = HashMap::new();
+    for fact in collector.facts.iter() {
+      let fact = fact.nub();
+      let name = match fact {
+        Fact::SingleLoc { .. } => "SingleLoc",
+        Fact::SingleNum { .. } => "SingleNum",
+        Fact::SpeculativeAssignment { .. } => "SpeculativeAssignment",
+        Fact::NoLoc { .. } => "NoLoc",
+        Fact::NoNum { .. } => "NoNum",
+        Fact::Conflict { .. } => "Conflict",
+        Fact::Overlap { .. } => "Overlap",
+        Fact::LockedSet { .. } => "LockedSet",
+        Fact::Implication { .. } => "Implication",
+      };
+      *nub_counts.entry(name.to_string()).or_insert(0) += 1;
+    }
+    let mut nub_counts = nub_counts
+      .iter()
+      .map(|(k, v)| format!("{}: {}", k, v))
+      .collect::<Vec<_>>();
+    nub_counts.sort();
     assert_eq!(
-      collector.facts.iter().map(|fact| fact.to_string()).collect::<Vec<_>>(),
+      nub_counts,
       vec![
-        "NoLoc",
-        "NoLoc",
-        "Conflict",
-        "NoLoc",
-        "Conflict",
-        "NoNum",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "Overlap",
-        "LockedSet",
-        "LockedSet",
-        "LockedSet",
-        "LockedSet",
-        "LockedSet",
-        "LockedSet",
-        "SingleLoc",
-        "SingleLoc",
-        "SingleLoc",
-        "Implication(LockedSet => NoLoc)",
-        "Implication(LockedSet => NoLoc)",
-        "Implication(LockedSet, LockedSet => NoLoc)",
-        "Implication(LockedSet => NoLoc)",
-        "Implication(LockedSet, LockedSet => NoNum)",
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => Overlap)",
-        "Implication(LockedSet => Overlap)",
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => Overlap)",
-        "Implication(LockedSet => Overlap)",
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => Overlap)", 
-        "Implication(LockedSet => LockedSet)", 
-        "Implication(LockedSet => LockedSet)", 
-        "Implication(LockedSet, LockedSet => LockedSet)", 
-        "Implication(LockedSet => LockedSet)", 
-        "Implication(LockedSet => LockedSet)", 
-        "Implication(LockedSet => SingleLoc)", 
-        "Implication(LockedSet => SingleLoc)", 
-        "Implication(LockedSet => SingleLoc)", 
-        "Implication(LockedSet => SingleLoc)", 
-        "Implication(LockedSet => SingleNum)", 
-        "Implication(LockedSet => SingleNum)", 
-        "Implication(LockedSet => SingleNum)", 
-        "Implication(LockedSet => SingleNum)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => NoLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => Overlap)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleLoc)", 
-        "Implication(Implication(LockedSet, LockedSet => LockedSet) => SingleNum)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => NoNum)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => NoNum)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => NoNum)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => LockedSet)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => SingleLoc)", 
-        "Implication(Implication(Implication(LockedSet, LockedSet => LockedSet) => LockedSet) => SingleLoc)", 
-        "Implication(Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet) => NoLoc)", 
-        "Implication(Implication(Implication(Implication(LockedSet, LockedSet => LockedSet), Implication(LockedSet => LockedSet) => LockedSet) => LockedSet) => NoLoc)"
+        "Conflict: 2",
+        "LockedSet: 3",
+        "NoLoc: 3",
+        "Overlap: 7",
+        "SingleLoc: 1",
+        "SingleNum: 3",
       ]
-    );
+    )
   }
 }
