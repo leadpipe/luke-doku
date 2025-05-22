@@ -72,7 +72,7 @@ impl Fact {
         cross_unit,
       } => {
         let mut answer = AsgmtSet::new();
-        answer.union_in_place(*num, unit.locs() - cross_unit.locs());
+        answer.union_in_place(*num, cross_unit.locs() - unit.locs());
         answer
       }
       Fact::LockedSet {
