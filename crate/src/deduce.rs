@@ -139,6 +139,7 @@ impl Fact {
 }
 
 /// A stateful object that can deduce facts about a Sudoku grid.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
 pub struct FactFinder {
   /// The remaining possible assignments: all possible assignments that haven't
   /// already happened.
@@ -170,12 +171,46 @@ impl FactFinder {
     self.actual_asgmts.to_grid()
   }
 
-  /// Returns the facts deducible from the current state of the grid.
-  pub fn deduce(&self) -> Vec<Fact> {
+  /// Returns all remaining and actual assignments.
+  pub fn possible_asgmts(&self) -> AsgmtSet {
+    self.remaining_asgmts | self.actual_asgmts
+  }
+
+  /// Returns the facts deducible from the current state of the grid, including
+  /// any errors.
+  pub fn deduce_all(&self) -> Vec<Fact> {
     let mut collector =
       internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
-    collector.collect();
+    collector.collect(internals::ErrorMode::Collect).unwrap();
     collector.facts
+  }
+
+  /// Returns the facts deducible from the current state of the grid, ignoring
+  /// any errors: use this when the current state is known to be valid.
+  pub fn deduce_valid(&self) -> Vec<Fact> {
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.collect(internals::ErrorMode::Ignore).unwrap();
+    collector.facts
+  }
+
+  /// Returns only the direct assignments that can be deduced from the
+  /// current state of the grid.
+  pub fn deduce_singles(&self) -> Vec<Fact> {
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.collect_singles();
+    collector.facts
+  }
+
+  /// Returns the facts deducible from the current state of the grid, short-circuiting
+  /// the search if an error is found.  This is useful for finding errors in the
+  /// current state of the grid, such as when the grid is known to be invalid.
+  pub fn deduce_invalid(&self) -> Result<Vec<Fact>, Invalid> {
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.collect(internals::ErrorMode::ShortCircuit)?;
+    Ok(collector.facts)
   }
 
   /// Applies the given fact to the grid and updates the possible assignments.
@@ -183,14 +218,23 @@ impl FactFinder {
   /// those returned from `deduce`) should be applied.
   pub fn apply_fact(&mut self, fact: &Fact) {
     if let Some(asgmt) = fact.as_asgmt() {
-      self.remaining_asgmts.apply(asgmt);
-      self.remaining_asgmts.remove(asgmt);
-      self.actual_asgmts.insert(asgmt);
-      self.sukaku_map.apply(asgmt);
+      self.apply(asgmt);
     } else {
       let eliminations = fact.as_eliminations();
       self.remaining_asgmts -= eliminations;
       self.sukaku_map.eliminate(&eliminations);
     }
+  }
+
+  pub fn eliminate(&mut self, asgmt: Asgmt) {
+    self.remaining_asgmts.remove(asgmt);
+    self.sukaku_map.eliminate_one(asgmt.loc, asgmt.num);
+  }
+
+  pub fn apply(&mut self, asgmt: Asgmt) {
+    self.remaining_asgmts.apply(asgmt);
+    self.remaining_asgmts.remove(asgmt);
+    self.actual_asgmts.insert(asgmt);
+    self.sukaku_map.apply(asgmt);
   }
 }

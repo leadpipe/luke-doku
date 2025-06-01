@@ -1,15 +1,16 @@
+///! Defines low-level functions and lookup tables for the deduce module.
+use itertools::Itertools;
+use seq_macro::seq;
 use std::collections::HashMap;
+use std::fmt;
 use std::ops::Index;
 use std::ops::IndexMut;
 
-///! Defines low-level functions and lookup tables for the deduce module.
 use crate::core::bits::*;
 use crate::core::masks::*;
 use crate::core::set::*;
 use crate::core::*;
 use crate::define_set_operators;
-use itertools::Itertools;
-use seq_macro::seq;
 
 use super::Fact;
 
@@ -19,6 +20,17 @@ pub struct Collector {
   pub sukaku_map: SukakuMap,
   pub facts: Vec<Fact>,
   pub found: HashMap<Fact, ()>,
+}
+
+/// The ways that the collector can handle errors during deduction.
+#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
+pub enum ErrorMode {
+  /// Used when the caller knows that there can't be any errors.
+  Ignore,
+  /// Used when the caller wants to stop deduction on the first error.
+  ShortCircuit,
+  /// Used when the caller wants to collect all errors and continue deduction.
+  Collect,
 }
 
 impl Collector {
@@ -39,19 +51,22 @@ impl Collector {
       .or_insert_with_key(|fact| self.facts.push(fact.clone()));
   }
 
-  pub fn collect(&mut self) {
+  /// Collects all facts from the current state of the collector, using the
+  /// given error mode to determine how to handle errors.
+  pub fn collect(&mut self, error_mode: ErrorMode) -> Result<(), Invalid> {
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
     let mut remaining_asgmts = self.remaining_asgmts;
     let mut sukaku_map = self.sukaku_map;
+    let mut set_state = SetState::new();
     loop {
       let start = self.facts.len();
-      if self.sukaku_map.has_error() {
-        find_errors(self);
+      if error_mode != ErrorMode::Ignore {
+        find_errors(self, error_mode == ErrorMode::ShortCircuit)?;
       }
       let eliminations_start = self.facts.len();
       find_overlaps(self);
-      find_locked_sets(self);
+      find_locked_sets(self, &mut set_state);
       let eliminations_end = self.facts.len();
       find_hidden_singles(self);
       find_naked_singles(self);
@@ -86,6 +101,12 @@ impl Collector {
       self.remaining_asgmts -= all_eliminated_asgmts;
       self.sukaku_map.eliminate(&all_eliminated_asgmts);
     }
+    Ok(())
+  }
+
+  pub fn collect_singles(&mut self) {
+    find_hidden_singles(self);
+    find_naked_singles(self);
   }
 }
 
@@ -118,6 +139,7 @@ fn narrow_antecedents(
     }
   }
   result.reverse();
+  assert!(!result.is_empty(), "Antecedents can't be empty");
   result
 }
 
@@ -157,8 +179,16 @@ impl Fact {
           }
         }
       }
-
-      Fact::SpeculativeAssignment { .. } | Fact::Conflict { .. } | Fact::Implication { .. } => (),
+      Fact::Implication { antecedents, .. } => {
+        // An implication might be revealed if any of the antecedents are
+        // revealed.
+        for antecedent in antecedents.iter() {
+          if antecedent.might_be_revealed_by_eliminations(eliminations) {
+            return true;
+          }
+        }
+      }
+      Fact::SpeculativeAssignment { .. } | Fact::Conflict { .. } => (),
     }
     false
   }
@@ -211,21 +241,29 @@ impl Fact {
         }
         true
       }
-      Fact::Implication { .. } => {
-        // We don't call this method on implications.
-        false
+      Fact::Implication { antecedents, .. } => {
+        // An implication is implied if all of its antecedents are implied.
+        for antecedent in antecedents.iter() {
+          if !antecedent.is_implied_by(remaining_asgmts, sukaku_map) {
+            return false;
+          }
+        }
+        true
       }
     }
   }
 }
 
-pub fn find_errors(collector: &mut Collector) {
+fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Invalid> {
   let possible_asgmts = collector.remaining_asgmts | collector.actual_asgmts;
   for unit in Unit::all() {
     let unit_locs = unit.locs();
     for num in Num::all() {
       let actual_locs = collector.actual_asgmts.num_locs(num) & unit_locs;
       if actual_locs.len() > 1 {
+        if short_circuit {
+          return Err(Invalid);
+        }
         collector.add_fact(Fact::Conflict {
           num,
           unit,
@@ -234,18 +272,25 @@ pub fn find_errors(collector: &mut Collector) {
       }
       let possible_locs = possible_asgmts.num_locs(num) & unit_locs;
       if possible_locs.is_empty() {
+        if short_circuit {
+          return Err(Invalid);
+        }
         collector.add_fact(Fact::NoLoc { num, unit });
       }
     }
   }
   for loc in (!collector.actual_asgmts.naked_singles()).iter() {
     if collector.sukaku_map[loc].is_empty() {
+      if short_circuit {
+        return Err(Invalid);
+      }
       collector.add_fact(Fact::NoNum { loc });
     }
   }
+  Ok(())
 }
 
-pub fn find_overlaps(collector: &mut Collector) {
+fn find_overlaps(collector: &mut Collector) {
   // Note: this mimics the logic in `collect` but only for overlaps.
   let mut remaining_asgmts = collector.remaining_asgmts;
   let mut prev_remaining_asgmts = collector.remaining_asgmts;
@@ -295,21 +340,20 @@ pub fn find_overlaps(collector: &mut Collector) {
 
 pub const MAX_SET_SIZE: i32 = 4;
 
-pub fn find_locked_sets(collector: &mut Collector) {
-  let mut set_state = SetState::new();
+fn find_locked_sets(collector: &mut Collector, set_state: &mut SetState) {
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
-      find_hidden_sets(collector, &mut set_state, unit_id.to_unit(), size);
+      find_hidden_sets(collector, set_state, unit_id.to_unit(), size);
     }
   }
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
-      find_naked_sets(collector, &mut set_state, unit_id.to_unit(), size);
+      find_naked_sets(collector, set_state, unit_id.to_unit(), size);
     }
   }
 }
 
-pub fn find_hidden_singles(collector: &mut Collector) {
+fn find_hidden_singles(collector: &mut Collector) {
   for num in Num::all() {
     let num_locs = collector.remaining_asgmts.num_locs(num);
     let mut units_to_check = UnitSet::default();
@@ -335,7 +379,7 @@ pub fn find_hidden_singles(collector: &mut Collector) {
   }
 }
 
-pub fn find_naked_singles(collector: &mut Collector) {
+fn find_naked_singles(collector: &mut Collector) {
   for loc in Loc::all() {
     let nums = collector.sukaku_map[loc];
     if nums.len() != 1 {
@@ -378,7 +422,7 @@ fn blk_col_bit(locs: LocSet, row_band: Band, col_band: Band, blk_line: BlkLine) 
 /// Extracts the overlaps from a bitmap of block-rows, and stores them as facts
 /// in the given vector.  The bitmap represents the block-rows of the given
 /// row-band; the ones mean that at least one of the locations in the
-/// corresponding block-row is assignable to the given numeral.  
+/// corresponding block-row is assignable to the given numeral.
 fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, collector: &mut Collector) {
   for spec in blk_line_bits_to_overlap_specs(blk_row_bits).iter() {
     collector.add_fact(spec.to_row_band_overlap(num, band));
@@ -743,32 +787,19 @@ impl SetState {
 /// fully marked up Sudoku, with each location containing the numerals that are
 /// possible for that location.  This is the same information that is
 /// represented in the `AsgmtSet`, but indexed the other way around.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-pub struct SukakuMap {
-  grid: [NumSet; 81],
-  has_error: bool,
-}
+#[derive(Clone, Copy, Eq, Hash, PartialEq)]
+pub struct SukakuMap([NumSet; 81]);
 
 impl SukakuMap {
   pub fn from_grid(grid: &Grid) -> Self {
-    let mut answer = Self {
-      grid: [NumSet::all(); 81],
-      has_error: false,
-    };
+    let mut answer = Self([NumSet::all(); 81]);
     for asgmt in grid.iter() {
       answer.apply(asgmt);
     }
     answer
   }
 
-  pub fn has_error(&self) -> bool {
-    self.has_error
-  }
-
   pub fn apply(&mut self, asgmt: Asgmt) {
-    if !self[asgmt.loc].contains(asgmt.num) {
-      self.has_error = true;
-    }
     self[asgmt.loc] = NumSet::new(); // Leave the location empty.
     for peer in asgmt.loc.peers().iter() {
       self.eliminate_one(peer, asgmt.num);
@@ -781,14 +812,8 @@ impl SukakuMap {
     }
   }
 
-  fn eliminate_one(&mut self, loc: Loc, num: Num) {
-    let nums = &mut self[loc];
-    if nums.contains(num) {
-      nums.remove(num);
-      if nums.is_empty() {
-        self.has_error = true;
-      }
-    }
+  pub fn eliminate_one(&mut self, loc: Loc, num: Num) {
+    self[loc].remove(num);
   }
 }
 
@@ -798,7 +823,7 @@ impl Index<Loc> for SukakuMap {
     unsafe {
       // Safe because `loc.index()` is in 0..81.
       debug_assert_eq!(Loc::COUNT, 81);
-      self.grid.get_unchecked(loc.index())
+      self.0.get_unchecked(loc.index())
     }
   }
 }
@@ -808,8 +833,44 @@ impl IndexMut<Loc> for SukakuMap {
     unsafe {
       // Safe because `loc.index()` is in 0..81.
       debug_assert_eq!(Loc::COUNT, 81);
-      self.grid.get_unchecked_mut(loc.index())
+      self.0.get_unchecked_mut(loc.index())
     }
+  }
+}
+
+impl fmt::Debug for SukakuMap {
+  fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    writeln!(f, "SukakuMap {{")?;
+    for row_band in Band::all() {
+      for blk_row in BlkLine::all() {
+        for col_band in Band::all() {
+          let blk = Blk::from_bands(row_band, col_band);
+          for blk_col in BlkLine::all() {
+            let loc = blk.loc_at(blk_row, blk_col);
+            let nums = self[loc];
+            if nums.is_empty() {
+              write!(f, " .        ")?;
+            } else {
+              let mut nums_str = String::new();
+              for num in nums.iter() {
+                nums_str.push_str(&num.to_string());
+              }
+              write!(f, " {:9}", nums_str)?;
+            }
+          }
+          if col_band != BAND3 {
+            write!(f, " |")?;
+          } else {
+            writeln!(f)?;
+          }
+        }
+      }
+      if row_band != BAND3 {
+        writeln!(f, "{:->32}{:->32}{:->32}", "+", "+", "")?;
+      }
+    }
+    writeln!(f, "}}")?;
+    Ok(())
   }
 }
 
@@ -1072,33 +1133,6 @@ mod tests {
     );
   }
 
-  #[test]
-  fn test_sukaku_map_has_error() {
-    let mut grid = Grid::from_str(
-      r"
-            . . . | 8 . 9 | . . 6
-            . 2 3 | . . . | . . .
-            . . . | 6 . 5 | . . .
-            - - - + - - - + - - -
-            7 . . | . . 1 | . . 2
-            . . . | 4 5 . | . . 9
-            . . . | . . . | 6 . .
-            - - - + - - - + - - -
-            . . . | . 7 . | . . .
-            . . 1 | . 4 6 | . . .
-            . . 4 | . . . | . . .
-        ",
-    )
-    .unwrap();
-    let sukaku_map = SukakuMap::from_grid(&grid);
-    assert!(!sukaku_map.has_error());
-
-    grid[L36] = Some(N8);
-    grid[L93] = Some(N3);
-    let sukaku_map = SukakuMap::from_grid(&grid);
-    assert!(sukaku_map.has_error());
-  }
-
   fn make_collector(grid: &Grid) -> Collector {
     let actual_asgmts = AsgmtSet::simple_from_grid(&grid);
     let remaining_asgmts = AsgmtSet::possibles_from_grid(&grid) - actual_asgmts;
@@ -1125,8 +1159,7 @@ mod tests {
     )
     .unwrap();
     let mut collector = make_collector(&grid);
-    assert!(collector.sukaku_map.has_error());
-    find_errors(&mut collector);
+    find_errors(&mut collector, false).unwrap();
     assert_eq!(
       collector.facts,
       vec![
@@ -1212,22 +1245,23 @@ mod tests {
   fn test_find_locked_sets() {
     let grid = Grid::from_str(
       r"
-         . 1 4 | . 9 . | . 5 . 
-         . . . | 6 . . | . . 1 
-         2 9 6 | 5 1 4 | 7 8 3 
+         . 1 4 | . 9 . | . 5 .
+         . . . | 6 . . | . . 1
+         2 9 6 | 5 1 4 | 7 8 3
         -------+-------+-------
-         . 4 . | . 5 1 | 3 6 . 
-         8 . 1 | 3 . 2 | . 7 . 
-         . . 3 | . 7 . | . 1 . 
+         . 4 . | . 5 1 | 3 6 .
+         8 . 1 | 3 . 2 | . 7 .
+         . . 3 | . 7 . | . 1 .
         -------+-------+-------
-         . . 5 | . . . | 1 . 7 
-         . . 9 | 1 . 5 | . . . 
-         1 3 . | . . . | 5 . . 
+         . . 5 | . . . | 1 . 7
+         . . 9 | 1 . 5 | . . .
+         1 3 . | . . . | 5 . .
         ",
     )
     .unwrap();
     let mut collector = make_collector(&grid);
-    find_locked_sets(&mut collector);
+    let mut set_state = SetState::new();
+    find_locked_sets(&mut collector, &mut set_state);
     assert_eq!(
       collector.facts,
       vec![
@@ -1258,7 +1292,8 @@ mod tests {
     }
     .apply(&grid);
     let mut collector = make_collector(&grid);
-    find_locked_sets(&mut collector);
+    let mut set_state = SetState::new();
+    find_locked_sets(&mut collector, &mut set_state);
     assert_eq!(
       collector.facts,
       vec![
@@ -1370,7 +1405,7 @@ mod tests {
     )
     .unwrap();
     let mut collector = make_collector(&grid);
-    collector.collect();
+    collector.collect(ErrorMode::Ignore).unwrap();
     let o1 = make_overlap(N1, B2, C5);
     let o2 = make_implication(vec![o1.clone()], make_overlap(N1, B5, R5));
     let o3 = make_implication(vec![o2.clone()], make_overlap(N1, B4, C3));
@@ -1419,7 +1454,7 @@ mod tests {
     )
     .unwrap();
     let mut collector = make_collector(&grid);
-    collector.collect();
+    collector.collect(ErrorMode::Collect).unwrap();
     let mut nub_counts: HashMap<String, i32> = HashMap::new();
     for fact in collector.facts.iter() {
       let fact = fact.nub();
@@ -1445,12 +1480,35 @@ mod tests {
       nub_counts,
       vec![
         "Conflict: 2",
-        "LockedSet: 3",
+        "LockedSet: 2",
         "NoLoc: 3",
         "Overlap: 7",
         "SingleLoc: 1",
         "SingleNum: 3",
       ]
     )
+  }
+
+  #[test]
+  fn test_collector_errors_short_circuit() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
+            - - - + - - - + - - -
+            . 3 . | 5 . 5 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 9 | . . .
+            - - - + - - - + - - -
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
+    )
+    .unwrap();
+    let mut collector = make_collector(&grid);
+    collector
+      .collect(ErrorMode::ShortCircuit)
+      .expect_err("Should have short-circuited");
   }
 }
