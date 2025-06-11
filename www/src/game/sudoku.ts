@@ -42,8 +42,8 @@ export class Sudoku {
 
   static fromDatabaseRecord(record: PuzzleRecord): Sudoku {
     return new Sudoku(
-      new Grid(wasm.Grid.newFromString(record.clues)),
-      record.solutions.map(s => new Grid(wasm.Grid.newFromString(s))),
+      new Grid(record.clues),
+      record.solutions.map(s => new Grid(s)),
       record.symmetryMatches.map(symMatchFromDb),
       PuzzleId.fromDatabase(record.puzzleId),
       record.source,

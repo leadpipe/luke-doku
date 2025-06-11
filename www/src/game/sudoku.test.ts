@@ -15,6 +15,7 @@ describe('Sudoku', () => {
     type: ToWorkerMessageType.GENERATE_PUZZLE,
     date: '2024-12-07',
     counter: 8,
+    interactionId: 1,
   }) as PuzzleGeneratedMessage;
   const sudoku = Sudoku.fromWorker(workerMessage);
 

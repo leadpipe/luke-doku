@@ -1,6 +1,7 @@
 import './events';
 import './game-clock';
 import './mat-icon';
+import './puzzle-rating';
 import './sudoku-view';
 
 import {LitElement, PropertyValues, css, html, type TemplateResult} from 'lit';
@@ -247,6 +248,11 @@ export class SolvePage extends LitElement {
         flex-grow: 100;
       }
 
+      puzzle-rating {
+        flex-grow: 1;
+        margin: 8px 0;
+      }
+
       game-clock {
         flex-grow: 1;
       }
@@ -424,6 +430,7 @@ export class SolvePage extends LitElement {
         html`
           <h1>Luke-doku</h1>
           <h2>${renderPuzzleTitle(game.sudoku, /*assumeToday=*/ true)}</h2>
+          <puzzle-rating .game=${game}></puzzle-rating>
           ${playState === PlayState.COMPLETED ?
             renderCompletedGameDescription(game)
           : ''}
@@ -497,6 +504,7 @@ export class SolvePage extends LitElement {
                 ></icon-button>
               </div>
               <div id="pause-button">${pauseButton}</div>
+              <puzzle-rating .game=${game}></puzzle-rating>
             `
           : ''}
           <game-clock

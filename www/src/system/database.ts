@@ -145,6 +145,10 @@ export interface LukeDokuDb extends DBSchema {
        * puzzle came from.
        */
       source?: string;
+      /**
+       * The complexity rating of the puzzle.  This is shown as 1-5 stars.
+       */
+      complexity?: wasm.Complexity;
 
       // -------- the state of attempts to solve the puzzle -------- //
 

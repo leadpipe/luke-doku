@@ -181,7 +181,7 @@ mod tests {
 
   fn eval_complexity(s: &str) -> Complexity {
     let grid = Grid::from_str(s).unwrap();
-    let puzzle = Puzzle::new(&grid).unwrap();
+    let puzzle = Puzzle::new(&grid, None).unwrap();
     evaluate_complexity(&puzzle)
   }
 

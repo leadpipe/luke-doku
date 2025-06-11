@@ -1,4 +1,5 @@
 import './events';
+import './puzzle-rating';
 
 import type {IDBPDatabase} from 'idb';
 import {css, html, LitElement} from 'lit';
@@ -121,7 +122,10 @@ export class PuzzlesPage extends LitElement {
   }
 
   private renderPuzzleDescription(game: Game, assumeToday: boolean) {
-    const parts = [renderPuzzleTitle(game.sudoku, assumeToday)];
+    const parts = [
+      renderPuzzleTitle(game.sudoku, assumeToday),
+      html`<puzzle-rating .game=${game}></puzzle-rating>`,
+    ];
     switch (game.playState) {
       case PlayState.UNSTARTED:
         break;

@@ -1,10 +1,13 @@
 import * as wasm from 'luke-doku-rust';
+import {ensureExhaustiveSwitch} from '../game/utils';
 import {
   type ErrorCaughtMessage,
+  type EvaluatePuzzleMessage,
   type FromWorkerMessage,
   FromWorkerMessageType,
   GeneratePuzzleMessage,
   PuzzleGeneratedMessage,
+  type TestPuzzleMessage,
   ToWorkerMessage,
   ToWorkerMessageType,
 } from './worker-types';
@@ -13,10 +16,19 @@ export async function handleToWorkerMessage(
   scope: DedicatedWorkerGlobalScope,
   message: ToWorkerMessage,
 ) {
-  switch (message.type) {
+  const messageType = message.type;
+  switch (messageType) {
     case ToWorkerMessageType.GENERATE_PUZZLE:
       scope.postMessage(generatePuzzle(message));
       break;
+    case ToWorkerMessageType.EVALUATE_PUZZLE:
+      scope.postMessage(evaluatePuzzle(message));
+      break;
+    case ToWorkerMessageType.TEST_PUZZLE:
+      scope.postMessage(testPuzzle(message));
+      break;
+    default:
+      ensureExhaustiveSwitch(messageType);
   }
 }
 
@@ -72,6 +84,64 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
   } satisfies PuzzleGeneratedMessage;
   puzzle.free();
   return answer;
+}
+
+function evaluatePuzzle(m: EvaluatePuzzleMessage): FromWorkerMessage {
+  const clues = wasm.Grid.newFromString(m.clues);
+  const solutions = m.solutions.map(s =>
+    wasm.Grid.newFromString(s)?.solvedGrid(),
+  );
+  if (!clues || solutions.some(s => !s)) {
+    return toErrorCaught(
+      m,
+      'evaluatePuzzle',
+      new Error('Invalid clues or solutions'),
+    );
+  }
+  const puzzle = wasm.Puzzle.new(clues, solutions as wasm.SolvedGrid[]);
+  if (!puzzle) {
+    return toErrorCaught(m, 'evaluatePuzzle', new Error('Invalid puzzle'));
+  }
+  let evaluatorVersion;
+  let complexity;
+  let estimatedTimeMs;
+  const startTimeMs = performance.now();
+  try {
+    const rating = wasm.evaluate(puzzle);
+    evaluatorVersion = rating.evaluatorVersion;
+    complexity = rating.complexity;
+    estimatedTimeMs = rating.estimatedTimeMs;
+    rating.free();
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'evaluatePuzzle', e);
+  } finally {
+    puzzle.free();
+  }
+  const elapsedMs = performance.now() - startTimeMs;
+  return {
+    type: FromWorkerMessageType.PUZZLE_EVALUATED,
+    toWorkerMessage: m,
+    evaluatorVersion,
+    complexity,
+    estimatedTimeMs,
+    elapsedMs,
+  };
+}
+
+function testPuzzle(m: TestPuzzleMessage): FromWorkerMessage {
+  const clues = wasm.Grid.newFromString(m.clues);
+  if (!clues) {
+    return toErrorCaught(m, 'testPuzzle', new Error('Invalid clues'));
+  }
+  const startTimeMs = performance.now();
+  const result = wasm.Puzzle.test(clues);
+  const elapsedMs = performance.now() - startTimeMs;
+  return {
+    type: FromWorkerMessageType.PUZZLE_TESTED,
+    toWorkerMessage: m,
+    result,
+    elapsedMs,
+  };
 }
 
 function toErrorCaught(

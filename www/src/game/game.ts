@@ -1,6 +1,10 @@
 import type {IDBPDatabase} from 'idb';
+import * as wasm from 'luke-doku-rust';
 import {AttemptState, LukeDokuDb, PuzzleRecord} from '../system/database';
-import {requestPuzzle} from '../system/puzzle-service';
+import {
+  requestPuzzleEvaluation,
+  requestPuzzleGeneration,
+} from '../system/puzzle-service';
 import {
   Command,
   CompletionState,
@@ -378,7 +382,7 @@ export class Game extends BaseGame {
     dateString: DateString,
     counter: number,
   ): Promise<Game> {
-    const puzzle = await requestPuzzle(dateString, counter);
+    const puzzle = await requestPuzzleGeneration(dateString, counter);
     const sudoku = Sudoku.fromWorker(puzzle);
     const record = sudoku.toDatabaseRecord();
     await db.add('puzzles', record);
@@ -391,6 +395,9 @@ export class Game extends BaseGame {
   private serializationResult: SerializationResult;
   // An object that's updated on every command, so components will be updated.
   #wrapper: GameWrapper;
+  // A promise that resolves each time the game is about to be saved, so that
+  // the UI can know when to update.
+  #saving = Promise.withResolvers<void>();
 
   /**
    * Requires a database instance and the record from the DB that corresponds to
@@ -400,7 +407,8 @@ export class Game extends BaseGame {
     private readonly db: IDBPDatabase<LukeDokuDb>,
     private readonly record: PuzzleRecord,
   ) {
-    const history = record.history ? deserializeCommands(record.history) : [];
+    const history =
+      record.history?.length ? deserializeCommands(record.history) : [];
     super(Sudoku.fromDatabaseRecord(record), history);
     this.serializationResult = {
       count: history.length,
@@ -413,6 +421,14 @@ export class Game extends BaseGame {
     // pause using the last `elapsedMs` we were able to write.
     if (this.playState === PlayState.RUNNING) {
       this.execute(new Pause(PauseReason.INFERRED), record.elapsedMs);
+    }
+
+    // If the game has no complexity rating, calculate it now.
+    if (this.record.complexity === undefined) {
+      requestPuzzleEvaluation(this.sudoku).then(result => {
+        this.record.complexity = result.complexity;
+        this.save();
+      });
     }
   }
 
@@ -432,7 +448,17 @@ export class Game extends BaseGame {
     record.elapsedMs = this.elapsedMs;
     record.lastUpdated = new Date();
     record.attemptState = this.getAttemptState();
+    this.#saving.resolve();
+    this.#saving = Promise.withResolvers<void>();
     await this.db.put('puzzles', record);
+  }
+
+  /**
+   * Returns a promise that resolves when the game is about to be saved, so that
+   * the UI can update.
+   */
+  get saving(): Promise<void> {
+    return this.#saving.promise;
   }
 
   /**
@@ -462,6 +488,14 @@ export class Game extends BaseGame {
    */
   get previousAttemptCount(): number {
     return this.record.previousAttempts?.length ?? 0;
+  }
+
+  /**
+   * The complexity rating for this puzzle, or undefined if it hasn't been
+   * calculated yet.
+   */
+  get complexity(): wasm.Complexity | undefined {
+    return this.record.complexity;
   }
 
   /** An object containing this game that is recreated on every command. */

@@ -33,8 +33,10 @@ pub struct Rating {
   pub complexity: Complexity,
   /// How long the evaluator estimates it will take a person to solve the
   /// puzzle, in milliseconds.
+  #[wasm_bindgen(js_name = "estimatedTimeMs")]
   pub estimated_time_ms: f64,
   /// The version of the evaluator that produced this rating.
+  #[wasm_bindgen(js_name = "evaluatorVersion")]
   pub evaluator_version: u32,
 }
 

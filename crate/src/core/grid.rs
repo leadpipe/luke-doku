@@ -36,10 +36,10 @@ impl Grid {
     }
   }
 
-  /// Constructs a Grid from a string, or throws.
+  /// Constructs a Grid from a string.
   #[wasm_bindgen(js_name = "newFromString")]
-  pub fn new_from_string(s: &str) -> Result<Grid, String> {
-    Grid::from_str(s)
+  pub fn new_from_string(s: &str) -> Option<Grid> {
+    Grid::from_str(s).ok()
   }
 
   /// Converts the grid to a Uint8Array.
@@ -117,6 +117,12 @@ impl Grid {
       }
     }
   }
+
+  /// Converts this grid to a SolvedGrid when this grid is solved.
+  #[wasm_bindgen(js_name = "solvedGrid")]
+  pub fn solved_grid(&self) -> Option<SolvedGrid> {
+    self.state().solved_grid()
+  }
 }
 
 impl Grid {
@@ -150,11 +156,6 @@ impl Grid {
     } else {
       GridState::Broken(broken)
     }
-  }
-
-  /// Converts this grid to a SolvedGrid when this grid is solved.
-  pub fn solved_grid(&self) -> Option<SolvedGrid> {
-    self.state().solved_grid()
   }
 }
 
