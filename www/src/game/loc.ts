@@ -11,6 +11,8 @@ export class Loc extends Object {
   /** The location index, in 0..81. */
   readonly index: number;
 
+  private peers: readonly Loc[] | null = null;
+
   private constructor(index: number) {
     super();
     this.index = index;
@@ -25,7 +27,10 @@ export class Loc extends Object {
 
   /** The "peer" locations, that belong to the same row, column, or block. */
   getPeers(): readonly Loc[] {
-    return Loc.arrayFromWasm(wasm.locPeers(this.index));
+    if (!this.peers) {
+      this.peers = Loc.arrayFromWasm(wasm.locPeers(this.index));
+    }
+    return this.peers;
   }
 
   /**
