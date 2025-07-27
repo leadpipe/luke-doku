@@ -345,7 +345,6 @@ export class SudokuInput implements ReactiveController {
   private sideCenter = devicePixels(0);
   private halfCentersGap = devicePixels(0);
   private multiHover?: ClockInputResult;
-  private negatedNums: Array<Set<number> | null> = Array(81).fill(null);
 
   private convertCoordinateToCellNumber(coord: number): number | undefined {
     const sideSize = toCss(this.host.sideSize);
@@ -532,34 +531,17 @@ export class SudokuInput implements ReactiveController {
   }
 
   private applyNumToLoc(game: Game, loc: Loc, num: number) {
-    const {negatedNums} = this;
-    if (negatedNums[loc.index]?.has(num) && game.getNums(loc)?.has(num)) {
+    if (!game.trails.active && game.marks.isNegated(loc, num)) {
       // If this numeral has been negated, remove it from the cell.
-      negatedNums[loc.index]?.delete(num);
       const nums = new Set(game.getNums(loc));
       nums.delete(num);
       game.setNums(loc, nums);
     } else {
       game.setNum(loc, num);
-      // Negate this numeral in all the peer locations that include it as part
-      // of a set.
-      for (const peer of loc.getPeers()) {
-        const nums = game.getNums(peer);
-        if (nums && nums.size > 1 && nums.has(num)) {
-          if (!negatedNums[peer.index]) {
-            negatedNums[peer.index] = new Set();
-          }
-          negatedNums[peer.index]?.add(num);
-        }
-      }
     }
     this.cellModified(loc);
     this.checkSolved(game);
     this.defaultResult = num;
-  }
-
-  isNegated(num: number, loc: Loc): boolean {
-    return this.negatedNums[loc.index]?.has(num) ?? false;
   }
 
   private checkSolved(game: Game) {

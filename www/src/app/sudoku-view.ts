@@ -745,7 +745,7 @@ export class SudokuView extends LitElement implements GridContainer {
     trails: ReadonlyTrails,
     answer: TemplateResult[],
   ): void {
-    const {cellCenter, input} = this;
+    const {cellCenter} = this;
     for (const loc of Loc.ALL) {
       const nums = marks.getNums(loc);
       if (!nums) continue;
@@ -774,7 +774,7 @@ export class SudokuView extends LitElement implements GridContainer {
             width=${cellSize} height=${cellSize}>
             <div class="multi">
               <div class=${classMap(cls)}>${[...nums].map(num =>
-                input?.isNegated(num, loc) ?
+                marks.isNegated(loc, num) ?
                   svg`<span class="negated">${num}</span>`
                 : num,
               )}</div>
