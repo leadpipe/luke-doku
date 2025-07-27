@@ -14,6 +14,13 @@ export class Marks {
    */
   private cells: Array<number | ReadonlySet<number> | null>;
 
+  /**
+   * Tracks which peer locations have negated each numeral in each multi-value
+   * cell.  A negation happens when a peer cell is assigned a (single) numeral
+   * that's included in this cell's values.
+   */
+  private readonly negations = new Map<Loc, Map<number, Set<Loc>>>();
+
   /** Bootstraps a Marks from a puzzle grid. */
   constructor(clues: ReadonlyGrid);
 
@@ -40,12 +47,41 @@ export class Marks {
     }
   }
 
+  private updatePeerNegations(loc: Loc, adding: boolean) {
+    const num = this.getNum(loc);
+    if (num === null) return;
+    for (const peer of loc.getPeers()) {
+      if (adding) {
+        const peerNums = this.getNums(peer);
+        if (!peerNums || peerNums.size < 2 || !peerNums.has(num)) {
+          continue;
+        }
+      }
+      let negationsPerNum = this.negations.get(peer);
+      if (!adding && !negationsPerNum?.has(num)) continue;
+      if (!negationsPerNum) {
+        this.negations.set(peer, (negationsPerNum = new Map()));
+      }
+      let negatedPeers = negationsPerNum.get(num);
+      if (!adding && !negatedPeers?.has(loc)) continue;
+      if (!negatedPeers) {
+        negationsPerNum.set(num, (negatedPeers = new Set()));
+      }
+      if (adding) {
+        negatedPeers.add(loc);
+      } else {
+        negatedPeers.delete(loc);
+      }
+    }
+  }
+
   /**
    * Clears the cell at the given location.
    *
    * @param loc Which location to clear.
    */
   clearCell(loc: Loc): void {
+    this.updatePeerNegations(loc, false);
     this.cells[loc.index] = null;
   }
 
@@ -94,7 +130,9 @@ export class Marks {
    * @throws Error if `num` is not an integer between 1 and 9 inclusive.
    */
   setNum(loc: Loc, num: number): void {
+    this.updatePeerNegations(loc, false);
     this.cells[loc.index] = new Set([checkIntRange(num, 1, 10)]);
+    this.updatePeerNegations(loc, true);
   }
 
   /**
@@ -122,9 +160,27 @@ export class Marks {
     if (!nums.size) {
       throw new Error('Empty set not allowed, call `clearCell` instead');
     }
+    this.updatePeerNegations(loc, false);
     this.cells[loc.index] = new Set(
       [...nums].map(n => checkIntRange(n, 1, 10)),
     );
+    this.updatePeerNegations(loc, true);
+  }
+
+  /**
+   * Tells whether the given numeral is negated in the given location.
+   *
+   * @param loc Which location to check.
+   * @param num The numeral to check, 1..=9.
+   * @returns Whether the numeral is negated in the cell.
+   */
+  isNegated(loc: Loc, num: number): boolean {
+    const nums = this.getNums(loc);
+    if (!nums || nums.size < 2 || !nums.has(num)) return false;
+    const negationsPerNum = this.negations.get(loc);
+    if (!negationsPerNum) return false;
+    const negatedPeers = negationsPerNum.get(num);
+    return !!negatedPeers?.size;
   }
 
   /**
