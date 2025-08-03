@@ -40,6 +40,12 @@ import {
   setBooleanAttribute,
 } from './utils';
 
+// Set this to false for debugging display issues.
+const allowAutoPause = false;
+
+declare const debugMode: boolean;
+const doAutoPause = allowAutoPause || !debugMode;
+
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
 export class SolvePage extends LitElement {
@@ -701,6 +707,7 @@ export class SolvePage extends LitElement {
   };
 
   private readonly foregroundnessHandler = () => {
+    if (!doAutoPause) return;
     if (document.visibilityState === 'visible') {
       this.autoResume();
     } else {
@@ -709,10 +716,12 @@ export class SolvePage extends LitElement {
   };
 
   private readonly windowBlurHandler = () => {
+    if (!doAutoPause) return;
     this.pausePlay(PauseReason.AUTO);
   };
 
   private readonly windowFocusHandler = () => {
+    if (!doAutoPause) return;
     this.autoResume();
   };
 
