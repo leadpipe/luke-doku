@@ -41,7 +41,7 @@ import {
 } from './utils';
 
 // Set this to false for debugging display issues.
-const allowAutoPause = false;
+const allowAutoPause = true;
 
 declare const debugMode: boolean;
 const doAutoPause = allowAutoPause || !debugMode;
