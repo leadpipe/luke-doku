@@ -7,7 +7,7 @@ export class OkLCH {
   constructor(
     readonly lightness: number, // 0..100
     readonly chroma: number, // 0..100 (0..37)
-    readonly hue: number,
+    readonly hue: number, // 0..360
   ) {}
 
   toColor(opacity?: number): string {

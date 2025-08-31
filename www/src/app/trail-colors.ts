@@ -1,6 +1,11 @@
 import * as wasm from 'luke-doku-rust';
 import {GridString} from '../game/types';
-import {COLOR_RANGES, mod, randomColorIndex} from './colors';
+import {mod, OkLCH} from './colors';
+
+const CHROMA = 35; // 0..37
+const DARK_LIGHTNESS = 90; // 0..100
+const LIGHT_LIGHTNESS = 40; // 0..100
+const HUE_DELTA = 77; // degrees
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A
@@ -25,19 +30,12 @@ export class TrailColors {
     const random = new wasm.JsRandom(this.seed);
     try {
       colors.length = 0;
-      let index = randomColorIndex(random);
-      const chromaSlider = 1; // Maximum chroma
-      const darkSlider = 1; // Maximum lightness for dark mode
-      const lightSlider = 0; // Minimum lightness for light mode
+      let hue = random.range(0, 360);
       for (let i = 0; i < count; ++i) {
-        const range = COLOR_RANGES[index];
-        const dark = range.randomHue(random, darkSlider, chromaSlider);
-        const light = range.varyLightness(dark, lightSlider);
+        const dark = new OkLCH(DARK_LIGHTNESS, CHROMA, hue);
+        const light = new OkLCH(LIGHT_LIGHTNESS, CHROMA, hue);
         colors.push(`light-dark(${light.toColor()}, ${dark.toColor()})`);
-        index = mod(
-          index + Math.floor(random.range(1, COLOR_RANGES.length)),
-          COLOR_RANGES.length,
-        );
+        hue = mod(hue + HUE_DELTA, 360);
       }
     } finally {
       random.free();
