@@ -83,6 +83,14 @@ export class SudokuInput implements ReactiveController {
     host.removeEventListener('pointerup', this.upHandler);
   }
 
+  isHoverLoc(loc: Loc): boolean {
+    return this.hoverLoc?.index === loc.index;
+  }
+
+  isDefaultResult(num: number): boolean {
+    return this.defaultResult === num;
+  }
+
   renderHoverLoc(): TemplateResult[] {
     const answer = [];
     const {hoverLoc, host, game} = this;
@@ -97,7 +105,7 @@ export class SudokuInput implements ReactiveController {
               width=${cellSize}
               height=${cellSize}
               />`);
-      if (game.isBlank(hoverLoc) && !this.inputLoc) {
+      if (!this.inputLoc && game.isBlank(hoverLoc)) {
         const {activeTrail} = game.trails;
         answer.push(svg`
           <text x=${x} y=${y} class=${

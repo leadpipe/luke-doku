@@ -69,6 +69,8 @@ export class SudokuView extends LitElement implements GridContainer {
         --target-fill: light-dark(#e0e0e040, #30303040);
         --selection-fill: ${HIGHLIGHT_COLOR};
         --broken-fill: ${ERROR_COLOR};
+        --multi-value-default: light-dark(#0a0, #8f8);
+        --multi-value-negated: light-dark(#f00, #f88);
 
         --gf: light-dark(#fff, #000);
         --gd: light-dark(#ddd, #222);
@@ -514,7 +516,15 @@ export class SudokuView extends LitElement implements GridContainer {
         opacity: 10%;
       }
       svg:not(.trail-active) .multi .solution {
-        opacity: 90%;
+        opacity: 70%;
+
+        .default-result {
+          opacity: 100%;
+          color: var(--multi-value-default);
+          &.negated {
+            color: var(--multi-value-negated);
+          }
+        }
       }
       .solution.large {
         font-size: 0.8em;
@@ -757,27 +767,31 @@ export class SudokuView extends LitElement implements GridContainer {
             broken: brokenLocs.has(loc),
           })}">${nums.values().next().value}</text>`);
       } else {
-        const {cellSize} = this;
+        const {cellSize, input} = this;
         const sizeClass =
           size > 5 ? 'xsmall'
           : size > 3 ? 'small'
           : size > 2 ? 'medium'
           : 'large';
+        const isHoverLoc = !!input?.isHoverLoc(loc);
         const cls = {
           solution: true,
           [sizeClass]: true,
           'with-trail': !!trails.activeTrail?.get(loc),
+          'hover-loc': isHoverLoc,
         };
         answer.push(svg`
           <foreignObject
             x=${x - cellSize / 2} y=${y - cellSize / 2}
             width=${cellSize} height=${cellSize}>
             <div class="multi">
-              <div class=${classMap(cls)}>${[...nums].map(num =>
-                marks.isNegated(loc, num) ?
-                  svg`<span class="negated">${num}</span>`
-                : num,
-              )}</div>
+              <div class=${classMap(cls)}>${[...nums].map(num => {
+                const cls = {
+                  negated: marks.isNegated(loc, num),
+                  'default-result': isHoverLoc && !!input?.isDefaultResult(num),
+                };
+                return svg`<span class=${classMap(cls)}>${num}</span>`;
+              })}</div>
             </div>
           </foreignObject>
         `);
