@@ -87,6 +87,10 @@ export class SudokuInput implements ReactiveController {
     return this.hoverLoc?.index === loc.index;
   }
 
+  isInputLoc(loc: Loc): boolean {
+    return this.inputLoc?.index === loc.index;
+  }
+
   isDefaultResult(num: number): boolean {
     return this.defaultResult === num;
   }
@@ -105,9 +109,23 @@ export class SudokuInput implements ReactiveController {
               width=${cellSize}
               height=${cellSize}
               />`);
-      if (!this.inputLoc && game.isBlank(hoverLoc)) {
-        const {activeTrail} = game.trails;
-        answer.push(svg`
+      if (game.isBlank(hoverLoc)) {
+        if (this.inputLoc) {
+          if (this.multiInput) {
+            host.pushMultiValueCell(
+              this.multiInput,
+              x,
+              y,
+              false,
+              true,
+              false,
+              _ => ({}),
+              answer,
+            );
+          }
+        } else {
+          const {activeTrail} = game.trails;
+          answer.push(svg`
           <text x=${x} y=${y} class=${
             activeTrail?.isEmpty ?
               `hover-loc trail trail-index-0 trail-${activeTrail.id} trailhead`
@@ -117,6 +135,7 @@ export class SudokuInput implements ReactiveController {
           }>
             ${resultToText(this.defaultResult)}
           </text>`);
+        }
       }
     }
     return answer;

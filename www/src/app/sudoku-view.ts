@@ -3,7 +3,7 @@ import './sudoku-input';
 
 import {css, html, LitElement, PropertyValues, svg, TemplateResult} from 'lit';
 import {customElement, property, query, state} from 'lit/decorators.js';
-import {classMap} from 'lit/directives/class-map.js';
+import {type ClassInfo, classMap} from 'lit/directives/class-map.js';
 import {ref} from 'lit/directives/ref.js';
 import {CompletionState} from '../game/command';
 import {Game, type GameWrapper, PlayState} from '../game/game';
@@ -431,6 +431,10 @@ export class SudokuView extends LitElement implements GridContainer {
         font-weight: ${SOLUTION_FONT_WEIGHT};
         fill: var(--hover-loc-text);
       }
+      div.multi div.hover-loc:not(.input-loc) {
+        color: var(--hover-loc-text);
+        background-color: var(--hover-loc);
+      }
       text.clue {
         font: ${CLUES_FONT};
         fill: var(--clue-fill);
@@ -767,36 +771,63 @@ export class SudokuView extends LitElement implements GridContainer {
             broken: brokenLocs.has(loc),
           })}">${nums.values().next().value}</text>`);
       } else {
-        const {cellSize, input} = this;
-        const sizeClass =
-          size > 5 ? 'xsmall'
-          : size > 3 ? 'small'
-          : size > 2 ? 'medium'
-          : 'large';
+        const {input} = this;
         const isHoverLoc = !!input?.isHoverLoc(loc);
-        const cls = {
-          solution: true,
-          [sizeClass]: true,
-          'with-trail': !!trails.activeTrail?.get(loc),
-          'hover-loc': isHoverLoc,
-        };
-        answer.push(svg`
-          <foreignObject
-            x=${x - cellSize / 2} y=${y - cellSize / 2}
-            width=${cellSize} height=${cellSize}>
-            <div class="multi">
-              <div class=${classMap(cls)}>${[...nums].map(num => {
-                const cls = {
-                  negated: marks.isNegated(loc, num),
-                  'default-result': isHoverLoc && !!input?.isDefaultResult(num),
-                };
-                return svg`<span class=${classMap(cls)}>${num}</span>`;
-              })}</div>
-            </div>
-          </foreignObject>
-        `);
+        this.pushMultiValueCell(
+          nums,
+          x,
+          y,
+          !!trails.activeTrail?.get(loc),
+          !!input?.isHoverLoc(loc),
+          !!input?.isInputLoc(loc),
+          num => ({
+            negated: marks.isNegated(loc, num),
+            'default-result': isHoverLoc && !!input?.isDefaultResult(num),
+          }),
+          answer,
+        );
       }
     }
+  }
+
+  pushMultiValueCell(
+    nums: ReadonlySet<number>,
+    x: number,
+    y: number,
+    withTrail: boolean,
+    isHoverLoc: boolean,
+    isInputLoc: boolean,
+    classesForNum: (num: number) => ClassInfo,
+    answer: TemplateResult[],
+  ): void {
+    const {cellSize} = this;
+    const size = nums.size;
+    const sizeClass =
+      size > 5 ? 'xsmall'
+      : size > 3 ? 'small'
+      : size > 2 ? 'medium'
+      : 'large';
+    const cls = {
+      solution: true,
+      [sizeClass]: true,
+      'with-trail': withTrail,
+      'hover-loc': isHoverLoc,
+      'input-loc': isInputLoc,
+    };
+    answer.push(svg`
+      <foreignObject
+        x=${x - cellSize / 2} y=${y - cellSize / 2}
+        width=${cellSize} height=${cellSize}>
+        <div class="multi">
+          <div class=${classMap(cls)}>${[...nums]
+            .sort()
+            .map(
+              num =>
+                svg`<span class=${classMap(classesForNum(num))}>${num}</span>`,
+            )}</div>
+        </div>
+      </foreignObject>
+    `);
   }
 
   private pushTrails(trails: ReadonlyTrails, answer: TemplateResult[]): void {

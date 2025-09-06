@@ -1,3 +1,5 @@
+import type {TemplateResult} from 'lit';
+import type {ClassInfo} from 'lit/directives/class-map.js';
 import {Loc} from '../game/loc';
 import {Branded} from '../game/types';
 
@@ -46,9 +48,18 @@ export interface GridContainer {
   /** The size of each side of the grid. */
   readonly sideSize: DevicePixels;
 
-  /**
-   * Calculates the center point of the cell at the given row and column, which
-   * are both between 0 and 8 inclusive.
-   */
+  /** Calculates the center point of the cell at the given location. */
   cellCenter(loc: Loc): Point;
+
+  /** Renders a multi-value cell. */
+  pushMultiValueCell(
+    nums: ReadonlySet<number>,
+    x: number,
+    y: number,
+    withTrail: boolean,
+    isHoverLoc: boolean,
+    isInputLoc: boolean,
+    classesForNum: (num: number) => ClassInfo,
+    answer: TemplateResult[],
+  ): void;
 }
