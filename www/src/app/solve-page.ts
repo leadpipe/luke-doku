@@ -46,6 +46,8 @@ const allowAutoPause = true;
 declare const debugMode: boolean;
 const doAutoPause = allowAutoPause || !debugMode;
 
+const BOARD_PADDING_PIXELS = 10;
+
 /** Encapsulates the entire game page. */
 @customElement('solve-page')
 export class SolvePage extends LitElement {
@@ -59,6 +61,7 @@ export class SolvePage extends LitElement {
         gap: var(--page-grid-gap);
         --page-grid-gap: 8px;
         --board-size: 380px;
+        --board-padding: ${BOARD_PADDING_PIXELS}px;
       }
       h1 {
         font-family: ${LOGO_FONT_FAMILY};
@@ -87,7 +90,10 @@ export class SolvePage extends LitElement {
 
       sudoku-view {
         width: var(--board-size);
-        height: var(--board-size);
+        /* Leave enough room for the default-input preview. */
+        height: calc(
+          var(--board-size) + (var(--board-size) - 2 * var(--board-padding)) / 9
+        );
       }
 
       #bottom-panel {
@@ -407,7 +413,7 @@ export class SolvePage extends LitElement {
       <div id="board">
         <sudoku-view
           .gameWrapper=${game?.wrapper ?? null}
-          .padding=${cssPixels(10)}
+          .padding=${cssPixels(BOARD_PADDING_PIXELS)}
           interactive
           @cell-modified=${this.noteCellModified}
           @puzzle-solved=${this.notePuzzleSolved}

@@ -54,8 +54,8 @@ export class SudokuView extends LitElement implements GridContainer {
     css`
       :host {
         display: flex;
+        flex-direction: column;
         align-items: center;
-        justify-content: center;
         background-color: var(--gf);
         user-select: none;
         -webkit-user-select: none;
@@ -82,6 +82,10 @@ export class SudokuView extends LitElement implements GridContainer {
 
       #multi-input-popup {
         display: none;
+      }
+
+      #default-input-preview circle {
+        fill: var(--clock-fill  );
       }
 
       :host([playstate='running']) #multi-input-popup {
@@ -414,6 +418,7 @@ export class SudokuView extends LitElement implements GridContainer {
       svg {
         overflow: hidden;
         touch-action: none;
+        flex: 0 0 auto;
       }
 
       svg * {
@@ -636,7 +641,8 @@ export class SudokuView extends LitElement implements GridContainer {
         <g id="solution">${game && this.renderGameState(game)}</g>
         <g id="input">${this.input?.renderInGrid()}</g>
       </svg>
-      ${this.input?.renderMultiInputPopup()}
+      ${this.input?.renderMultiInputPopup() ??
+      this.input?.renderDefaultInputPreview()}
     `;
   }
 

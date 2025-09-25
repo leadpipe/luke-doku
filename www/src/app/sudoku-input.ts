@@ -268,7 +268,7 @@ export class SudokuInput implements ReactiveController {
     const {multiInput, host, inputLoc, multiHover} = this;
     if (!multiInput || !inputLoc) return; // We're not in multi-input mode, so we don't render anything.
 
-    // TODO: support a vertical orientation aligned to the right of the grid.
+    // TODO (maybe): support a vertical orientation aligned to the right of the grid.
     const rect = host.svgElement.getBoundingClientRect();
     const gridWidth = cssPixels(rect.width);
     const {cellSize, sideSize, padding} = host;
@@ -289,14 +289,11 @@ export class SudokuInput implements ReactiveController {
       <svg
         id="multi-input-popup"
         viewBox="${-svgPadding} 0 ${toDevice(gridWidth)} ${popupHeight}"
-        width="100"
-        height="100"
         style="
           width: ${gridWidth}px;
           height: ${toCss(popupHeight)}px;
-          position: fixed;
-          left: ${rect.left}px;
-          top: ${rect.bottom - padding}px;
+          position: relative;
+          top: ${-padding}px;
         "
       >
         <style>
@@ -355,6 +352,43 @@ export class SudokuInput implements ReactiveController {
           y=${centerLine1}
         >
           ${INPUT_TEXT['cancel']}
+        </text>
+      </svg>
+    `;
+  }
+
+  renderDefaultInputPreview() {
+    const {multiInput, host, inputLoc, defaultResult, game} = this;
+    if (multiInput && inputLoc) return; // In multi-input mode, we don't render anything.
+    if (game.playState !== PlayState.RUNNING) return;
+
+    const {cellSize} = host;
+    const radius = devicePixels(cellSize / 2);
+    const {activeTrail} = game.trails;
+    return html`
+      <svg
+        id="default-input-preview"
+        viewBox="0 0 ${cellSize} ${cellSize}"
+        style="
+          width: ${toCss(cellSize)}px;
+          height: ${toCss(cellSize)}px;
+        "
+      >
+        <circle
+          class="default-input-background"
+          r=${radius}
+          cx=${radius}
+          cy=${radius}
+        ></circle>
+        <text
+          x=${radius}
+          y=${radius}
+          class=${activeTrail?.isEmpty ?
+            `solution trail trail-${activeTrail.id} trailhead`
+          : activeTrail ? `solution trail trail-${activeTrail.id}`
+          : 'solution'}
+        >
+          ${resultToText(defaultResult)}
         </text>
       </svg>
     `;
