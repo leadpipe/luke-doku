@@ -5,7 +5,7 @@ import {mod, OkLCH} from './colors';
 const CHROMA = 35; // 0..37
 const DARK_LIGHTNESS = 90; // 0..100
 const LIGHT_LIGHTNESS = 40; // 0..100
-const HUE_DELTA = 77; // degrees
+const HUE_DELTA = 137; // degrees
 
 /**
  * Calculates the colors to associate with any trails for a given puzzle.  A
