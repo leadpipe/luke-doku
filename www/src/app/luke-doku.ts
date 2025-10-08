@@ -59,6 +59,12 @@ export class LukeDoku extends LitElement {
   `;
 
   override render() {
+    if (window !== window.top) {
+      // In an iframe, just show a link to the app.
+      return html`<div class="loading">
+        <a href="." target="_blank">Open Luke-doku in a new tab</a>
+      </div>`;
+    }
     const {page, nextPage, nextPageClass} = this;
     const pageClass =
       nextPageClass && (nextPageClass === 'left' ? 'to-right' : 'to-left');
