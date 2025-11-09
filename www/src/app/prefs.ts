@@ -1,5 +1,5 @@
 import './events';
-import {prefsEvent, PrefsEventTarget} from './events';
+import {dispatchTypeSafeEvent, PrefsEventTarget} from './events';
 import {Theme, ThemeOrAuto} from './types';
 import {todayString} from './utils';
 
@@ -55,7 +55,7 @@ export function setPreferredTheme(theme: ThemeOrAuto) {
 function dispatchThemeChange(prev: Theme) {
   const next = getCurrentTheme();
   if (next !== prev) {
-    prefsTarget.dispatchEvent(prefsEvent('current-theme', {detail: next}));
+    dispatchTypeSafeEvent(prefsTarget, 'current-theme', next);
   }
 }
 
@@ -88,7 +88,7 @@ export function getShowClock(): boolean {
 export function setShowClock(flag: boolean) {
   showClock = flag;
   window.localStorage.setItem('showClock', String(flag));
-  prefsTarget.dispatchEvent(prefsEvent('show-clock', {detail: flag}));
+  dispatchTypeSafeEvent(prefsTarget, 'show-clock', flag);
 }
 
 let seenHelp = false;

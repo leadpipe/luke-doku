@@ -14,7 +14,11 @@ import {Game, PlayState} from '../game/game';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {ensureExhaustiveSwitch} from '../game/utils';
-import {customEvent} from './events';
+import {
+  addTypeSafeListener,
+  dispatchTypeSafeEvent,
+  removeTypeSafeListener,
+} from './events';
 import {
   getCurrentSystemTheme,
   getCurrentTheme,
@@ -755,7 +759,7 @@ export class SolvePage extends LitElement {
     window.addEventListener('blur', this.windowBlurHandler);
     window.addEventListener('focus', this.windowFocusHandler);
     window.addEventListener('keydown', this.spacebarHandler);
-    prefsTarget.addEventListener('current-theme', this.themeHandler);
+    addTypeSafeListener(prefsTarget, 'current-theme', this.themeHandler);
   }
 
   override disconnectedCallback(): void {
@@ -767,7 +771,7 @@ export class SolvePage extends LitElement {
     window.removeEventListener('blur', this.windowBlurHandler);
     window.removeEventListener('focus', this.windowFocusHandler);
     window.removeEventListener('keydown', this.spacebarHandler);
-    prefsTarget.removeEventListener('current-theme', this.themeHandler);
+    removeTypeSafeListener(prefsTarget, 'current-theme', this.themeHandler);
   }
 
   private setTheme(event: Event) {
@@ -777,13 +781,7 @@ export class SolvePage extends LitElement {
 
   private showPuzzlesPage(event_: Event) {
     this.game?.pause(PauseReason.AUTO);
-    this.dispatchEvent(
-      customEvent('show-puzzles-page', {
-        composed: true,
-        bubbles: true,
-        detail: undefined,
-      }),
-    );
+    dispatchTypeSafeEvent(this, 'show-puzzles-page', undefined);
   }
 
   private async showDialog(

@@ -4,7 +4,7 @@ import {map} from 'lit/directives/map.js';
 import {Game, PlayState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
-import {customEvent} from './events';
+import {dispatchTypeSafeEvent} from './events';
 import {
   cssPixels,
   devicePixels,
@@ -607,24 +607,12 @@ export class SudokuInput implements ReactiveController {
 
   private checkSolved(game: Game) {
     if (!game.trails.active && game.marks.asGrid().isSolved()) {
-      this.host.dispatchEvent(
-        customEvent('puzzle-solved', {
-          detail: undefined,
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      dispatchTypeSafeEvent(this.host, 'puzzle-solved', undefined);
     }
   }
 
   private cellModified(loc: Loc) {
-    this.host.dispatchEvent(
-      customEvent('cell-modified', {
-        detail: loc,
-        bubbles: true,
-        composed: true,
-      }),
-    );
+    dispatchTypeSafeEvent(this.host, 'cell-modified', loc);
   }
 
   private handleKeyDown(event: KeyboardEvent) {

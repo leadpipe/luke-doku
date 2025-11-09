@@ -15,7 +15,7 @@ import {
   type LukeDokuDb,
   openDb,
 } from '../system/database';
-import {customEvent} from './events';
+import {dispatchTypeSafeEvent} from './events';
 import {LOGO_FONT_FAMILY} from './styles';
 import type {SudokuView} from './sudoku-view';
 import {
@@ -264,13 +264,7 @@ export class PuzzlesPage extends LitElement {
     const cluesString = findDataString(event, 'clues') as GridString;
     const game = Game.forCluesString(cluesString);
     if (game) {
-      this.dispatchEvent(
-        customEvent('play-puzzle', {
-          detail: game,
-          bubbles: true,
-          composed: true,
-        }),
-      );
+      dispatchTypeSafeEvent(this, 'play-puzzle', game);
     }
   }
 
