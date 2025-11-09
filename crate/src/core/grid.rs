@@ -134,7 +134,7 @@ impl Grid {
   }
 
   /// This grid's state: solved, incomplete, or broken.
-  pub fn state(&self) -> GridState {
+  pub fn state<'a>(&'a self) -> GridState<'a> {
     let mut broken = LocSet::new();
     let asgmts = AsgmtSet::simple_from_grid(self);
     for unit in Unit::all() {

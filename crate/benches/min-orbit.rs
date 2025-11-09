@@ -1,11 +1,11 @@
 use chrono::{Duration, NaiveDate};
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, criterion_main, Criterion};
 use luke_doku::{core::SolvedGrid, date::LogicalDate, gen::*, permute::GridPermutation};
 
 fn criterion_benchmark(c: &mut Criterion) {
   let start = NaiveDate::from_ymd_opt(1961, 9, 20).unwrap();
   c.bench_function("min-orbit 20", |b| {
-    b.iter(|| find_min_orbit(start, black_box(20)))
+    b.iter(|| find_min_orbit(start, std::hint::black_box(20)))
   });
 }
 

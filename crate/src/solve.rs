@@ -156,7 +156,7 @@ impl SearcherFactory {
     }
   }
 
-  pub fn new_searcher<'a>(&'a self, helper: &'a mut dyn SearchHelper) -> Searcher {
+  pub fn new_searcher<'a>(&'a self, helper: &'a mut dyn SearchHelper) -> Searcher<'a> {
     Searcher::new(&self.ledger, &self.doubles, helper)
   }
 }
