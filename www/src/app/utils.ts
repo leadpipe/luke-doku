@@ -142,6 +142,11 @@ export function renderPuzzleTitle(sudoku: Sudoku, assumeToday: boolean) {
         html`Puzzle from <q>${sudoku.source}</q>`
       : `External puzzle`;
   }
+  return puzzleTitleFromId(id, assumeToday);
+}
+
+/** Constructs a title for a puzzle with the given Luke-doku ID. */
+export function puzzleTitleFromId(id: PuzzleId, assumeToday: boolean): string {
   const puzzleDate = wasm.LogicalDate.fromString(id.date);
   const days = today.daysSince(puzzleDate);
   if (days === 0 && assumeToday) {
