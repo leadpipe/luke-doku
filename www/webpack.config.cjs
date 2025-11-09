@@ -60,10 +60,7 @@ const baseConfig = {
           transform(content) {
             return content
               .toString()
-              .replaceAll(
-                '$debugMode',
-                debugMode ? `{'debug_mode': 'true'}` : '{}',
-              );
+              .replaceAll('$debugMode', debugMode.toString());
           },
         },
         //        {from: '../icons', to: __dirname + '/dist'},
