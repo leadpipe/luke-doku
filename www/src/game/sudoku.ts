@@ -106,6 +106,33 @@ export class PuzzleId {
   toString(): string {
     return `${this.date}:${this.counter}:${this.generatorVersion ?? 0}`;
   }
+
+  static parse(s: string): PuzzleId | null {
+    const parts = s.split(':');
+    if (parts.length < 2 || parts.length > 3) return null;
+    try {
+      wasm.LogicalDate.fromString(parts[0]).free();
+    } catch {
+      return null;
+    }
+    const date = parts[0] as DateString;
+    const counter = Number(parts[1]);
+    if (isNaN(counter) || counter < 1 || !Number.isInteger(counter)) {
+      return null;
+    }
+    let generatorVersion = 0;
+    if (parts.length === 3) {
+      generatorVersion = Number(parts[2]);
+      if (
+        isNaN(generatorVersion) ||
+        generatorVersion < 0 ||
+        !Number.isInteger(generatorVersion)
+      ) {
+        return null;
+      }
+    }
+    return new PuzzleId(date, counter, generatorVersion);
+  }
 }
 
 /**

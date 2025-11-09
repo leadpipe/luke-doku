@@ -5,7 +5,8 @@ import {
   type PuzzleGeneratedMessage,
   ToWorkerMessageType,
 } from '../worker/worker-types';
-import {Sudoku} from './sudoku';
+import {PuzzleId, Sudoku} from './sudoku';
+import {dateString} from './types';
 
 const {generatePuzzle} = TEST_ONLY;
 
@@ -98,6 +99,34 @@ describe('Sudoku', () => {
       expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(
         sudoku,
       );
+    });
+  });
+});
+
+describe('PuzzleId', () => {
+  describe('parse', () => {
+    it('parses valid IDs', () => {
+      expect(PuzzleId.parse('2024-06-15:3')).toEqual(
+        new PuzzleId(
+          dateString(wasm.LogicalDate.fromString('2024-06-15')),
+          3,
+          0,
+        ),
+      );
+      expect(PuzzleId.parse('2024-12-31:42:2')).toEqual(
+        new PuzzleId(
+          dateString(wasm.LogicalDate.fromString('2024-12-31')),
+          42,
+          2,
+        ),
+      );
+    });
+
+    it('returns null for invalid IDs', () => {
+      expect(PuzzleId.parse('')).toBeNull();
+      expect(PuzzleId.parse('2024-06-15')).toBeNull();
+      expect(PuzzleId.parse('2024-06-15:-3')).toBeNull();
+      expect(PuzzleId.parse('2024-06-15:3:foo')).toBeNull();
     });
   });
 });
