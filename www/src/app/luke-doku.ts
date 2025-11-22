@@ -6,14 +6,24 @@ import './sudoku-view';
 import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
+import * as wasm from 'luke-doku-rust';
 import {Game} from '../game/game';
+import {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import {
-  iterateDatePuzzlesAsc,
   iterateOngoingPuzzlesDesc,
+  lookUpPuzzleById,
   openDb,
 } from '../system/database';
+import {addTypeSafeListener} from './events';
+import {
+  getHashState,
+  type HashState,
+  navigateHome,
+  navigateToPath,
+  navigateToPuzzle,
+} from './nav';
 import {getPuzzleDate, setPuzzleDateToToday} from './prefs';
 import {todayString} from './utils';
 
@@ -116,73 +126,111 @@ export class LukeDoku extends LitElement {
 
   constructor() {
     super();
-    this.addEventListener('play-puzzle', e => this.selectPuzzle(e));
-    this.addEventListener('show-puzzles-page', () => this.showPuzzlesPage());
-
-    if (getPuzzleDate() < todayString) {
-      this.loadPuzzleOfTheDay();
-    } else {
-      this.loadOngoingGameOrPuzzles();
-    }
+    addTypeSafeListener(
+      window,
+      'hash-state-changed',
+      async (event: CustomEvent<HashState>) => {
+        (await this.showGameForPath(event.detail)) ||
+          this.showPage('puzzles', this.page === 'loading' ? 'right' : 'left');
+      },
+    );
+    this.startProcess();
   }
 
   override connectedCallback(): void {
     super.connectedCallback();
     window.addEventListener('focus', this.reloadOnNewDay);
     window.addEventListener('blur', this.reloadOnNewDay);
-    document.addEventListener('visibilitychange', this.reloadOnNewDay);
+    document.addEventListener('visibilitychange', this.handleVisibilityChange);
   }
 
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('focus', this.reloadOnNewDay);
     window.removeEventListener('blur', this.reloadOnNewDay);
-    document.removeEventListener('visibilitychange', this.reloadOnNewDay);
+    document.removeEventListener(
+      'visibilitychange',
+      this.handleVisibilityChange,
+    );
   }
 
-  private selectPuzzle(event: CustomEvent<Game>) {
-    this.game = event.detail;
-    this.showPage('solve', 'right');
+  private async showGameForPath(hashState: HashState): Promise<boolean> {
+    if (hashState.path.length === 1) {
+      // The solve page for a specific puzzle.
+      const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
+      if (game) {
+        this.game = game;
+        this.showPage('solve', 'right');
+        return true;
+      }
+    }
+    return false;
   }
 
-  private showPuzzlesPage() {
-    this.showPage('puzzles', 'left');
+  private async startProcess() {
+    await this.updateComplete;
+    if (await this.showGameForPath(getHashState())) {
+    } else if (getPuzzleDate() < todayString) {
+      await this.goToPuzzleOfTheDay();
+    } else {
+      await this.goToOngoingGameOrPuzzles();
+    }
   }
 
-  private readonly reloadOnNewDay = () => {
+  private async tryToLoadGameFromCluesOrId(
+    cluesOrId: string,
+  ): Promise<Game | null> {
+    let game = Game.forCluesOrIdString(cluesOrId);
+    if (game) {
+      return game;
+    }
+    const db = await openDb();
+    const puzzleId = PuzzleId.parse(cluesOrId);
+    if (puzzleId) {
+      const record = await lookUpPuzzleById(db, puzzleId);
+      if (record) {
+        game = Game.forDbRecord(db, record);
+        return game;
+      }
+      return await Game.createGame(db, puzzleId.date, puzzleId.counter);
+    }
+    // TODO: handle a clues string
+    return null;
+  }
+
+  private readonly reloadOnNewDay = async () => {
     // Note we check for strictly greater than, not just "not equals," to handle
     // the case where local time goes backwards during fast travel westwards.
     if (dateString(new Date()) > todayString) {
+      await navigateHome();
       this.showPage('loading', 'left');
       location.reload();
+      return true;
     }
+    return false;
   };
 
-  private async loadPuzzleOfTheDay() {
-    const db = await openDb();
-    let game: Game | null = null;
-    for await (const cursor of iterateDatePuzzlesAsc(db, todayString)) {
-      if (cursor.value.puzzleId?.[1] === 1) {
-        game = Game.forDbRecord(db, cursor.value);
-      }
-      break;
+  private readonly handleVisibilityChange = async () => {
+    if (await this.reloadOnNewDay()) {
+      return;
     }
-    if (!game) {
-      game = await Game.createGame(db, todayString, 1);
-    }
-    this.game = game;
-    this.showPage('solve', 'right');
+    await this.goToOngoingGameOrPuzzles();
+  };
+
+  private async goToPuzzleOfTheDay() {
+    await navigateToPath(
+      new PuzzleId(todayString, 1, wasm.generatorVersion()).toString(),
+    );
     setPuzzleDateToToday();
   }
 
-  private async loadOngoingGameOrPuzzles() {
+  private async goToOngoingGameOrPuzzles() {
     const db = await openDb();
     for await (const cursor of iterateOngoingPuzzlesDesc(db)) {
-      this.game = Game.forDbRecord(db, cursor.value);
-      this.showPage('solve', 'right');
+      await navigateToPuzzle(Sudoku.fromDatabaseRecord(cursor.value));
       return;
     }
-    this.showPage('puzzles', 'right');
+    await navigateHome();
   }
 
   private async showPage(page: Page, pageClass: 'left' | 'right') {

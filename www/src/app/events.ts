@@ -1,14 +1,9 @@
-import type {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import type {HashState} from './nav';
 import {Theme} from './types';
 
 declare global {
   interface HTMLElementEventMap {
-    /**
-     * Sent to switch to the solve page showing the given Game.
-     */
-    'play-puzzle': CustomEvent<Game>;
     /**
      * Sent by game-clock when another second has passed.  The event detail
      * tells whether the clock was being shown.
@@ -23,10 +18,6 @@ declare global {
      * contents of a cell. The event detail says which cell.
      */
     'cell-modified': CustomEvent<Loc>;
-    /**
-     * Sent to return to the puzzles page.
-     */
-    'show-puzzles-page': CustomEvent<void>;
   }
 
   interface WindowEventMap {

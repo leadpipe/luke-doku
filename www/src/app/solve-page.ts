@@ -14,11 +14,8 @@ import {Game, PlayState} from '../game/game';
 import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {ensureExhaustiveSwitch} from '../game/utils';
-import {
-  addTypeSafeListener,
-  dispatchTypeSafeEvent,
-  removeTypeSafeListener,
-} from './events';
+import {addTypeSafeListener, removeTypeSafeListener} from './events';
+import {navigateHome} from './nav';
 import {
   getCurrentSystemTheme,
   getCurrentTheme,
@@ -781,7 +778,7 @@ export class SolvePage extends LitElement {
 
   private showPuzzlesPage(event_: Event) {
     this.game?.pause(PauseReason.AUTO);
-    dispatchTypeSafeEvent(this, 'show-puzzles-page', undefined);
+    navigateHome();
   }
 
   private async showDialog(
