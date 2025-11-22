@@ -355,22 +355,26 @@ export class Game extends BaseGame {
    * @param record The record in the database
    */
   static forDbRecord(db: IDBPDatabase<LukeDokuDb>, record: PuzzleRecord): Game {
-    let answer = this.forCluesString(record.clues);
+    let answer = this.forCluesOrIdString(record.clues);
     if (!answer) {
       answer = new Game(db, record);
-      this.instances.set(record.clues, new WeakRef(answer));
+      const ref = new WeakRef(answer);
+      this.instances.set(record.clues, ref);
+      if (answer.sudoku.id) {
+        this.instances.set(answer.sudoku.id.toString(), ref);
+      }
     }
     return answer;
   }
 
   /**
-   * Returns the Game that corresponds to the given clues string, if it has been
+   * Returns the Game that corresponds to the given clues or puzzle ID, if it has been
    * created and not garbage collected.
-   * @param clues The clues string for the game in question
+   * @param clues The clues string, or puzzle ID string, for the game in question
    * @returns The Game for the given clues, or undefined
    */
-  static forCluesString(clues: string | GridString): Game | undefined {
-    return this.instances.get(clues)?.deref();
+  static forCluesOrIdString(cluesOrId: string | GridString): Game | undefined {
+    return this.instances.get(cluesOrId)?.deref();
   }
 
   /**
@@ -480,6 +484,9 @@ export class Game extends BaseGame {
       this.record.history,
     ];
     Game.instances.delete(record.clues);
+    if (this.sudoku.id) {
+      Game.instances.delete(this.sudoku.id.toString());
+    }
     return Game.forDbRecord(this.db, record);
   }
 
