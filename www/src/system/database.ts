@@ -5,6 +5,7 @@ import {
   openDB,
 } from 'idb';
 import * as wasm from 'luke-doku-rust';
+import type {PuzzleId} from '../game/sudoku';
 import type {DateString} from '../game/types';
 
 /**
@@ -40,6 +41,18 @@ export function iterateDatePuzzlesAsc(
   return index.iterate(
     IDBKeyRange.bound([dateString, 1], [dateString, Infinity]),
   );
+}
+
+export function lookUpPuzzleById(
+  db: IDBPDatabase<LukeDokuDb>,
+  puzzleId: PuzzleId,
+): Promise<PuzzleRecord | undefined> {
+  const index = db.transaction('puzzles').store.index('byPuzzleId');
+  return index.get([
+    puzzleId.date,
+    puzzleId.counter,
+    puzzleId.generatorVersion,
+  ]);
 }
 
 const INFINITE_DATE = 8640000000000000;
@@ -178,7 +191,7 @@ export interface LukeDokuDb extends DBSchema {
        * Lets you find a particular generated puzzle, or all the generated
        * puzzles for a particular day.
        */
-      byPuzzleId: [string, number];
+      byPuzzleId: [string, number, number];
 
       /**
        * Lets you find all the puzzles in a given state, ordered by last updated
