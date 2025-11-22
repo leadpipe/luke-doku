@@ -1,7 +1,8 @@
 // Browser navigation module.
 
-import {PuzzleId} from '../game/sudoku';
+import {PuzzleId, type Sudoku} from '../game/sudoku';
 import {EventType, logEvent} from '../system/analytics';
+import {dispatchTypeSafeEvent} from './events';
 import {puzzleTitleFromId} from './utils';
 
 /**
@@ -39,7 +40,7 @@ export function getHashState(url?: string): HashState {
   const hashIndex = url.indexOf('#');
   const hash = hashIndex >= 0 ? url.substring(hashIndex + 1) : '';
   const hashUrl = new URL('http://example.com/' + hash);
-  const path = hashUrl.pathname.substring(1).split('/').map(decodeURIComponent);
+  const path = hashUrl.pathname.substring(1).split('/');
   return {
     path,
     params: hashUrl.searchParams,
@@ -47,7 +48,7 @@ export function getHashState(url?: string): HashState {
 }
 
 function getUrl(hashState: HashState): string {
-  const hashPath = hashState.path.map(encodeURIComponent).join('/');
+  const hashPath = hashState.path.join('/');
   const search = hashState.params.toString();
   if (!hashPath && !search) {
     return baseUrl;
@@ -133,7 +134,11 @@ function updateEntriesAndTitle(
  * Aligns the given history stack with the given hash state by pushing,
  * replacing, or going back as needed.
  */
-function alignHistoryStack(stack: HistoryStack, hashState: HashState) {
+function alignHistoryStack(
+  stack: HistoryStack,
+  hashState: HashState,
+  sendEvent = true,
+) {
   const {path} = hashState;
   const prefixUrls = getPrefixUrls({path, params: new URLSearchParams()});
   // Find the first entry that differs from the implied history stack.
@@ -152,7 +157,7 @@ function alignHistoryStack(stack: HistoryStack, hashState: HashState) {
       stack.index = 0;
     }
     updateEntriesAndTitle(stack.entries, 0, prefixUrls[0]);
-  } else if (stack.index > targetIndex) {
+  } else if (stack.index !== targetIndex) {
     window.history.go(targetIndex - stack.index);
     stack.index = targetIndex;
   }
@@ -166,6 +171,7 @@ function alignHistoryStack(stack: HistoryStack, hashState: HashState) {
     stack.index = i;
   }
   window.sessionStorage.setItem('historyStack', JSON.stringify(stack));
+  if (sendEvent) handleHashStateChange();
 }
 
 const baseUrl = window.location.href.replace(/(#.*)?$/, '');
@@ -203,13 +209,16 @@ const historyStack: Promise<HistoryStack> = (async () => {
     ],
   };
   window.history.replaceState(null, '', baseUrl);
-  alignHistoryStack(stack, getHashState(fullUrl));
+  alignHistoryStack(stack, getHashState(fullUrl), false);
   return stack;
 })();
 
-window.addEventListener('popstate', async () => {
+window.addEventListener('popstate', handleHashStateChange);
+
+async function handleHashStateChange() {
   const stack = await historyStack;
   const fullUrl = window.location.href;
+  const hashState = getHashState(fullUrl);
   const index = stack.entries.findIndex(entry => entry.url === fullUrl);
   if (index >= 0) {
     stack.index = index;
@@ -220,9 +229,10 @@ window.addEventListener('popstate', async () => {
       category: 'history stack missing entry',
       detail: fullUrl,
     });
-    alignHistoryStack(stack, getHashState(fullUrl));
+    alignHistoryStack(stack, hashState);
   }
-});
+  dispatchTypeSafeEvent(window, 'hash-state-changed', hashState);
+}
 
 /**
  * Navigates to the base URL, which shows the puzzles page.  This consists of
@@ -271,4 +281,11 @@ export async function navigateToParam(key: string, value?: string) {
     params.set(key, value);
   }
   alignHistoryStack(stack, {path: currentHashState.path, params});
+}
+
+/**
+ * Navigates to the given puzzle's solve page.
+ */
+export async function navigateToPuzzle(sudoku: Sudoku) {
+  await navigateToPath(sudoku.id ? sudoku.id.toString() : sudoku.cluesString());
 }
