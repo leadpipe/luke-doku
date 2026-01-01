@@ -66,7 +66,7 @@ impl Collector {
       }
       let eliminations_start = self.facts.len();
       find_overlaps(self);
-      find_locked_sets(self, &mut set_state);
+      find_subsets(self, &mut set_state);
       let eliminations_end = self.facts.len();
       find_hidden_singles(self);
       find_naked_singles(self);
@@ -158,7 +158,7 @@ impl Fact {
           }
         }
       }
-      Fact::LockedSet {
+      Fact::Subset {
         nums,
         unit,
         locs,
@@ -196,7 +196,7 @@ impl Fact {
   fn uses_sukaku_map(&self) -> bool {
     match self {
       Fact::SingleNum { .. } | Fact::NoNum { .. } => true,
-      Fact::LockedSet { is_naked, .. } => *is_naked,
+      Fact::Subset { is_naked, .. } => *is_naked,
       _ => false,
     }
   }
@@ -219,7 +219,7 @@ impl Fact {
         unit,
         cross_unit,
       } => ((remaining_asgmts.num_locs(*num) & unit.locs()) - cross_unit.locs()).is_empty(),
-      Fact::LockedSet {
+      Fact::Subset {
         nums,
         unit,
         locs,
@@ -340,7 +340,7 @@ fn find_overlaps(collector: &mut Collector) {
 
 pub const MAX_SET_SIZE: i32 = 4;
 
-fn find_locked_sets(collector: &mut Collector, set_state: &mut SetState) {
+fn find_subsets(collector: &mut Collector, set_state: &mut SetState) {
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
       find_hidden_sets(collector, set_state, unit_id.to_unit(), size);
@@ -901,7 +901,7 @@ fn find_hidden_sets(collector: &mut Collector, set_state: &mut SetState, unit: U
       }
       if locs.len() == size {
         let cross_unit = find_overlapping_unit(unit, locs);
-        collector.add_fact(Fact::LockedSet {
+        collector.add_fact(Fact::Subset {
           nums,
           unit,
           locs,
@@ -945,7 +945,7 @@ fn find_naked_sets(collector: &mut Collector, set_state: &mut SetState, unit: Un
       }
       if nums.len() == size {
         let cross_unit = find_overlapping_unit(unit, locs);
-        collector.add_fact(Fact::LockedSet {
+        collector.add_fact(Fact::Subset {
           nums,
           unit,
           locs,
@@ -1225,14 +1225,14 @@ mod tests {
     assert_eq!(collector.facts, vec![o1, o2, o3, o4, o5,]);
   }
 
-  fn make_locked_set(
+  fn make_subset(
     nums: NumSet,
     unit: impl UnitTrait,
     locs: LocSet,
     cross_unit: Option<impl UnitTrait>,
     is_naked: bool,
   ) -> Fact {
-    Fact::LockedSet {
+    Fact::Subset {
       nums,
       unit: unit.to_unit(),
       locs,
@@ -1242,7 +1242,7 @@ mod tests {
   }
 
   #[test]
-  fn test_find_locked_sets() {
+  fn test_find_subsets() {
     let grid = Grid::from_str(
       r"
          . 1 4 | . 9 . | . 5 .
@@ -1261,20 +1261,20 @@ mod tests {
     .unwrap();
     let mut collector = make_collector(&grid);
     let mut set_state = SetState::new();
-    find_locked_sets(&mut collector, &mut set_state);
+    find_subsets(&mut collector, &mut set_state);
     assert_eq!(
       collector.facts,
       vec![
-        make_locked_set(num_set! {N4, N9}, B3, loc_set! {L27, L28}, Some(R2), false),
-        make_locked_set(
+        make_subset(num_set! {N4, N9}, B3, loc_set! {L27, L28}, Some(R2), false),
+        make_subset(
           num_set! {N3, N7, N8},
           R1,
           loc_set! {L11, L14, L16},
           None::<Blk>,
           false
         ),
-        make_locked_set(num_set! {N2, N6}, B3, loc_set! {L17, L19}, Some(R1), true),
-        make_locked_set(
+        make_subset(num_set! {N2, N6}, B3, loc_set! {L17, L19}, Some(R1), true),
+        make_subset(
           num_set! {N3, N5, N7, N8},
           R2,
           loc_set! {L21, L22, L23, L26},
@@ -1293,20 +1293,20 @@ mod tests {
     .apply(&grid);
     let mut collector = make_collector(&grid);
     let mut set_state = SetState::new();
-    find_locked_sets(&mut collector, &mut set_state);
+    find_subsets(&mut collector, &mut set_state);
     assert_eq!(
       collector.facts,
       vec![
-        make_locked_set(num_set! {N4, N9}, B7, loc_set! {L72, L82}, Some(C2), false),
-        make_locked_set(
+        make_subset(num_set! {N4, N9}, B7, loc_set! {L72, L82}, Some(C2), false),
+        make_subset(
           num_set! {N3, N7, N8},
           C1,
           loc_set! {L11, L41, L61},
           None::<Blk>,
           false
         ),
-        make_locked_set(num_set! {N2, N6}, B7, loc_set! {L71, L91}, Some(C1), true),
-        make_locked_set(
+        make_subset(num_set! {N2, N6}, B7, loc_set! {L71, L91}, Some(C1), true),
+        make_subset(
           num_set! {N3, N5, N7, N8},
           C2,
           loc_set! {L12, L22, L32, L62},
@@ -1413,7 +1413,7 @@ mod tests {
     let o5 = make_implication(vec![o3.clone()], make_overlap(N1, B7, R8));
     let set = make_implication(
       vec![o2.clone()],
-      make_locked_set(
+      make_subset(
         num_set! {N4, N5, N6, N8},
         C2,
         loc_set! {L12, L22, L32, L52},
@@ -1466,7 +1466,7 @@ mod tests {
         Fact::NoNum { .. } => "NoNum",
         Fact::Conflict { .. } => "Conflict",
         Fact::Overlap { .. } => "Overlap",
-        Fact::LockedSet { .. } => "LockedSet",
+        Fact::Subset { .. } => "Subset",
         Fact::Implication { .. } => "Implication",
       };
       *nub_counts.entry(name.to_string()).or_insert(0) += 1;
@@ -1480,7 +1480,7 @@ mod tests {
       nub_counts,
       vec![
         "Conflict: 2",
-        "LockedSet: 2",
+        "Subset: 2",
         "NoLoc: 3",
         "Overlap: 7",
         "SingleLoc: 1",

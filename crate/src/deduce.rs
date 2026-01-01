@@ -35,7 +35,7 @@ pub enum Fact {
   /// Elimination: the given numerals can only occupy the given locations within
   /// the unit, so all other locations in the unit can be eliminated for those
   /// numerals, and all other numerals can be eliminated from those locations.
-  LockedSet {
+  Subset {
     nums: NumSet,
     unit: Unit,
     locs: LocSet,
@@ -75,7 +75,7 @@ impl Fact {
         answer.union_in_place(*num, cross_unit.locs() - unit.locs());
         answer
       }
-      Fact::LockedSet {
+      Fact::Subset {
         nums,
         unit,
         locs,

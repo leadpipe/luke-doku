@@ -114,7 +114,7 @@ impl Fact {
       Fact::SingleNum { .. } => Complexity::Simple,
       Fact::SpeculativeAssignment { .. } => Complexity::Simple,
       Fact::Overlap { .. } => Complexity::Moderate,
-      Fact::LockedSet {
+      Fact::Subset {
         nums,
         unit,
         is_naked,
@@ -138,7 +138,7 @@ impl Fact {
           return Complexity::Moderate;
         }
         if antecedents.len() == 1
-          && matches!(antecedents[0], Fact::LockedSet { .. })
+          && matches!(antecedents[0], Fact::Subset { .. })
           && !matches!(**consequent, Fact::Implication { .. })
         {
           // A single locked set implies a single assignment, so we can treat it
@@ -157,7 +157,7 @@ impl Fact {
       Fact::SingleNum { num, .. } => NumSet::singleton(*num),
       Fact::SpeculativeAssignment { num, .. } => NumSet::singleton(*num),
       Fact::Overlap { num, .. } => NumSet::singleton(*num),
-      Fact::LockedSet { nums, .. } => *nums,
+      Fact::Subset { nums, .. } => *nums,
       Fact::Implication {
         antecedents,
         consequent,
