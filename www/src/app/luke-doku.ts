@@ -7,7 +7,7 @@ import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
 import * as wasm from 'luke-doku-rust';
-import {Game} from '../game/game';
+import {Game, PlayState} from '../game/game';
 import {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
 import {ensureExhaustiveSwitch} from '../game/utils';
@@ -167,10 +167,26 @@ export class LukeDoku extends LitElement {
     return false;
   }
 
+  private async isOnUnstartedGame(hashState: HashState): Promise<boolean> {
+    if (hashState.path.length === 1) {
+      const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
+      if (
+        game &&
+        game === this.game &&
+        game.playState === PlayState.UNSTARTED
+      ) {
+        return true;
+      }
+    }
+    return false;
+  }
+
   private async startProcess() {
     await this.updateComplete;
     if (await this.showGameForPath(getHashState())) {
-    } else if (getPuzzleDate() < todayString) {
+      return;
+    }
+    if (getPuzzleDate() < todayString) {
       await this.goToPuzzleOfTheDay();
     } else {
       await this.goToOngoingGameOrPuzzles();
@@ -212,6 +228,9 @@ export class LukeDoku extends LitElement {
 
   private readonly handleVisibilityChange = async () => {
     if (await this.reloadOnNewDay()) {
+      return;
+    }
+    if (await this.isOnUnstartedGame(getHashState())) {
       return;
     }
     await this.goToOngoingGameOrPuzzles();
