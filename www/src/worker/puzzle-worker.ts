@@ -139,7 +139,10 @@ function testPuzzle(m: TestPuzzleMessage): FromWorkerMessage {
   return {
     type: FromWorkerMessageType.PUZZLE_TESTED,
     toWorkerMessage: m,
-    result,
+    solutions: result.puzzle?.solutions.map((s: wasm.SolvedGrid) =>
+      s.grid().toFlatString(),
+    ),
+    incomplete: result.incomplete,
     elapsedMs,
   };
 }

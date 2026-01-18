@@ -29,17 +29,15 @@ pub struct Puzzle {
 }
 
 /// Possible results of testing a set of clues to see if it works as a puzzle.
-#[derive(Clone, Copy, Debug, Eq, Hash, PartialEq)]
-#[wasm_bindgen]
-pub enum PuzzleProspect {
-  /// The set of clues doesn't work, there are no solutions.
-  NoSolutions,
-  /// The set of clues works: it produces solutions consistent with luke-doku's
-  /// rules.
-  Viable,
-  /// The set of clues is incomplete: it produces too many solutions or
-  /// a set of solutions with too many holes.
-  NotEnoughClues,
+#[derive(Clone, Debug, Eq, Hash, PartialEq)]
+#[wasm_bindgen(getter_with_clone)]
+pub struct PuzzleProspect {
+  /// If the clues produce a puzzle satisfying luke-doku's rules, this is the
+  /// resulting puzzle; otherwise, it's None.
+  pub puzzle: Option<Puzzle>,
+  /// If `puzzle` is None, this indicates whether the clues match too many
+  /// solutions (true) or no solutions at all (false).
+  pub incomplete: bool,
 }
 
 #[wasm_bindgen]
@@ -64,7 +62,6 @@ impl Puzzle {
         gen_opts: None,
         solutions,
       });
-        
     }
     let mut helper = DefaultHelper();
     let summary = solve(&clues, MAX_SOLUTIONS, &mut helper);
@@ -79,17 +76,30 @@ impl Puzzle {
   }
 
   /// Tests a set of clues for whether they form a viable puzzle, according to
-  /// luke-doku's parameters.
+  /// luke-doku's criteria.
   pub fn test(clues: &Grid) -> PuzzleProspect {
     let mut helper = DefaultHelper();
     let summary = solve(&clues, MAX_SOLUTIONS, &mut helper);
     if summary.solutions.len() == 0 {
-      return PuzzleProspect::NoSolutions;
+      PuzzleProspect {
+        puzzle: None,
+        incomplete: false,
+      }
+    } else if summary.too_many_solutions || summary.num_holes() > MAX_HOLES {
+      PuzzleProspect {
+        puzzle: None,
+        incomplete: true,
+      }
+    } else {
+      PuzzleProspect {
+        puzzle: Some(Self {
+          clues: summary.clues,
+          gen_opts: None,
+          solutions: summary.solutions,
+        }),
+        incomplete: false,
+      }
     }
-    if summary.too_many_solutions || summary.num_holes() > MAX_HOLES {
-      return PuzzleProspect::NotEnoughClues;
-    }
-    PuzzleProspect::Viable
   }
 
   #[wasm_bindgen(js_name = "solutionsCount")]

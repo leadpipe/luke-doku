@@ -138,8 +138,16 @@ export interface PuzzleTestedMessage extends FromWorkerMessageBase {
   readonly toWorkerMessage: TestPuzzleMessage;
   readonly type: FromWorkerMessageType.PUZZLE_TESTED;
 
-  /** The result of the test. */
-  readonly result: wasm.PuzzleProspect;
+  /** The set of solutions, each in GridString form, if the puzzle is viable. */
+  readonly solutions?: readonly string[];
+
+  /**
+   * Whether the given clues are incomplete, meaning they are consistent with
+   * too many solutions; only pertains when `solutions` is absent.  When
+   * `solutions` is absent and this is false, the clues are erroneous: they
+   * produce no solutions at all.
+   */
+  readonly incomplete: boolean;
 
   /** How long it took to test the puzzle, in milliseconds. */
   readonly elapsedMs: number;
