@@ -174,4 +174,6 @@ const dailySolutions = new Map<string, wasm.DailySolution>();
 
 export const TEST_ONLY = {
   generatePuzzle,
+  evaluatePuzzle,
+  testPuzzle,
 };
