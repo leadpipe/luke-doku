@@ -1480,11 +1480,11 @@ mod tests {
       nub_counts,
       vec![
         "Conflict: 2",
-        "Subset: 2",
         "NoLoc: 3",
         "Overlap: 7",
         "SingleLoc: 1",
         "SingleNum: 3",
+        "Subset: 2",
       ]
     )
   }
