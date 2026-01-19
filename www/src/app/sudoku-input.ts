@@ -1,7 +1,6 @@
 import {html, LitElement, ReactiveController, svg, TemplateResult} from 'lit';
 import {classMap} from 'lit/directives/class-map.js';
 import {map} from 'lit/directives/map.js';
-import {Game, PlayState} from '../game/game';
 import {iota} from '../game/iota';
 import {Loc} from '../game/loc';
 import {dispatchTypeSafeEvent} from './events';
@@ -54,10 +53,7 @@ function resultToText(result: ClockInputResult): string {
  * Manages the clock-face and popup multi-numeral Sudoku input mechanisms.
  */
 export class SudokuInput implements ReactiveController {
-  constructor(
-    private readonly host: LitElement & GridContainer,
-    private readonly game: Game,
-  ) {
+  constructor(private readonly host: LitElement & GridContainer) {
     host.addController(this);
   }
 
@@ -97,7 +93,7 @@ export class SudokuInput implements ReactiveController {
 
   renderHoverLoc(): TemplateResult[] {
     const answer = [];
-    const {hoverLoc, host, game} = this;
+    const {hoverLoc, host} = this;
     const {cellCenter, cellSize} = host;
     const halfCell = cellSize / 2;
     if (hoverLoc) {
@@ -109,7 +105,7 @@ export class SudokuInput implements ReactiveController {
               width=${cellSize}
               height=${cellSize}
               />`);
-      if (game.isBlank(hoverLoc)) {
+      if (host.isBlank(hoverLoc)) {
         if (this.inputLoc) {
           if (this.multiInput) {
             host.pushMultiValueCell(
@@ -124,7 +120,7 @@ export class SudokuInput implements ReactiveController {
             );
           }
         } else {
-          const {activeTrail} = game.trails;
+          const activeTrail = host.getActiveTrail();
           answer.push(svg`
           <text x=${x} y=${y} class=${
             activeTrail?.isEmpty ?
@@ -142,11 +138,11 @@ export class SudokuInput implements ReactiveController {
   }
 
   renderInGrid(): TemplateResult[] | TemplateResult | undefined {
-    const {inputLoc, multiInput} = this;
+    const {inputLoc, multiInput, host} = this;
     if (!inputLoc) return;
-    const multipleOk = !this.game.trails.active;
-    const [x, y] = this.host.cellCenter(inputLoc);
-    const radius = this.host.cellSize * RADIUS_RATIO;
+    const multipleOk = host.canBeMultiInput();
+    const [x, y] = host.cellCenter(inputLoc);
+    const radius = host.cellSize * RADIUS_RATIO;
     if (multiInput) {
       return svg`
         <circle
@@ -282,7 +278,7 @@ export class SudokuInput implements ReactiveController {
     const centerStripHeight = SQRT_3 * halfCentersGap;
     const centerLine2 = centerLine1 + centerStripHeight;
     const popupHeight = devicePixels(centerLine2 + radius + MULTI_INPUT_GAP);
-    const nums = this.game.marks.getNums(inputLoc);
+    const nums = host.getNums(inputLoc);
     this.sideCenter = devicePixels(sideCenter);
     this.halfCentersGap = devicePixels(halfCentersGap);
     return html`
@@ -358,13 +354,13 @@ export class SudokuInput implements ReactiveController {
   }
 
   renderDefaultInputPreview() {
-    const {multiInput, host, inputLoc, defaultResult, game} = this;
-    if (multiInput && inputLoc) return; // In multi-input mode, we don't render anything.
-    if (game.playState !== PlayState.RUNNING) return;
+    const {multiInput, host, inputLoc, defaultResult} = this;
+    if (multiInput && inputLoc) return; // In multi-input mode, we don't render this.
+    if (!host.shouldAcceptInput()) return;
 
     const {cellSize} = host;
     const radius = devicePixels(cellSize / 2);
-    const {activeTrail} = game.trails;
+    const activeTrail = host.getActiveTrail();
     return html`
       <svg
         id="default-input-preview"
@@ -447,8 +443,8 @@ export class SudokuInput implements ReactiveController {
   }
 
   private isPossibleInputLoc(loc: Loc): boolean {
-    if (this.game.playState !== PlayState.RUNNING) return false;
-    return this.game.sudoku.clues.get(loc) === null;
+    if (!this.host.shouldAcceptInput()) return false;
+    return this.host.canBeWritten(loc);
   }
 
   private readonly keyHandler = (event: KeyboardEvent) =>
@@ -463,7 +459,7 @@ export class SudokuInput implements ReactiveController {
     this.handlePointerUp(event);
 
   private handlePointerHovering(event: PointerEvent) {
-    const {multiInput} = this;
+    const {multiInput, host} = this;
     if (this.inputLoc && !multiInput) {
       this.pointerMoved(event);
       return;
@@ -472,7 +468,7 @@ export class SudokuInput implements ReactiveController {
       const result = this.convertMultiInputEventToResult(event);
       if (result !== this.multiHover) {
         this.multiHover = result;
-        this.host.requestUpdate();
+        host.requestUpdate();
       }
       if (result) return;
     }
@@ -481,28 +477,28 @@ export class SudokuInput implements ReactiveController {
     this.fixMultipleDefaultResult();
     if (hoverLoc !== this.hoverLoc) {
       this.hoverLoc = hoverLoc;
-      this.host.requestUpdate();
+      host.requestUpdate();
     }
   }
 
   private fixMultipleDefaultResult() {
-    if (this.defaultResult === 'multiple' && this.game.trails.active) {
+    if (this.defaultResult === 'multiple' && this.host.areTrailsActive()) {
       this.defaultResult = 1;
     }
   }
 
   private handlePointerCancel(event: PointerEvent) {
-    const {inputLoc} = this;
+    const {inputLoc, host} = this;
     if (inputLoc) {
-      this.host.releasePointerCapture(event.pointerId);
+      host.releasePointerCapture(event.pointerId);
       this.cancelInput();
       this.hoverLoc = inputLoc;
-      this.host.requestUpdate();
+      host.requestUpdate();
     }
   }
 
   private handlePointerDown(event: PointerEvent) {
-    const {multiInput} = this;
+    const {multiInput, host} = this;
     if (multiInput) {
       const result = this.convertMultiInputEventToResult(event);
       if (result) {
@@ -512,7 +508,7 @@ export class SudokuInput implements ReactiveController {
         } else {
           this.toggleMultiInput(result);
         }
-        this.host.requestUpdate();
+        host.requestUpdate();
         return;
       }
     }
@@ -521,34 +517,35 @@ export class SudokuInput implements ReactiveController {
       const prev = this.inputLoc?.index;
       this.cancelInput();
       if (prev === loc?.index) {
-        this.host.requestUpdate();
+        host.requestUpdate();
         return;
       }
     }
-    const {inputLoc, game} = this;
+    const {inputLoc} = this;
     if (!inputLoc && loc && this.isPossibleInputLoc(loc)) {
       this.lastMultiInput = multiInput;
       this.fixMultipleDefaultResult();
       this.inputLoc = loc;
       this.hoverLoc = undefined;
-      this.host.setPointerCapture(event.pointerId);
+      host.setPointerCapture(event.pointerId);
       this.inputCenter = toPoint(event);
-      this.currentNum = game.getNum(loc);
-      const nums = game.getNums(loc);
+      this.currentNum = host.getNum(loc);
+      const nums = host.getNums(loc);
       this.result =
         this.currentNum ??
         (nums && !nums.has(this.defaultResult as number) ?
           'multiple'
         : 'default');
       this.clockSection = -1;
-      this.host.requestUpdate();
+      host.requestUpdate();
     }
   }
 
   private handlePointerUp(event: PointerEvent) {
-    this.host.releasePointerCapture(event.pointerId);
+    const {host} = this;
+    host.releasePointerCapture(event.pointerId);
     if (this.multiInput) return;
-    const {inputLoc, game} = this;
+    const {inputLoc} = this;
     if (inputLoc) {
       let {result, defaultResult} = this;
       if (result === 'default') {
@@ -561,52 +558,53 @@ export class SudokuInput implements ReactiveController {
           if (
             defaultResult === 'multiple' &&
             this.lastMultiInput &&
-            !game.getNums(inputLoc)
+            !host.getNums(inputLoc)
           ) {
             const nums = (this.multiInput = new Set(this.lastMultiInput));
             if (nums.size) {
-              game.setNums(inputLoc, nums);
+              host.setNums(inputLoc, nums);
             } else {
-              game.clearCell(inputLoc);
+              host.clearCell(inputLoc);
             }
           } else {
             this.defaultResult = result;
-            this.multiInput = new Set(game.marks.getNums(inputLoc));
+            this.multiInput = new Set(host.getNums(inputLoc));
           }
-          this.host.requestUpdate();
-          return; // Skip the cleanup required for the other results: we're still in input mode.
+          host.requestUpdate();
+          return; // Skip the cleanup required for the other results: we're staying in multi-input mode.
         case 'clear':
-          game.clearCell(inputLoc);
+          host.clearCell(inputLoc);
           this.cellModified(inputLoc);
           break;
         default:
-          if (game.getNum(inputLoc) !== result) {
-            this.applyNumToLoc(game, inputLoc, result);
+          if (host.getNum(inputLoc) !== result) {
+            this.applyNumToLoc(inputLoc, result);
           }
           break;
       }
       this.cancelInput();
       this.hoverLoc = inputLoc;
-      this.host.requestUpdate();
+      host.requestUpdate();
     }
   }
 
-  private applyNumToLoc(game: Game, loc: Loc, num: number) {
-    if (!game.trails.active && game.marks.isNegated(loc, num)) {
+  private applyNumToLoc(loc: Loc, num: number) {
+    const {host} = this;
+    if (!host.areTrailsActive() && host.isNegated(loc, num)) {
       // If this numeral has been negated, remove it from the cell.
-      const nums = new Set(game.getNums(loc));
+      const nums = new Set(host.getNums(loc));
       nums.delete(num);
-      game.setNums(loc, nums);
+      host.setNums(loc, nums);
     } else {
-      game.setNum(loc, num);
+      host.setNum(loc, num);
     }
     this.cellModified(loc);
-    this.checkSolved(game);
+    this.checkSolved();
     this.defaultResult = num;
   }
 
-  private checkSolved(game: Game) {
-    if (!game.trails.active && game.marks.asGrid().isSolved()) {
+  private checkSolved() {
+    if (!this.host.areTrailsActive() && this.host.isSolved()) {
       dispatchTypeSafeEvent(this.host, 'puzzle-solved', undefined);
     }
   }
@@ -616,7 +614,7 @@ export class SudokuInput implements ReactiveController {
   }
 
   private handleKeyDown(event: KeyboardEvent) {
-    const {hoverLoc, game, multiInput} = this;
+    const {hoverLoc, multiInput, host} = this;
     let update = false;
     switch (event.key) {
       case 'Backspace':
@@ -630,8 +628,8 @@ export class SudokuInput implements ReactiveController {
           }
         }
         // If we're hovering over a set cell, clear it.
-        else if (hoverLoc && game.getNums(hoverLoc)) {
-          game.clearCell(hoverLoc);
+        else if (hoverLoc && host.getNums(hoverLoc)) {
+          host.clearCell(hoverLoc);
           this.cellModified(hoverLoc);
           update = true;
         }
@@ -648,12 +646,13 @@ export class SudokuInput implements ReactiveController {
       case '+':
       case '=':
         // Set the default result to multi-input.  And enter multi-input mode,
-        // if we're hovering over a cell.  But ignore if trails are active.
-        if (game.trails.active) break;
+        // if we're hovering over a cell.  But ignore if multi-input mode isn't
+        // allowed.
+        if (!host.canBeMultiInput()) break;
         this.defaultResult = 'multiple';
         if (hoverLoc) {
           this.inputLoc = hoverLoc;
-          this.multiInput = new Set(game.marks.getNums(hoverLoc));
+          this.multiInput = new Set(host.getNums(hoverLoc));
         }
         update = true;
         break;
@@ -666,10 +665,10 @@ export class SudokuInput implements ReactiveController {
           const num = Number(event.key);
           if (
             hoverLoc &&
-            !game.marks.getClue(hoverLoc) &&
+            host.canBeWritten(hoverLoc) &&
             (!multiInput || hoverLoc !== this.inputLoc)
           ) {
-            this.applyNumToLoc(game, hoverLoc, num);
+            this.applyNumToLoc(hoverLoc, num);
             if (multiInput) {
               this.cancelInput();
             }
@@ -683,12 +682,12 @@ export class SudokuInput implements ReactiveController {
         break;
     }
     if (update) {
-      this.host.requestUpdate();
+      host.requestUpdate();
     }
   }
 
   private toggleMultiInput(num: number) {
-    const {multiInput, inputLoc, game} = this;
+    const {multiInput, inputLoc, host} = this;
     if (!multiInput || !inputLoc) return;
     if (multiInput.has(num)) {
       multiInput.delete(num);
@@ -696,11 +695,11 @@ export class SudokuInput implements ReactiveController {
       multiInput.add(num);
     }
     if (multiInput.size) {
-      game.setNums(inputLoc, multiInput);
+      host.setNums(inputLoc, multiInput);
       this.cellModified(inputLoc);
-      this.checkSolved(game);
+      this.checkSolved();
     } else {
-      game.clearCell(inputLoc);
+      host.clearCell(inputLoc);
       this.cellModified(inputLoc);
     }
   }
@@ -725,7 +724,7 @@ export class SudokuInput implements ReactiveController {
         : PI + acos((y - centerY) / distance);
       this.clockSection = round((6 * radians) / PI) % 12;
       this.result = SECTION_RESULT[this.clockSection];
-      if (this.result === 'multiple' && this.game.trails.active) {
+      if (this.result === 'multiple' && !this.host.canBeMultiInput()) {
         this.result = 'cancel';
       }
     } else {

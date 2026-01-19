@@ -2,6 +2,7 @@ import type {TemplateResult} from 'lit';
 import type {ClassInfo} from 'lit/directives/class-map.js';
 import {Loc} from '../game/loc';
 import {Branded} from '../game/types';
+import type { PlayState } from '../game/game';
 
 export type Theme = 'dark' | 'light';
 export type ThemeOrAuto = Theme | 'auto';
@@ -62,4 +63,43 @@ export interface GridContainer {
     classesForNum: (num: number) => ClassInfo,
     answer: TemplateResult[],
   ): void;
+
+  /** Tells whether input should be accepted at this time. */
+  shouldAcceptInput(): boolean;
+
+  /** Tells whether the given location is a blank cell. */
+  isBlank(loc: Loc): boolean;
+
+  /** Tells whether the given location can be written to. */
+  canBeWritten(loc: Loc): boolean;
+
+  /** Returns the single value at the location, or null if multiple/none. */
+  getNum(loc: Loc): number | null | undefined;
+
+  /** Returns all possible values at the location. */
+  getNums(loc: Loc): ReadonlySet<number> | null | undefined;
+
+  /** Sets a single value at the location. */
+  setNum(loc: Loc, num: number): void;
+
+  /** Sets multiple possible values at the location. */
+  setNums(loc: Loc, nums: Set<number>): void;
+
+  /** Clears the location. */
+  clearCell(loc: Loc): void;
+
+  /** Returns the active trail, if any. */
+  getActiveTrail(): {isEmpty: boolean; id: number} | null | undefined;
+
+  /** Tells whether trails are currently active. */
+  areTrailsActive(): boolean;
+
+  /** Tells whether multi-input mode can be entered. */
+  canBeMultiInput(): boolean;
+
+  /** Tells whether the puzzle is solved. */
+  isSolved(): boolean;
+
+  /** Tells whether a value is negated at a location. */
+  isNegated(loc: Loc, num: number): boolean;
 }

@@ -85,7 +85,7 @@ export class SudokuView extends LitElement implements GridContainer {
       }
 
       #default-input-preview circle {
-        fill: var(--clock-fill  );
+        fill: var(--clock-fill);
       }
 
       :host([playstate='running']) #multi-input-popup {
@@ -948,8 +948,7 @@ export class SudokuView extends LitElement implements GridContainer {
   private updateSymmetries() {
     const {gameWrapper, interactive} = this;
     if (gameWrapper && !this.pausePatterns.length && this.centers.length) {
-      this.input =
-        interactive ? new SudokuInput(this, gameWrapper.game) : undefined;
+      this.input = interactive ? new SudokuInput(this) : undefined;
       this.pausePatterns = gameWrapper.game.sudoku.symmetryMatches.map(
         (symMatch, index) =>
           new PausePattern(
@@ -1057,6 +1056,60 @@ export class SudokuView extends LitElement implements GridContainer {
       }
     }
     this.centers = centers;
+  }
+
+  shouldAcceptInput(): boolean {
+    return this.gameWrapper?.game.playState === PlayState.RUNNING;
+  }
+
+  isBlank(loc: Loc): boolean {
+    return this.gameWrapper?.game.isBlank(loc) ?? false;
+  }
+
+  canBeWritten(loc: Loc): boolean {
+    // A cell can be written if it is not a clue, OR if there is no game (for
+    // entering a new puzzle).
+    return this.gameWrapper?.game.sudoku.clues.get(loc) == null;
+  }
+
+  getNum(loc: Loc): number | null | undefined {
+    return this.gameWrapper?.game.getNum(loc);
+  }
+
+  getNums(loc: Loc): ReadonlySet<number> | null | undefined {
+    return this.gameWrapper?.game.getNums(loc);
+  }
+
+  setNum(loc: Loc, num: number): void {
+    this.gameWrapper?.game.setNum(loc, num);
+  }
+
+  setNums(loc: Loc, nums: Set<number>): void {
+    this.gameWrapper?.game.setNums(loc, nums);
+  }
+
+  clearCell(loc: Loc): void {
+    this.gameWrapper?.game.clearCell(loc);
+  }
+
+  getActiveTrail(): {isEmpty: boolean; id: number} | null | undefined {
+    return this.gameWrapper?.game.trails.activeTrail;
+  }
+
+  areTrailsActive(): boolean {
+    return this.gameWrapper?.game.trails.active ?? false;
+  }
+
+  canBeMultiInput(): boolean {
+    return this.gameWrapper != null && !this.areTrailsActive();
+  }
+
+  isSolved(): boolean {
+    return this.gameWrapper?.game.marks.asGrid().isSolved() ?? false;
+  }
+
+  isNegated(loc: Loc, num: number): boolean {
+    return this.gameWrapper?.game.marks.isNegated(loc, num) ?? false;
   }
 }
 declare global {
