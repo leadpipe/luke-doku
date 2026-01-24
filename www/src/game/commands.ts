@@ -249,7 +249,7 @@ class RestoreTrailsOperation implements Operation {
   }
 
   apply(internals: GameInternals): boolean {
-    internals.trails = this.prevTrails;
+    internals.trails = new Trails(this.prevTrails);
     return true;
   }
 }
@@ -266,7 +266,9 @@ class RestoreActiveTrailOperation implements Operation {
   }
 
   apply(internals: GameInternals): boolean {
-    return internals.trails.replaceActiveTrail(this.prevTrail);
+    return internals.trails.replaceActiveTrail(
+      new Trail(this.prevTrail.id, this.prevTrail),
+    );
   }
 }
 
@@ -283,7 +285,7 @@ class RestoreMarksAndTrailsOperation extends RestoreTrailsOperation {
 
   override apply(internals: GameInternals): boolean {
     super.apply(internals);
-    internals.marks = this.prevMarks;
+    internals.marks = new Marks(this.prevMarks);
     return true;
   }
 }
