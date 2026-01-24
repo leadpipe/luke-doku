@@ -46,7 +46,7 @@ export class Trail extends Grid {
     super.set(loc, num);
     if (count === 0 && num) {
       this.trailheadState = loc;
-    } else if (count === 1 && !num) {
+    } else if (count === 1 && !num && loc === this.trailheadState) {
       this.trailheadState = null;
     }
     return true;
