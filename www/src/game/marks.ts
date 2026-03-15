@@ -197,6 +197,20 @@ export class Marks {
     }
     return grid;
   }
+
+  /**
+   * Converts this Marks to a Grid, with every clue assigned and the rest blank.
+   *
+   * @returns A Grid with all of this Marks's clues set.
+   */
+  asClues(): Grid {
+    const grid = new Grid();
+    for (const loc of Loc.ALL) {
+      const num = this.getClue(loc);
+      if (num) grid.set(loc, num);
+    }
+    return grid;
+  }
 }
 
 /** A Marks that you can't modify. */
