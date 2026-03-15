@@ -91,6 +91,10 @@ export class Grid {
   brokenLocs(): Set<Loc> {
     const complete = this.array.every(num => num > 0);
     if (!complete) return new Set();
+    return this.incompleteBrokenLocs();
+  }
+
+  incompleteBrokenLocs(): Set<Loc> {
     const grid = this.toWasm();
     try {
       const broken = grid.brokenLocs();
