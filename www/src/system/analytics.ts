@@ -21,10 +21,18 @@ export declare interface EventParams {
   elapsedMs?: number;
 }
 
+declare const debugMode: boolean;
+export function log(message: string, ...args: any[]) {
+  if (debugMode) {
+    console.log(new Date().toLocaleString(), message, ...args);
+  }
+}
+
 /**
  * Logs something that happened to Google Analytics.
  * @param event What happened.
  */
 export function logEvent(event: EventType, params: EventParams = {}) {
+  log('LOG EVENT', event, params);
   gtag('event', event, params);
 }
