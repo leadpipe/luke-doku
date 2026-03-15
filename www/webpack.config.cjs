@@ -37,7 +37,19 @@ const baseConfig = {
       },
       {
         test: /\.s[ac]ss$/,
-        use: ['style-loader', 'css-loader', 'sass-loader'],
+        use: [
+          'style-loader',
+          'css-loader',
+          {
+            loader: 'sass-loader',
+            options: {
+              sassOptions: {
+                // This tells Sass to ignore warnings from node_modules
+                quietDeps: true,
+              },
+            },
+          },
+        ],
       },
     ],
   },
