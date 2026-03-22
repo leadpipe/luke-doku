@@ -26,7 +26,9 @@ import {
   CORRECT_COLOR,
   ERROR_COLOR,
   HIGHLIGHT_COLOR,
+  INTERACTIVE_SUDOKU_VIEW_SIZES,
   LOGO_FONT_FAMILY,
+  LOGO_FONT_SIZE,
   TRAILHEAD_FONT_STYLE,
   TRAILHEAD_FONT_WEIGHT,
 } from './styles';
@@ -53,6 +55,7 @@ const BOARD_PADDING_PIXELS = 10;
 @customElement('solve-page')
 export class SolvePage extends LitElement {
   static override styles = [
+    INTERACTIVE_SUDOKU_VIEW_SIZES,
     css`
       :host {
         height: 100vh;
@@ -66,7 +69,7 @@ export class SolvePage extends LitElement {
       }
       h1 {
         font-family: ${LOGO_FONT_FAMILY};
-        font-size: 48px;
+        font-size: ${LOGO_FONT_SIZE};
         margin-block: 16px;
       }
       h2 {
@@ -87,14 +90,6 @@ export class SolvePage extends LitElement {
         display: flex;
         justify-content: center;
         gap: 4px 16px;
-      }
-
-      sudoku-view {
-        width: var(--board-size);
-        /* Leave enough room for the default-input preview. */
-        height: calc(
-          var(--board-size) + (var(--board-size) - 2 * var(--board-padding)) / 9
-        );
       }
 
       #bottom-panel {
