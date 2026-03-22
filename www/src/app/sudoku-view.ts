@@ -563,6 +563,12 @@ export class SudokuView extends LitElement implements GridContainer {
       overlayIndex,
     } = this;
     const game = gameWrapper?.game;
+    const incomingClues = this.clues;
+    const clues = incomingClues ?? game?.marks.asClues();
+    const brokenLocs =
+      incomingClues ?
+        clues?.incompleteBrokenLocs()
+      : game?.marks.asGrid().brokenLocs();
     const cssSize = sideSize / devicePixelRatio + 2 * padding;
     const svgPadding = padding * devicePixelRatio;
     const compSize = sideSize + 2 * svgPadding;
@@ -637,8 +643,8 @@ export class SudokuView extends LitElement implements GridContainer {
             ${nextPattern.renderPattern()}
           </g>`
         : ''}
-        <g id="clues">${game && this.renderClues(game)}</g>
-        <g id="solution">${game && this.renderGameState(game)}</g>
+        <g id="clues">${clues && this.renderClues(clues, brokenLocs)}</g>
+        <g id="solution">${game && this.renderGameState(game, brokenLocs)}</g>
         <g id="input">${this.input?.renderInGrid()}</g>
       </svg>
       ${this.input?.renderMultiInputPopup() ??
@@ -697,25 +703,23 @@ export class SudokuView extends LitElement implements GridContainer {
     `;
   }
 
-  private renderClues(game: Game) {
-    const brokenLocs = game.marks.asGrid().brokenLocs();
+  private renderClues(clues: ReadonlyGrid, brokenLocs?: Set<Loc>) {
     const answer: TemplateResult[] = [];
-    const {marks} = game;
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
-      const clue = marks.getClue(loc);
+      const clue = clues.get(loc);
       if (clue) {
         const [x, y] = cellCenter(loc);
         answer.push(svg`
           <text x=${x} y=${y} class="clue ${classMap({
-            broken: brokenLocs.has(loc),
+            broken: !!brokenLocs?.has(loc),
           })}">${clue}</text>`);
       }
     }
     return answer;
   }
 
-  private renderGameState(game: Game) {
+  private renderGameState(game: Game, brokenLocs?: Set<Loc>) {
     if (
       game.playState === PlayState.COMPLETED &&
       game.completionState === CompletionState.SOLVED &&
@@ -725,7 +729,6 @@ export class SudokuView extends LitElement implements GridContainer {
       return this.renderMultiSolutionCells(game.sudoku.solutions);
     }
     const answer = this.input?.renderHoverLoc() ?? [];
-    const brokenLocs = game.marks.asGrid().brokenLocs();
     this.pushSolutionCells(game.marks, brokenLocs, game.trails, answer);
     this.pushTrails(game.trails, answer);
     return answer;
@@ -761,7 +764,7 @@ export class SudokuView extends LitElement implements GridContainer {
 
   private pushSolutionCells(
     marks: ReadonlyMarks,
-    brokenLocs: Set<Loc>,
+    brokenLocs: Set<Loc> | undefined,
     trails: ReadonlyTrails,
     answer: TemplateResult[],
   ): void {
@@ -774,7 +777,7 @@ export class SudokuView extends LitElement implements GridContainer {
       if (size === 1) {
         answer.push(svg`
           <text x=${x} y=${y} class="solution ${classMap({
-            broken: brokenLocs.has(loc),
+            broken: !!brokenLocs?.has(loc),
           })}">${nums.values().next().value}</text>`);
       } else {
         const {input} = this;
@@ -872,6 +875,9 @@ export class SudokuView extends LitElement implements GridContainer {
   private sudoku: Sudoku | null = null;
   private trailColors: TrailColors | null = null;
 
+  /** The grid for clues, when a puzzle is being entered. */
+  @property({attribute: false}) clues: Grid | null = null;
+
   /** The symmetry overlays that go along with this puzzle. */
   @state() private pausePatterns: PausePattern[] = [];
 
@@ -943,12 +949,17 @@ export class SudokuView extends LitElement implements GridContainer {
     if (changedProperties.has('gameWrapper') && !this.pausePatterns.length) {
       this.updateSymmetries();
     }
+    if (!this.input && this.interactive) {
+      this.input = new SudokuInput(this);
+    }
+    if (this.clues) {
+      this.playState = PlayState.RUNNING;
+    }
   }
 
   private updateSymmetries() {
-    const {gameWrapper, interactive} = this;
+    const {gameWrapper} = this;
     if (gameWrapper && !this.pausePatterns.length && this.centers.length) {
-      this.input = interactive ? new SudokuInput(this) : undefined;
       this.pausePatterns = gameWrapper.game.sudoku.symmetryMatches.map(
         (symMatch, index) =>
           new PausePattern(
@@ -1059,11 +1070,13 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   shouldAcceptInput(): boolean {
-    return this.gameWrapper?.game.playState === PlayState.RUNNING;
+    return (
+      this.gameWrapper?.game.playState === PlayState.RUNNING || !!this.clues
+    );
   }
 
   isBlank(loc: Loc): boolean {
-    return this.gameWrapper?.game.isBlank(loc) ?? false;
+    return !!(this.gameWrapper?.game.isBlank(loc) || this.clues?.get(loc));
   }
 
   canBeWritten(loc: Loc): boolean {
@@ -1073,22 +1086,41 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   getNum(loc: Loc): number | null | undefined {
-    return this.gameWrapper?.game.getNum(loc);
+    return this.gameWrapper?.game.getNum(loc) || this.clues?.get(loc);
   }
 
   getNums(loc: Loc): ReadonlySet<number> | null | undefined {
+    if (this.clues) {
+      const clue = this.clues.get(loc);
+      return clue ? new Set([clue]) : null;
+    }
     return this.gameWrapper?.game.getNums(loc);
   }
 
   setNum(loc: Loc, num: number): void {
+    if (this.clues) {
+      this.clues.set(loc, num);
+      return;
+    }
     this.gameWrapper?.game.setNum(loc, num);
   }
 
   setNums(loc: Loc, nums: Set<number>): void {
+    if (this.clues && nums.size === 1) {
+      const num = nums.values().next().value;
+      if (num) {
+        this.clues.set(loc, num);
+        return;
+      }
+    }
     this.gameWrapper?.game.setNums(loc, nums);
   }
 
   clearCell(loc: Loc): void {
+    if (this.clues) {
+      this.clues.set(loc, null);
+      return;
+    }
     this.gameWrapper?.game.clearCell(loc);
   }
 
@@ -1098,6 +1130,10 @@ export class SudokuView extends LitElement implements GridContainer {
 
   areTrailsActive(): boolean {
     return this.gameWrapper?.game.trails.active ?? false;
+  }
+
+  isEnteringClues(): boolean {
+    return this.clues != null;
   }
 
   canBeMultiInput(): boolean {

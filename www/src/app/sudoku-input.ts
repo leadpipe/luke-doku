@@ -382,7 +382,7 @@ export class SudokuInput implements ReactiveController {
           class=${activeTrail?.isEmpty ?
             `solution trail trail-${activeTrail.id} trailhead`
           : activeTrail ? `solution trail trail-${activeTrail.id}`
-          : 'solution'}
+          : host.isEnteringClues() ? 'clue' : 'solution'}
         >
           ${resultToText(defaultResult)}
         </text>

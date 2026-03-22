@@ -94,6 +94,9 @@ export interface GridContainer {
   /** Tells whether trails are currently active. */
   areTrailsActive(): boolean;
 
+  /** Tells whether a new puzzle is being entered. */
+  isEnteringClues(): boolean;
+
   /** Tells whether multi-input mode can be entered. */
   canBeMultiInput(): boolean;
 
