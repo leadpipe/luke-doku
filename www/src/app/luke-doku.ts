@@ -1,3 +1,4 @@
+import './enter-puzzle-page';
 import './events';
 import './puzzles-page';
 import './solve-page';
@@ -11,6 +12,7 @@ import {Game, PlayState} from '../game/game';
 import {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
 import {ensureExhaustiveSwitch} from '../game/utils';
+import {log} from '../system/analytics';
 import {
   iterateOngoingPuzzlesDesc,
   lookUpPuzzleById,
@@ -18,6 +20,7 @@ import {
 } from '../system/database';
 import {addTypeSafeListener} from './events';
 import {
+  ENTER_PUZZLE_PATH,
   getHashState,
   type HashState,
   navigateHome,
@@ -27,7 +30,7 @@ import {
 import {getPuzzleDate, setPuzzleDateToToday} from './prefs';
 import {todayString} from './utils';
 
-type Page = 'loading' | 'solve' | 'puzzles';
+type Page = 'loading' | 'solve' | 'puzzles' | 'enter-puzzle';
 
 /** Top-level component. */
 @customElement('luke-doku')
@@ -86,6 +89,7 @@ export class LukeDoku extends LitElement {
       this.renderPage('loading', pageClasses),
       this.renderPage('puzzles', pageClasses),
       this.renderPage('solve', pageClasses),
+      this.renderPage('enter-puzzle', pageClasses),
     ];
   }
 
@@ -114,6 +118,13 @@ export class LukeDoku extends LitElement {
             @transitionend=${this.pageTransitionEnd}
           ></puzzles-page>
         `;
+      case 'enter-puzzle':
+        return html`
+          <enter-puzzle-page
+            class=${ifDefined(pageClasses.get(page))}
+            @transitionend=${this.pageTransitionEnd}
+          ></enter-puzzle-page>
+        `;
       default:
         ensureExhaustiveSwitch(page);
     }
@@ -130,7 +141,8 @@ export class LukeDoku extends LitElement {
       window,
       'hash-state-changed',
       async (event: CustomEvent<HashState>) => {
-        (await this.showGameForPath(event.detail)) ||
+        log('hash-state-changed', event.detail);
+        (await this.showPageForPath(event.detail)) ||
           this.showPage('puzzles', this.page === 'loading' ? 'right' : 'left');
       },
     );
@@ -154,21 +166,29 @@ export class LukeDoku extends LitElement {
     );
   }
 
-  private async showGameForPath(hashState: HashState): Promise<boolean> {
+  private async showPageForPath(hashState: HashState): Promise<boolean> {
+    if (hashState.path[0] === ENTER_PUZZLE_PATH) {
+      // The enter puzzle page.
+      await this.showPage('enter-puzzle', 'right');
+      return true;
+    }
     if (hashState.path.length === 1) {
       // The solve page for a specific puzzle.
       const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
       if (game) {
         this.game = game;
-        this.showPage('solve', 'right');
+        await this.showPage('solve', 'right');
         return true;
       }
     }
     return false;
   }
 
-  private async isOnUnstartedGame(hashState: HashState): Promise<boolean> {
+  private async shouldStayOnPage(hashState: HashState): Promise<boolean> {
     if (hashState.path.length === 1) {
+      if (hashState.path[0] === ENTER_PUZZLE_PATH) {
+        return true;
+      }
       const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
       if (
         game &&
@@ -183,7 +203,7 @@ export class LukeDoku extends LitElement {
 
   private async startProcess() {
     await this.updateComplete;
-    if (await this.showGameForPath(getHashState())) {
+    if (await this.showPageForPath(getHashState())) {
       return;
     }
     if (getPuzzleDate() < todayString) {
@@ -230,7 +250,7 @@ export class LukeDoku extends LitElement {
     if (await this.reloadOnNewDay()) {
       return;
     }
-    if (await this.isOnUnstartedGame(getHashState())) {
+    if (await this.shouldStayOnPage(getHashState())) {
       return;
     }
     await this.goToOngoingGameOrPuzzles();
@@ -258,6 +278,7 @@ export class LukeDoku extends LitElement {
     this.nextPageClass = pageClass;
     await this.updateComplete;
     requestAnimationFrame(() => this.classList.add('transition'));
+    log(`Navigating to page ${page} from ${this.page}`);
   }
 
   private pageTransitionEnd() {

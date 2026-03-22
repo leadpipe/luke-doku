@@ -1,4 +1,5 @@
 import './events';
+import './icon-button';
 import './puzzle-rating';
 
 import type {IDBPDatabase} from 'idb';
@@ -15,8 +16,8 @@ import {
   type LukeDokuDb,
   openDb,
 } from '../system/database';
-import {navigateToPuzzle} from './nav';
-import {LOGO_FONT_FAMILY} from './styles';
+import {ENTER_PUZZLE_PATH, navigateToPath, navigateToPuzzle} from './nav';
+import {LOGO_FONT_FAMILY, LOGO_FONT_SIZE} from './styles';
 import type {SudokuView} from './sudoku-view';
 import {
   elapsedTimeString,
@@ -35,9 +36,15 @@ export class PuzzlesPage extends LitElement {
         margin: 20px;
       }
     }
-    h1 {
+    .logo-font {
       font-family: ${LOGO_FONT_FAMILY};
-      font-size: 48px;
+      font-size: ${LOGO_FONT_SIZE};
+    }
+    .title {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
     }
     .puzzle-list {
       display: flex;
@@ -64,7 +71,14 @@ export class PuzzlesPage extends LitElement {
 
   override render() {
     return html`
-      <h1>Luke-doku</h1>
+      <div class="title">
+        <span class="logo-font">Luke-doku</span>
+        <icon-button
+          iconName="add"
+          label="Enter a puzzle"
+          @click=${this.showEnterPuzzlePage}
+        ></icon-button>
+      </div>
       ${this.ongoingGames.length > 0 ?
         html`
           <h2>Ongoing</h2>
@@ -266,6 +280,10 @@ export class PuzzlesPage extends LitElement {
     if (game) {
       navigateToPuzzle(game.sudoku);
     }
+  }
+
+  private showEnterPuzzlePage() {
+    navigateToPath(ENTER_PUZZLE_PATH);
   }
 
   private async generateMore() {
