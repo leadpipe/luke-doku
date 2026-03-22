@@ -18,7 +18,7 @@ describe('Sudoku', () => {
     counter: 8,
     interactionId: 1,
   }) as PuzzleGeneratedMessage;
-  const sudoku = Sudoku.fromWorker(workerMessage);
+  const sudoku = Sudoku.fromGeneratedPuzzle(workerMessage);
 
   beforeEach(() => {
     advanceTo(now);

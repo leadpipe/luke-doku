@@ -4,6 +4,7 @@ export enum ToWorkerMessageType {
   GENERATE_PUZZLE = 'GENERATE_PUZZLE',
   EVALUATE_PUZZLE = 'EVALUATE_PUZZLE',
   TEST_PUZZLE = 'TEST_PUZZLE',
+  FIND_SYMMETRIES = 'FIND_SYMMETRIES',
 }
 
 interface ToWorkerMessageBase {
@@ -38,16 +39,25 @@ export interface TestPuzzleMessage extends ToWorkerMessageBase {
   readonly clues: string;
 }
 
+export interface FindSymmetriesMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.FIND_SYMMETRIES;
+
+  /** The clues of the puzzle for which to find symmetries, in GridString form. */
+  readonly clues: string;
+}
+
 export type ToWorkerMessage =
   | GeneratePuzzleMessage
   | EvaluatePuzzleMessage
-  | TestPuzzleMessage;
+  | TestPuzzleMessage
+  | FindSymmetriesMessage;
 
 export enum FromWorkerMessageType {
   ERROR_CAUGHT = 'ERROR_CAUGHT',
   PUZZLE_GENERATED = 'PUZZLE_GENERATED',
   PUZZLE_EVALUATED = 'PUZZLE_EVALUATED',
   PUZZLE_TESTED = 'PUZZLE_TESTED',
+  SYMMETRIES_FOUND = 'SYMMETRIES_FOUND',
 }
 
 interface FromWorkerMessageBase {
@@ -94,12 +104,6 @@ export interface PuzzleGeneratedMessage extends FromWorkerMessageBase {
   readonly solutions: readonly string[];
 
   /**
-   * A non-empty array of symmetries that match or partially match the layout of
-   * the puzzle's clues on the grid.
-   */
-  readonly symmetryMatches: readonly [wasm.Sym, WasmSymMatch][];
-
-  /**
    * How long it took the worker to generate the daily solution, in
    * milliseconds. Absent for previously cached days.
    */
@@ -110,11 +114,8 @@ export interface PuzzleGeneratedMessage extends FromWorkerMessageBase {
    */
   readonly elapsedMs: number;
 
-  /**
-   * How long it took the worker to calculate the symmetries of the puzzle's
-   * clues, in milliseconds.
-   */
-  readonly symMatchesElapsedMs: number;
+  /** The symmetries of the puzzle's clues. */
+  readonly symmetriesFound: SymmetriesFoundMessage;
 }
 
 export interface PuzzleEvaluatedMessage extends FromWorkerMessageBase {
@@ -153,8 +154,26 @@ export interface PuzzleTestedMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+export interface SymmetriesFoundMessage extends FromWorkerMessageBase {
+  readonly toWorkerMessage: FindSymmetriesMessage | GeneratePuzzleMessage;
+  readonly type: FromWorkerMessageType.SYMMETRIES_FOUND;
+
+  /**
+   * A non-empty array of symmetries that match or partially match the layout of
+   * the puzzle's clues on the grid.
+   */
+  readonly symmetryMatches: readonly [wasm.Sym, WasmSymMatch][];
+
+  /**
+   * How long it took the worker to calculate the symmetries of the puzzle's
+   * clues, in milliseconds.
+   */
+  readonly elapsedMs: number;
+}
+
 export type FromWorkerMessage =
   | ErrorCaughtMessage
   | PuzzleGeneratedMessage
   | PuzzleEvaluatedMessage
-  | PuzzleTestedMessage;
+  | PuzzleTestedMessage
+  | SymmetriesFoundMessage;

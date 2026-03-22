@@ -4,6 +4,7 @@ import {AttemptState, LukeDokuDb, PuzzleRecord} from '../system/database';
 import {
   requestPuzzleEvaluation,
   requestPuzzleGeneration,
+  requestPuzzleSymmetries,
 } from '../system/puzzle-service';
 import {
   Command,
@@ -387,7 +388,29 @@ export class Game extends BaseGame {
     counter: number,
   ): Promise<Game> {
     const puzzle = await requestPuzzleGeneration(dateString, counter);
-    const sudoku = Sudoku.fromWorker(puzzle);
+    const sudoku = Sudoku.fromGeneratedPuzzle(puzzle);
+    const record = sudoku.toDatabaseRecord();
+    await db.add('puzzles', record);
+    return Game.forDbRecord(db, record);
+  }
+
+  /**
+   * Creates a Game object for the given entered puzzle, and saves it to the
+   * database.
+   */
+  static async saveEnteredPuzzle(
+    db: IDBPDatabase<LukeDokuDb>,
+    clues: string,
+    solutions: readonly string[],
+    source?: string,
+  ): Promise<Game> {
+    const symmetriesFound = await requestPuzzleSymmetries(clues);
+    const sudoku = Sudoku.fromEnteredPuzzle(
+      clues,
+      solutions,
+      symmetriesFound,
+      source,
+    );
     const record = sudoku.toDatabaseRecord();
     await db.add('puzzles', record);
     return Game.forDbRecord(db, record);

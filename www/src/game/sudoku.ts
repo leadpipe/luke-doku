@@ -4,7 +4,10 @@ import {
   type DbSymMatch,
   type PuzzleRecord,
 } from '../system/database';
-import type {PuzzleGeneratedMessage} from '../worker/worker-types';
+import type {
+  PuzzleGeneratedMessage,
+  SymmetriesFoundMessage,
+} from '../worker/worker-types';
 import {Grid, ReadonlyGrid} from './grid';
 import {Loc} from './loc';
 import {DateString, GridString} from './types';
@@ -25,17 +28,35 @@ export class Sudoku {
     readonly source?: string,
   ) {}
 
-  static fromWorker(puzzle: PuzzleGeneratedMessage, source?: string): Sudoku {
+  static symmetryMatches(m: SymmetriesFoundMessage): SymMatch[] {
+    return m.symmetryMatches.map(([sym, match]) => ({
+      sym,
+      fullOrbits: match.full_orbits.map(orbitToLocs),
+      numNonconformingLocs: match.num_nonconforming_locs,
+      partialOrbits: match.partial_orbits.map(orbitToLocs),
+    }));
+  }
+
+  static fromGeneratedPuzzle(puzzle: PuzzleGeneratedMessage): Sudoku {
     return new Sudoku(
       new Grid(puzzle.clues),
       puzzle.solutions.map(s => new Grid(s)),
-      puzzle.symmetryMatches.map(([sym, match]) => ({
-        sym,
-        fullOrbits: match.full_orbits.map(orbitToLocs),
-        numNonconformingLocs: match.num_nonconforming_locs,
-        partialOrbits: match.partial_orbits.map(orbitToLocs),
-      })),
+      this.symmetryMatches(puzzle.symmetriesFound),
       PuzzleId.fromWorker(puzzle),
+    );
+  }
+
+  static fromEnteredPuzzle(
+    clues: string,
+    solutions: readonly string[],
+    symmetriesFound: SymmetriesFoundMessage,
+    source?: string,
+  ): Sudoku {
+    return new Sudoku(
+      new Grid(clues),
+      solutions.map(s => new Grid(s)),
+      this.symmetryMatches(symmetriesFound),
+      undefined,
       source,
     );
   }

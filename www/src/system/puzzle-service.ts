@@ -8,6 +8,7 @@ import {
   type PuzzleEvaluatedMessage,
   type PuzzleGeneratedMessage,
   type PuzzleTestedMessage,
+  type SymmetriesFoundMessage,
   type ToWorkerMessage,
   ToWorkerMessageType,
 } from '../worker/worker-types';
@@ -106,7 +107,7 @@ class WorkerQueue {
           logEvent(EventType.SYSTEM, {
             category: 'worker symmetry compute time',
             detail: puzzleId.toString(),
-            elapsedMs: e.data.symMatchesElapsedMs,
+            elapsedMs: e.data.symmetriesFound.elapsedMs,
           });
           pending.resolve(e.data);
           break;
@@ -122,6 +123,20 @@ class WorkerQueue {
           logEvent(EventType.SYSTEM, {
             category: 'worker puzzle test time',
             detail: e.data.toWorkerMessage.clues,
+            elapsedMs: e.data.elapsedMs,
+          });
+          pending.resolve(e.data);
+          break;
+        case FromWorkerMessageType.SYMMETRIES_FOUND:
+          logEvent(EventType.SYSTEM, {
+            category: 'worker symmetry compute time',
+            detail:
+              (
+                e.data.toWorkerMessage.type ===
+                ToWorkerMessageType.FIND_SYMMETRIES
+              ) ?
+                e.data.toWorkerMessage.clues
+              : undefined,
             elapsedMs: e.data.elapsedMs,
           });
           pending.resolve(e.data);
@@ -202,6 +217,12 @@ export async function requestPuzzleEvaluation(
   ) as Promise<PuzzleEvaluatedMessage>;
 }
 
+/**
+ * Sends a message to the worker to test whether a set of clues forms a valid
+ * puzzle, and returns a promise that resolves to the test result.
+ * @param clues The clues of the puzzle to test, as a flat string.
+ * @returns A promise that resolves to the test result.
+ */
 export async function requestPuzzleTesting(
   clues: string,
 ): Promise<PuzzleTestedMessage> {
@@ -213,4 +234,23 @@ export async function requestPuzzleTesting(
     message,
     FromWorkerMessageType.PUZZLE_TESTED,
   ) as Promise<PuzzleTestedMessage>;
+}
+
+/**
+ * Sends a message to the worker to find the symmetries of a puzzle, and returns
+ * a promise that resolves to the symmetries found.
+ * @param clues The clues of the puzzle for which to find symmetries, as a flat string.
+ * @returns A promise that resolves to the symmetries found.
+ */
+export async function requestPuzzleSymmetries(
+  clues: string,
+): Promise<SymmetriesFoundMessage> {
+  const message = {
+    type: ToWorkerMessageType.FIND_SYMMETRIES,
+    clues,
+  };
+  return puzzlesQueue.request(
+    message,
+    FromWorkerMessageType.SYMMETRIES_FOUND,
+  ) as Promise<SymmetriesFoundMessage>;
 }
