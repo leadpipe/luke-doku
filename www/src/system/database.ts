@@ -55,6 +55,13 @@ export function lookUpPuzzleById(
   ]);
 }
 
+export function lookUpPuzzleByClues(
+  db: IDBPDatabase<LukeDokuDb>,
+  clues: string,
+): Promise<PuzzleRecord | undefined> {
+  return db.transaction('puzzles').store.get(clues);
+}
+
 const INFINITE_DATE = 8640000000000000;
 
 /**
