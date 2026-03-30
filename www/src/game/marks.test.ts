@@ -1,3 +1,4 @@
+import { expect } from '@esm-bundle/chai';
 import {Loc} from './loc';
 import {Marks} from './marks';
 
@@ -8,7 +9,7 @@ describe('Marks', () => {
       const marks = new Marks();
       const testLoc = Loc.of(0);
       const testNum = 5;
-      expect(marks.isNegated(testLoc, testNum)).toBe(false);
+      expect(marks.isNegated(testLoc, testNum)).to.equal(false);
     });
 
     it('tracks negations when setting a single number in a peer cell', () => {
@@ -22,9 +23,9 @@ describe('Marks', () => {
       // Set a value in peer that should negate one of the possibilities
       marks.setNum(rightPeer, 2);
 
-      expect(marks.isNegated(center, 2)).toBe(true);
-      expect(marks.isNegated(center, 1)).toBe(false);
-      expect(marks.isNegated(center, 3)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(true);
+      expect(marks.isNegated(center, 1)).to.equal(false);
+      expect(marks.isNegated(center, 3)).to.equal(false);
     });
 
     it('removes negations when clearing a peer cell', () => {
@@ -34,10 +35,10 @@ describe('Marks', () => {
 
       marks.setNums(center, new Set([1, 2, 3]));
       marks.setNum(rightPeer, 2);
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       marks.clearCell(rightPeer);
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
     });
 
     it('updates negations when changing a cell value', () => {
@@ -47,10 +48,10 @@ describe('Marks', () => {
 
       marks.setNums(center, new Set([1, 2, 3]));
       marks.setNum(rightPeer, 2);
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       marks.setNum(rightPeer, 4); // Change to a number not in center's possibilities
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
     });
 
     it('handles multiple peers negating the same number', () => {
@@ -63,15 +64,15 @@ describe('Marks', () => {
       marks.setNum(rightPeer, 2);
       marks.setNum(leftPeer, 2);
 
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       // Clearing one peer shouldn't remove the negation since another peer still has the value
       marks.clearCell(rightPeer);
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       // Clearing all peers with the value should remove the negation
       marks.clearCell(leftPeer);
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
     });
 
     it('maintains negation state when modifying non-peer cells', () => {
@@ -80,11 +81,11 @@ describe('Marks', () => {
       const nonPeer = Loc.of(80); // Cell in different row/column/block
 
       marks.setNums(center, new Set([1, 2, 3]));
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
 
       // Setting value in non-peer shouldn't affect negation
       marks.setNum(nonPeer, 2);
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
     });
 
     it('updates negations when modifying possibilities in target cell', () => {
@@ -94,19 +95,19 @@ describe('Marks', () => {
 
       marks.setNums(center, new Set([1, 2, 3]));
       marks.setNum(rightPeer, 2);
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       // Changing possibilities should update negations
       marks.setNums(center, new Set([1, 3]));
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
 
       // Changing possibilities back should restore negations
       marks.setNums(center, new Set([1, 2, 3]));
-      expect(marks.isNegated(center, 2)).toBe(true);
+      expect(marks.isNegated(center, 2)).to.equal(true);
 
       // Negations only count for multi-valued cells
       marks.setNum(center, 2);
-      expect(marks.isNegated(center, 2)).toBe(false);
+      expect(marks.isNegated(center, 2)).to.equal(false);
     });
   });
 });

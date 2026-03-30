@@ -1,5 +1,5 @@
-import * as wasm from 'luke-doku-rust';
 import {GridString} from '../game/types';
+import * as wasm from '../wasm';
 import {mod, OkLCH} from './colors';
 
 const CHROMA = 35; // 0..37

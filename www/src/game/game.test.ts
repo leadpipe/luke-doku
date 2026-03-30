@@ -1,3 +1,4 @@
+import {expect} from '@esm-bundle/chai';
 import {CreateTrail, Redo, Undo} from './commands';
 import {FAKE_HISTORY} from './fake-data';
 import {TEST_ONLY} from './game';
@@ -6,7 +7,6 @@ import {Loc} from './loc';
 import {Sudoku} from './sudoku';
 
 const {BaseGame} = TEST_ONLY;
-const {objectContaining} = expect;
 
 describe('Game', () => {
   function newSudoku(clues: Grid) {
@@ -17,15 +17,17 @@ describe('Game', () => {
     const clues = new Grid(); // a blank grid
     const sudoku = newSudoku(clues);
     const game = new BaseGame(sudoku, FAKE_HISTORY);
-    expect(game.marks.getNum(Loc.of(1))).toEqual(4);
-    expect(game.history).toEqual(FAKE_HISTORY.map(e => objectContaining(e)));
+    expect(game.marks.getNum(Loc.of(1))).to.deep.equal(4);
+    game.history.forEach((entry, i) => {
+      expect(entry).to.deep.include(FAKE_HISTORY[i]);
+    });
   });
 
   it('fails to restore a game from incompatible history', () => {
     const clues = new Grid();
     clues.set(Loc.of(1), 9);
     const sudoku = newSudoku(clues);
-    expect(() => new BaseGame(sudoku, FAKE_HISTORY)).toThrow(
+    expect(() => new BaseGame(sudoku, FAKE_HISTORY)).to.throw(
       /failed to execute SetNums/,
     );
   });
@@ -33,18 +35,18 @@ describe('Game', () => {
   it(`handles repeated undos of creating a trail`, () => {
     const game = new BaseGame(newSudoku(new Grid()));
     game.createTrail();
-    expect(game.trails.order.length).toBe(1);
+    expect(game.trails.order.length).to.equal(1);
     game.undo();
-    expect(game.trails.order.length).toBe(0);
+    expect(game.trails.order.length).to.equal(0);
     game.redo();
-    expect(game.trails.order.length).toBe(1);
+    expect(game.trails.order.length).to.equal(1);
     game.undo();
-    expect(game.trails.order.length).toBe(0);
-    expect(game.history).toEqual([
-      objectContaining({command: new CreateTrail()}),
-      objectContaining({command: new Undo()}),
-      objectContaining({command: new Redo()}),
-      objectContaining({command: new Undo()}),
+    expect(game.trails.order.length).to.equal(0);
+    expect(game.history.map(e => e.command)).to.deep.equal([
+      new CreateTrail(),
+      new Undo(),
+      new Redo(),
+      new Undo(),
     ]);
   });
 
@@ -53,16 +55,15 @@ describe('Game', () => {
     game.createTrail();
     game.setNum(Loc.of(1), 2);
     game.setNum(Loc.of(0), 1);
-    expect(game.trails.order[0].trailhead).toBe(Loc.of(1));
+    expect(game.trails.order[0].trailhead).to.equal(Loc.of(1));
     game.createTrail();
-    expect(game.trails.order).toEqual([
-      objectContaining({id: 1}),
-      objectContaining({id: 0}),
-    ]);
-    expect(game.trails.order[0].trailhead).toBeNull();
+    expect(game.trails.order.map(t => t.id)).to.deep.equal([1, 0]);
+    expect(game.trails.order[0].trailhead).to.equal(null);
     game.copyFromTrail(game.trails.order[1]);
-    expect(game.trails.order[0].trailhead).toBe(Loc.of(1));
-    expect(game.trails.order[0].bytes).toEqual(game.trails.order[1].bytes);
+    expect(game.trails.order[0].trailhead).to.equal(Loc.of(1));
+    expect(game.trails.order[0].bytes).to.deep.equal(
+      game.trails.order[1].bytes,
+    );
   });
 
   it(`can undo a trail move over an existing marks move`, () => {
@@ -70,6 +71,6 @@ describe('Game', () => {
     game.setNum(Loc.of(0), 1);
     game.createTrail();
     game.setNum(Loc.of(0), 2);
-    expect(game.undo()).toBe(true);
+    expect(game.undo()).to.equal(true);
   });
 });

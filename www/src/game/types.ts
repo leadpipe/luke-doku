@@ -1,4 +1,4 @@
-import * as wasm from 'luke-doku-rust';
+import * as wasm from '../wasm';
 
 declare const brandKey: unique symbol;
 type Brand<B> = {[brandKey]: B};

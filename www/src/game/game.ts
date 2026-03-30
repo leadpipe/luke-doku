@@ -1,11 +1,11 @@
 import type {IDBPDatabase} from 'idb';
-import * as wasm from 'luke-doku-rust';
 import {AttemptState, LukeDokuDb, PuzzleRecord} from '../system/database';
 import {
   requestPuzzleEvaluation,
   requestPuzzleGeneration,
   requestPuzzleSymmetries,
 } from '../system/puzzle-service';
+import * as wasm from '../wasm';
 import {
   Command,
   CompletionState,

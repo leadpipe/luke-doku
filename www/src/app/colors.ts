@@ -1,4 +1,4 @@
-import * as wasm from 'luke-doku-rust';
+import * as wasm from '../wasm';
 
 /**
  * A color in the okLCH space.

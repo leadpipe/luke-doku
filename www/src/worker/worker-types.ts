@@ -1,4 +1,4 @@
-import * as wasm from 'luke-doku-rust';
+import * as wasm from '../wasm';
 
 export enum ToWorkerMessageType {
   GENERATE_PUZZLE = 'GENERATE_PUZZLE',

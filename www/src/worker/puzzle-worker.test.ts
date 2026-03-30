@@ -1,3 +1,4 @@
+import { expect } from "@esm-bundle/chai";
 import {TEST_ONLY} from './puzzle-worker';
 import {
   type EvaluatePuzzleMessage,
@@ -19,11 +20,11 @@ describe('Puzzle Worker', () => {
       } as const;
       const result = generatePuzzle(message) as PuzzleGeneratedMessage;
 
-      expect(result.type).toBe('PUZZLE_GENERATED');
-      expect(result.clues).toBeTruthy();
-      expect(result.solutions).toHaveLength(1);
-      expect(result.generatorVersion).toBeDefined();
-      expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(result.type).to.equal('PUZZLE_GENERATED');
+      expect(result.clues).to.be.ok;
+      expect(result.solutions).to.have.lengthOf(1);
+      expect(result.generatorVersion).to.not.be.undefined;
+      expect(result.elapsedMs).to.be.at.least(0);
     });
 
     it('caches daily solutions for repeated generations', () => {
@@ -43,11 +44,11 @@ describe('Puzzle Worker', () => {
       const result1 = generatePuzzle(message1) as PuzzleGeneratedMessage;
       const result2 = generatePuzzle(message2) as PuzzleGeneratedMessage;
 
-      expect(result1.type).toBe('PUZZLE_GENERATED');
-      expect(result2.type).toBe('PUZZLE_GENERATED');
+      expect(result1.type).to.equal('PUZZLE_GENERATED');
+      expect(result2.type).to.equal('PUZZLE_GENERATED');
       // First generation should have dailySolutionElapsedMs, second should be absent (cached)
-      expect(result1.dailySolutionElapsedMs).toBeDefined();
-      expect(result2.dailySolutionElapsedMs).toBeUndefined();
+      expect(result1.dailySolutionElapsedMs).to.not.be.undefined;
+      expect(result2.dailySolutionElapsedMs).to.be.undefined;
     });
 
     it('returns different puzzles for different counters', () => {
@@ -67,7 +68,7 @@ describe('Puzzle Worker', () => {
       const result1 = generatePuzzle(message1) as PuzzleGeneratedMessage;
       const result2 = generatePuzzle(message2) as PuzzleGeneratedMessage;
 
-      expect(result1.clues).not.toEqual(result2.clues);
+      expect(result1.clues).not.to.deep.equal(result2.clues);
     });
 
     it('handles invalid dates gracefully', () => {
@@ -79,7 +80,7 @@ describe('Puzzle Worker', () => {
       } as const;
 
       const result = generatePuzzle(message);
-      expect(result.type).toBe('ERROR_CAUGHT');
+      expect(result.type).to.equal('ERROR_CAUGHT');
     });
   });
 
@@ -103,10 +104,10 @@ describe('Puzzle Worker', () => {
       };
 
       const result = evaluatePuzzle(evaluateMessage);
-      expect(result.type).toBe('PUZZLE_EVALUATED');
-      expect((result as any).complexity).toBeDefined();
-      expect((result as any).estimatedTimeMs).toBeGreaterThanOrEqual(0);
-      expect((result as any).evaluatorVersion).toBeDefined();
+      expect(result.type).to.equal('PUZZLE_EVALUATED');
+      expect((result as any).complexity).to.not.be.undefined;
+      expect((result as any).estimatedTimeMs).to.be.at.least(0);
+      expect((result as any).evaluatorVersion).to.not.be.undefined;
     });
 
     it('returns error for invalid clues', () => {
@@ -118,7 +119,7 @@ describe('Puzzle Worker', () => {
       };
 
       const result = evaluatePuzzle(message);
-      expect(result.type).toBe('ERROR_CAUGHT');
+      expect(result.type).to.equal('ERROR_CAUGHT');
     });
   });
 
@@ -141,9 +142,9 @@ describe('Puzzle Worker', () => {
       } as const;
 
       const result = testPuzzle(testMessage) as PuzzleTestedMessage;
-      expect(result.type).toBe('PUZZLE_TESTED');
-      expect(result.solutions).toBeDefined();
-      expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(result.type).to.equal('PUZZLE_TESTED');
+      expect(result.solutions).to.not.be.undefined;
+      expect(result.elapsedMs).to.be.at.least(0);
     });
 
     it('tests an incomplete set of clues', () => {
@@ -154,10 +155,10 @@ describe('Puzzle Worker', () => {
       } as const;
 
       const result = testPuzzle(testMessage) as PuzzleTestedMessage;
-      expect(result.type).toBe('PUZZLE_TESTED');
-      expect(result.solutions).toBeUndefined();
-      expect(result.incomplete).toBe(true);
-      expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(result.type).to.equal('PUZZLE_TESTED');
+      expect(result.solutions).to.be.undefined;
+      expect(result.incomplete).to.equal(true);
+      expect(result.elapsedMs).to.be.at.least(0);
     });
 
     it('tests an erroneous set of clues', () => {
@@ -169,10 +170,10 @@ describe('Puzzle Worker', () => {
       } as const;
 
       const result = testPuzzle(testMessage) as PuzzleTestedMessage;
-      expect(result.type).toBe('PUZZLE_TESTED');
-      expect(result.solutions).toBeUndefined();
-      expect(result.incomplete).toBe(false);
-      expect(result.elapsedMs).toBeGreaterThanOrEqual(0);
+      expect(result.type).to.equal('PUZZLE_TESTED');
+      expect(result.solutions).to.be.undefined;
+      expect(result.incomplete).to.equal(false);
+      expect(result.elapsedMs).to.be.at.least(0);
     });
 
     it('returns error for invalid clues', () => {
@@ -183,7 +184,7 @@ describe('Puzzle Worker', () => {
       } as const;
 
       const result = testPuzzle(message);
-      expect(result.type).toBe('ERROR_CAUGHT');
+      expect(result.type).to.equal('ERROR_CAUGHT');
     });
   });
 });

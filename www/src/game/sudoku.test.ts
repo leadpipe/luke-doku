@@ -1,5 +1,6 @@
-import {advanceTo} from 'jest-date-mock';
-import * as wasm from 'luke-doku-rust';
+import {expect} from '@esm-bundle/chai';
+import sinon from 'sinon';
+import * as wasm from '../wasm';
 import {TEST_ONLY} from '../worker/puzzle-worker';
 import {
   type PuzzleGeneratedMessage,
@@ -20,14 +21,18 @@ describe('Sudoku', () => {
   }) as PuzzleGeneratedMessage;
   const sudoku = Sudoku.fromGeneratedPuzzle(workerMessage);
 
+  let clock: sinon.SinonFakeTimers;
   beforeEach(() => {
-    advanceTo(now);
+    clock = sinon.useFakeTimers(now.getTime());
+  });
+  afterEach(() => {
+    clock.restore();
   });
 
   describe('toDatabaseRecord', () => {
     it('works as expected', () => {
       const record = sudoku.toDatabaseRecord();
-      expect(record).toEqual({
+      expect(record).to.deep.equal({
         clues:
           '..4.6........3..92.1.5......3......7.5..21.6.6......3......8.74.76.1..5.....5.8..',
         solutions: [
@@ -90,15 +95,15 @@ describe('Sudoku', () => {
           .concat(m.partialOrbits.map(o => o.buffer)),
       );
       const buffers = (n: number) => Array.from({length: n}).fill(buffer);
-      expect(allBuffers).toEqual([buffers(7 + 2), buffers(10 + 5)]);
+      expect(allBuffers).to.deep.equal([buffers(7 + 2), buffers(10 + 5)]);
     });
   });
 
   describe('fromDatabaseRecord', () => {
     it('undoes toDatabaseRecord', () => {
-      expect(Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord())).toEqual(
-        sudoku,
-      );
+      expect(
+        Sudoku.fromDatabaseRecord(sudoku.toDatabaseRecord()),
+      ).to.deep.equal(sudoku);
     });
   });
 });
@@ -106,14 +111,14 @@ describe('Sudoku', () => {
 describe('PuzzleId', () => {
   describe('parse', () => {
     it('parses valid IDs', () => {
-      expect(PuzzleId.parse('2024-06-15:3')).toEqual(
+      expect(PuzzleId.parse('2024-06-15:3')).to.deep.equal(
         new PuzzleId(
           dateString(wasm.LogicalDate.fromString('2024-06-15')),
           3,
           0,
         ),
       );
-      expect(PuzzleId.parse('2024-12-31:42:2')).toEqual(
+      expect(PuzzleId.parse('2024-12-31:42:2')).to.deep.equal(
         new PuzzleId(
           dateString(wasm.LogicalDate.fromString('2024-12-31')),
           42,
@@ -123,10 +128,10 @@ describe('PuzzleId', () => {
     });
 
     it('returns null for invalid IDs', () => {
-      expect(PuzzleId.parse('')).toBeNull();
-      expect(PuzzleId.parse('2024-06-15')).toBeNull();
-      expect(PuzzleId.parse('2024-06-15:-3')).toBeNull();
-      expect(PuzzleId.parse('2024-06-15:3:foo')).toBeNull();
+      expect(PuzzleId.parse('')).to.be.null;
+      expect(PuzzleId.parse('2024-06-15')).to.be.null;
+      expect(PuzzleId.parse('2024-06-15:-3')).to.be.null;
+      expect(PuzzleId.parse('2024-06-15:3:foo')).to.be.null;
     });
   });
 });

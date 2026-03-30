@@ -1,4 +1,4 @@
-import * as wasm from 'luke-doku-rust';
+import * as wasm from '../wasm';
 import {checkIntRange} from './ints';
 import {iota} from './iota';
 

@@ -1,5 +1,5 @@
-import * as wasm from 'luke-doku-rust';
 import {ensureExhaustiveSwitch} from '../game/utils';
+import * as wasm from '../wasm';
 import {
   type ErrorCaughtMessage,
   type EvaluatePuzzleMessage,

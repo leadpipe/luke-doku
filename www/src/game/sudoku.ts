@@ -1,9 +1,9 @@
-import * as wasm from 'luke-doku-rust';
 import {
   AttemptState,
   type DbSymMatch,
   type PuzzleRecord,
 } from '../system/database';
+import * as wasm from '../wasm';
 import type {
   PuzzleGeneratedMessage,
   SymmetriesFoundMessage,

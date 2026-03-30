@@ -1,3 +1,4 @@
+import { expect } from '@esm-bundle/chai';
 import {CommandTag} from './command';
 import {FAKE_HISTORY, FAKE_HISTORY_SERIALIZED} from './fake-data';
 import {deserializeCommands, serializeCommands, TEST_ONLY} from './serialize';
@@ -6,7 +7,7 @@ const {serializersByTag} = TEST_ONLY;
 
 describe('serialize module', () => {
   it('serializing works', () => {
-    expect(serializeCommands(FAKE_HISTORY).serialized).toEqual(
+    expect(serializeCommands(FAKE_HISTORY).serialized).to.deep.equal(
       FAKE_HISTORY_SERIALIZED,
     );
   });
@@ -17,28 +18,28 @@ describe('serialize module', () => {
         FAKE_HISTORY,
         serializeCommands(FAKE_HISTORY.slice(0, 5)),
       ).serialized,
-    ).toEqual(FAKE_HISTORY_SERIALIZED);
+    ).to.deep.equal(FAKE_HISTORY_SERIALIZED);
   });
 
   it('repeated serializing works', () => {
     const result = serializeCommands(FAKE_HISTORY);
-    expect(serializeCommands(FAKE_HISTORY, result)).toBe(result);
+    expect(serializeCommands(FAKE_HISTORY, result)).to.equal(result);
   });
 
   it('deserializing works', () => {
-    expect(deserializeCommands(FAKE_HISTORY_SERIALIZED)).toEqual(FAKE_HISTORY);
+    expect(deserializeCommands(FAKE_HISTORY_SERIALIZED)).to.deep.equal(FAKE_HISTORY);
   });
 
   it(`serializers are indexed correctly`, () => {
     for (const [tag, serializer] of Object.entries(serializersByTag)) {
-      expect(CommandTag[Number(tag)]).toBe(CommandTag[serializer.tag]);
-      expect(serializer.tag).toBe(serializer.ctor.prototype.tag());
+      expect(CommandTag[Number(tag)]).to.equal(CommandTag[serializer.tag]);
+      expect(serializer.tag).to.equal(serializer.ctor.prototype.tag());
     }
   });
 
   it(`command tags will fit in 7 bits`, () => {
     for (const serializer of Object.values(serializersByTag)) {
-      expect(serializer.tag & 127, CommandTag[serializer.tag]).toBe(
+      expect(serializer.tag & 127, CommandTag[serializer.tag]).to.equal(
         serializer.tag,
       );
     }

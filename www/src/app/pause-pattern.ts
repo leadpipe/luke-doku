@@ -1,8 +1,8 @@
 import {svg, SVGTemplateResult} from 'lit';
-import * as wasm from 'luke-doku-rust';
 import {ReadonlyGrid} from '../game/grid';
 import {Loc} from '../game/loc';
 import {SymMatch} from '../game/sudoku';
+import * as wasm from '../wasm';
 import {
   COLOR_RANGES,
   mod,

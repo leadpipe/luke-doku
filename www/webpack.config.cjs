@@ -12,14 +12,14 @@ const WorkboxPlugin = require('workbox-webpack-plugin');
 var __dirname;
 let debugMode = true;
 const baseConfig = {
-  entry: './src/bootstrap.js',
   output: {
     path: __dirname + '/dist',
     filename: 'bundle.js',
     publicPath: '',
   },
   experiments: {
-    syncWebAssembly: true,
+    asyncWebAssembly: true,
+    topLevelAwait: true,
   },
   resolve: {
     extensions: ['.ts', '.js'],
@@ -62,6 +62,7 @@ const baseConfig = {
     }),
     new WasmPackPlugin({
       crateDirectory: path.resolve(__dirname, '../crate'),
+      extraArgs: '--target web',
       outName: 'luke_doku',
     }),
     new CopyPlugin({
@@ -72,7 +73,8 @@ const baseConfig = {
           transform(content) {
             return content
               .toString()
-              .replaceAll('$debugMode', debugMode.toString());
+              .replaceAll('$debugMode', debugMode.toString())
+              .replace('./index.ts', 'bundle.js');
           },
         },
         //        {from: '../icons', to: __dirname + '/dist'},

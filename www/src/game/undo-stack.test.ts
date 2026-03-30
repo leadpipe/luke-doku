@@ -1,3 +1,4 @@
+import { expect } from '@esm-bundle/chai';
 import {
   Command,
   CommandTag,
@@ -70,23 +71,23 @@ describe(`UndoStack`, () => {
   });
 
   it(`can't undo or redo before any commands are pushed`, () => {
-    expect(state.undoStack.canUndo()).toBe(false);
-    expect(state.undoStack.canRedo()).toBe(false);
+    expect(state.undoStack.canUndo()).to.equal(false);
+    expect(state.undoStack.canRedo()).to.equal(false);
   });
 
   it(`can undo but can't redo after the first push`, () => {
     state.undoStack.push(state.undoable);
-    expect(state.undoStack.canUndo()).toBe(true);
-    expect(state.undoStack.canRedo()).toBe(false);
+    expect(state.undoStack.canUndo()).to.equal(true);
+    expect(state.undoStack.canRedo()).to.equal(false);
   });
 
   it(`can't undo but can redo after the first undo`, () => {
     state.undoStack.push(state.undoable);
     const undid = state.undoStack.undo(state.internals);
-    expect(undid).toBe(true);
-    expect(state.undoStack.canUndo()).toBe(false);
-    expect(state.undoStack.canRedo()).toBe(true);
-    expect(state.command.applyCount).toBe(1);
-    expect(state.command.undoCount).toBe(1);
+    expect(undid).to.equal(true);
+    expect(state.undoStack.canUndo()).to.equal(false);
+    expect(state.undoStack.canRedo()).to.equal(true);
+    expect(state.command.applyCount).to.equal(1);
+    expect(state.command.undoCount).to.equal(1);
   });
 });

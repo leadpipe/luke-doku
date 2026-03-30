@@ -1,9 +1,9 @@
 import {LitElement, css, html} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
-import * as wasm from 'luke-doku-rust';
 import {Game} from '../game/game';
 import {iota} from '../game/iota';
 import {ensureExhaustiveSwitch} from '../game/utils';
+import * as wasm from '../wasm';
 
 @customElement('puzzle-rating')
 export class PuzzleRating extends LitElement {

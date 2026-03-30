@@ -4,9 +4,9 @@ import {
   type IDBPDatabase,
   openDB,
 } from 'idb';
-import * as wasm from 'luke-doku-rust';
 import type {PuzzleId} from '../game/sudoku';
 import type {DateString} from '../game/types';
+import * as wasm from '../wasm';
 
 /**
  * Opens the IndexedDB that Luke-doku stores puzzles in.

@@ -1,9 +1,9 @@
 import {html, type HTMLTemplateResult} from 'lit';
-import * as wasm from 'luke-doku-rust';
 import {CompletionState} from '../game/command';
 import type {Game} from '../game/game';
 import type {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
+import * as wasm from '../wasm';
 import {CORRECT_COLOR, ERROR_COLOR} from './styles';
 
 /**

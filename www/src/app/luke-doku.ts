@@ -7,7 +7,6 @@ import './sudoku-view';
 import {css, html, LitElement, TemplateResult} from 'lit';
 import {customElement, state} from 'lit/decorators.js';
 import {ifDefined} from 'lit/directives/if-defined.js';
-import * as wasm from 'luke-doku-rust';
 import {Game, PlayState} from '../game/game';
 import {PuzzleId, Sudoku} from '../game/sudoku';
 import {dateString} from '../game/types';
@@ -18,6 +17,7 @@ import {
   lookUpPuzzleById,
   openDb,
 } from '../system/database';
+import * as wasm from '../wasm';
 import {addTypeSafeListener} from './events';
 import {
   ENTER_PUZZLE_PATH,
