@@ -1,8 +1,8 @@
-@use 'pkg:@fontsource-utils/scss' as fontsource;
-@use 'pkg:@fontsource/lumanosimo/scss' as Lumanosimo;
-@use 'pkg:@fontsource/material-icons/scss' as MaterialIcons;
-@use 'pkg:@fontsource/merriweather-sans/scss' as MerriweatherSans;
-@use 'pkg:@fontsource/prompt/scss' as Prompt;
+@use '@fontsource-utils/scss' as fontsource;
+@use '@fontsource/lumanosimo/scss' as Lumanosimo;
+@use '@fontsource/material-icons/scss' as MaterialIcons;
+@use '@fontsource/merriweather-sans/scss' as MerriweatherSans;
+@use '@fontsource/prompt/scss' as Prompt;
 
 @include fontsource.faces(
   $metadata: Lumanosimo.$metadata,
