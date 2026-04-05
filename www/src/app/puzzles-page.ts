@@ -87,6 +87,14 @@ export class PuzzlesPage extends LitElement {
           </div>
         `
       : ''}
+      ${this.unstartedManualGames.length > 0 ?
+        html`
+          <h2>External puzzles</h2>
+          <div class="puzzle-list">
+            ${this.renderPuzzles(this.unstartedManualGames)}
+          </div>
+        `
+      : ''}
       <h2>Today&apos;s puzzles</h2>
       <div class="puzzle-list">
         ${this.renderPuzzles(this.todaysGames, /*assumeToday=*/ true)}
@@ -153,6 +161,7 @@ export class PuzzlesPage extends LitElement {
     return parts;
   }
 
+  @state() private unstartedManualGames: Game[] = [];
   @state() private ongoingGames: Game[] = [];
   @state() private todaysGames: Game[] = [];
   private topCounter = 0;
@@ -169,6 +178,7 @@ export class PuzzlesPage extends LitElement {
   private async loadPuzzles() {
     const db = await openDb();
     this.cleanOldUnstartedPuzzles(db);
+    this.loadManuallyEnteredUnstartedPuzzles(db);
     this.loadOngoingPuzzles(db);
     this.loadRecentlyCompletedPuzzles(db);
     await this.loadTodaysPuzzles(db);
@@ -205,6 +215,19 @@ export class PuzzlesPage extends LitElement {
       this.todaysGames = this.todaysGames === a ? b : a;
     }
     this.topCounter = Math.max(this.topCounter, totalCount);
+  }
+
+  private async loadManuallyEnteredUnstartedPuzzles(db: IDBPDatabase<LukeDokuDb>) {
+    const a = this.unstartedManualGames;
+    const b = [...a];
+    for await (const cursor of iterateUnstartedPuzzlesAsc(db)) {
+      if (!cursor.value.puzzleId) {
+        const game = Game.forDbRecord(db, cursor.value);
+        a.push(game);
+        b.push(game);
+        this.unstartedManualGames = this.unstartedManualGames === a ? b : a;
+      }
+    }
   }
 
   private async loadOngoingPuzzles(db: IDBPDatabase<LukeDokuDb>) {
