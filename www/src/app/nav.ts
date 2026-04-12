@@ -36,10 +36,6 @@ declare global {
     readonly currentEntry: NavigationHistoryEntry | null;
     entries(): NavigationHistoryEntry[];
   }
-
-  interface Window {
-    readonly navigation?: Navigation;
-  }
 }
 
 /**
@@ -205,7 +201,7 @@ async function alignHistoryStack(
       break;
     }
   }
-  
+
   // To avoid attempting to go to an index that doesn't exist yet, we must cap `i`.
   i = Math.min(i, stack.entries.length - 1);
 
@@ -213,7 +209,8 @@ async function alignHistoryStack(
   // we may need to clear the browser's forward history. The only way to clear
   // forward history is to push a state. We force a push by ensuring `i` is at
   // most `prefixUrls.length - 2` when garbage exists.
-  const stackHasGarbage = stack.entries.length > prefixUrls.length || i < stack.entries.length - 1;
+  const stackHasGarbage =
+    stack.entries.length > prefixUrls.length || i < stack.entries.length - 1;
   if (stackHasGarbage && i >= prefixUrls.length - 1) {
     i = Math.max(0, prefixUrls.length - 2);
   }
@@ -235,16 +232,18 @@ async function alignHistoryStack(
 const baseUrl = window.location.href.replace(/(#.*)?$/, '');
 
 let initPromise: Promise<void> | null = null;
-let fallbackStack: HistoryStack = { index: 0, entries: [] };
+let fallbackStack: HistoryStack = {index: 0, entries: []};
 
 export async function getHistoryStack(): Promise<HistoryStack> {
   if (!initPromise) initPromise = initializeHistoryStack();
   await initPromise;
-  
+
   if (window.navigation) {
     return {
       index: window.navigation.currentEntry?.index ?? 0,
-      entries: window.navigation.entries().map(e => ({url: e.url || '', index: e.index})),
+      entries: window.navigation
+        .entries()
+        .map(e => ({url: e.url || '', index: e.index})),
     };
   }
   return fallbackStack;
@@ -258,10 +257,15 @@ function saveHistoryStack(stack: HistoryStack) {
 
 async function initializeHistoryStack(): Promise<void> {
   const fullUrl = window.location.href;
-  
+
   // Natively managed path
   if (window.navigation) {
-    const stack = await getHistoryStack(); 
+    const stack = {
+      index: window.navigation.currentEntry?.index ?? 0,
+      entries: window.navigation
+        .entries()
+        .map(e => ({url: e.url || '', index: e.index})),
+    };
     await alignHistoryStack(stack, getHashState(fullUrl), false);
     return;
   }
@@ -288,7 +292,7 @@ async function initializeHistoryStack(): Promise<void> {
       detail: stored,
     });
   }
-  
+
   fallbackStack = {
     index: 0,
     entries: [
