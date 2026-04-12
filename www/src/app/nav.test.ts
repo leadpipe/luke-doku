@@ -63,6 +63,48 @@ describe('nav module', () => {
     });
   });
 
+  describe('getHistoryStack & saveHistoryStack with/without Navigation API', () => {
+    let originalNavigation: any;
+
+    beforeEach(() => {
+      originalNavigation = (window as any).navigation;
+    });
+
+    afterEach(() => {
+      if (originalNavigation) {
+        (window as any).navigation = originalNavigation;
+      } else {
+        delete (window as any).navigation;
+      }
+    });
+
+    it('falls back to sessionStorage tracking when Navigation API is unavailable', async () => {
+      delete (window as any).navigation;
+      const { getHistoryStack } = await import('./nav');
+      // Await initial initialization if needed
+      const stack = await getHistoryStack();
+      expect(stack).to.have.property('entries');
+      expect(stack).to.have.property('index');
+    });
+
+    it('bypasses sessionStorage and reads directly from window.navigation when available', async () => {
+      const fakeEntries = [
+        { url: 'http://test.com/', index: 0 },
+        { url: 'http://test.com/#foo', index: 1 }
+      ];
+      (window as any).navigation = {
+        currentEntry: fakeEntries[1],
+        entries: () => fakeEntries
+      };
+      
+      const { getHistoryStack } = await import('./nav');
+      const stack = await getHistoryStack();
+      
+      expect(stack.index).to.equal(1);
+      expect(stack.entries).to.deep.equal(fakeEntries);
+    });
+  });
+
   describe('alignHistoryStack', () => {
     const baseUrl = window.location.href.replace(/(#.*)?$/, '');
 

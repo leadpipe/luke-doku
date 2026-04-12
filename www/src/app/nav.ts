@@ -17,9 +17,29 @@ declare interface HistoryEntry {
 /**
  * Tracks the current browser location history.
  */
-declare interface HistoryStack {
+export declare interface HistoryStack {
   index: number;
   entries: HistoryEntry[];
+}
+
+declare global {
+  interface NavigationHistoryEntry {
+    readonly id: string;
+    readonly index: number;
+    readonly key: string;
+    readonly sameDocument: boolean;
+    readonly url: string | null;
+    getState(): unknown;
+  }
+
+  interface Navigation {
+    readonly currentEntry: NavigationHistoryEntry | null;
+    entries(): NavigationHistoryEntry[];
+  }
+
+  interface Window {
+    readonly navigation?: Navigation;
+  }
 }
 
 /**
@@ -208,15 +228,45 @@ async function alignHistoryStack(
     updateEntriesAndTitle(stack.entries, i, url);
     stack.index = i;
   }
-  window.sessionStorage.setItem('historyStack', JSON.stringify(stack));
+  saveHistoryStack(stack);
   if (sendEvent) handleHashStateChange({index: stack.index});
 }
 
 const baseUrl = window.location.href.replace(/(#.*)?$/, '');
 
-const historyStack: Promise<HistoryStack> = (async () => {
-  // TODO: Use the real NavigationHistory API when available.
+let initPromise: Promise<void> | null = null;
+let fallbackStack: HistoryStack = { index: 0, entries: [] };
+
+export async function getHistoryStack(): Promise<HistoryStack> {
+  if (!initPromise) initPromise = initializeHistoryStack();
+  await initPromise;
+  
+  if (window.navigation) {
+    return {
+      index: window.navigation.currentEntry?.index ?? 0,
+      entries: window.navigation.entries().map(e => ({url: e.url || '', index: e.index})),
+    };
+  }
+  return fallbackStack;
+}
+
+function saveHistoryStack(stack: HistoryStack) {
+  if (window.navigation) return; // Browser natively maintains history entries directly
+  fallbackStack = stack;
+  window.sessionStorage.setItem('historyStack', JSON.stringify(fallbackStack));
+}
+
+async function initializeHistoryStack(): Promise<void> {
   const fullUrl = window.location.href;
+  
+  // Natively managed path
+  if (window.navigation) {
+    const stack = await getHistoryStack(); 
+    await alignHistoryStack(stack, getHashState(fullUrl), false);
+    return;
+  }
+
+  // Session storage managed local fallback
   const stored = window.sessionStorage.getItem('historyStack');
   if (stored) {
     try {
@@ -228,7 +278,8 @@ const historyStack: Promise<HistoryStack> = (async () => {
         typeof parsed.index === 'number' &&
         parsed.entries[parsed.index]?.url === fullUrl
       ) {
-        return parsed;
+        fallbackStack = parsed;
+        return;
       }
     } catch {}
     // The stored history stack doesn't match the current URL.
@@ -237,7 +288,8 @@ const historyStack: Promise<HistoryStack> = (async () => {
       detail: stored,
     });
   }
-  const stack: HistoryStack = {
+  
+  fallbackStack = {
     index: 0,
     entries: [
       {
@@ -247,9 +299,8 @@ const historyStack: Promise<HistoryStack> = (async () => {
     ],
   };
   window.history.replaceState(null, '', baseUrl);
-  await alignHistoryStack(stack, getHashState(fullUrl), false);
-  return stack;
-})();
+  await alignHistoryStack(fallbackStack, getHashState(fullUrl), false);
+}
 
 let popstateResolver: ((value: void | PromiseLike<void>) => void) | null = null;
 
@@ -295,13 +346,13 @@ async function go(delta: number): Promise<void> {
 }
 
 async function handleHashStateChange({index: stateIndex}: {index?: number}) {
-  const stack = await historyStack;
+  const stack = await getHistoryStack();
   const fullUrl = window.location.href;
   const hashState = getHashState(fullUrl);
   const index = stack.entries.findIndex(entry => entry.url === fullUrl);
   if (index >= 0) {
     stack.index = index;
-    window.sessionStorage.setItem('historyStack', JSON.stringify(stack));
+    saveHistoryStack(stack);
   } else {
     // The current URL is not in our history stack; rebuild the stack.
     if (stateIndex != null) {
@@ -349,7 +400,7 @@ export async function navigateToPath(...path: string[]) {
  * prefixes of the path and parameters.
  */
 export async function navigateToHashState(hashState: HashState) {
-  await alignHistoryStack(await historyStack, hashState);
+  await alignHistoryStack(await getHistoryStack(), hashState);
 }
 
 /**
@@ -357,7 +408,7 @@ export async function navigateToHashState(hashState: HashState) {
  * If the value is undefined, the parameter is removed.
  */
 export async function navigateToParam(key: string, value?: string) {
-  const stack = await historyStack;
+  const stack = await getHistoryStack();
   const currentHashState = getHashState(stack.entries[stack.index].url);
   const params = new URLSearchParams(currentHashState.params);
   if (value === undefined) {
