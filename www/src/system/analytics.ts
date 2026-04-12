@@ -23,7 +23,7 @@ export declare interface EventParams {
 
 declare const debugMode: boolean;
 export function log(message: string, ...args: any[]) {
-  if (debugMode) {
+  if (typeof debugMode !== 'undefined' && debugMode) {
     console.log(new Date().toLocaleString(), message, ...args);
   }
 }

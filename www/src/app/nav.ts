@@ -104,6 +104,7 @@ function getPrefixUrls(hashState: HashState): string[] {
 
 export const TEST_ONLY = {
   getPrefixUrls,
+  alignHistoryStack,
 };
 
 /**
@@ -151,7 +152,7 @@ function updateEntriesAndTitle(
   url: string,
 ) {
   const hashState = getHashState(url);
-  document.title = getDocumentTitle(hashState);
+  const title = getDocumentTitle(hashState);
   const pushed = pushOrReplace(entries, index, url);
   if (pushed) {
     window.history.pushState({index}, '', url);
@@ -160,6 +161,7 @@ function updateEntriesAndTitle(
     window.history.replaceState({index}, '', url);
     log('REPLACE', index, url);
   }
+  document.title = title;
 }
 
 /**
@@ -183,25 +185,24 @@ async function alignHistoryStack(
       break;
     }
   }
-  // The general approach is to jump forward or back, replace the first
-  // differing entry, and then push the rest of the entries.  However, if the
-  // new stack is shorter, we may need to jump to the last identical entry so
-  // there is something to push.
-  if (
-    i === stack.entries.length ||
-    i === prefixUrls.length ||
-    (i > 0 && i < stack.entries.length && i < prefixUrls.length - 1)
-  ) {
-    --i;
+  
+  // To avoid attempting to go to an index that doesn't exist yet, we must cap `i`.
+  i = Math.min(i, stack.entries.length - 1);
+
+  // If the new stack is shorter, or we are branching off from an earlier entry,
+  // we may need to clear the browser's forward history. The only way to clear
+  // forward history is to push a state. We force a push by ensuring `i` is at
+  // most `prefixUrls.length - 2` when garbage exists.
+  const stackHasGarbage = stack.entries.length > prefixUrls.length || i < stack.entries.length - 1;
+  if (stackHasGarbage && i >= prefixUrls.length - 1) {
+    i = Math.max(0, prefixUrls.length - 2);
   }
 
   await go(i - stack.index);
   stack.index = i;
 
-  // If we need to push new entries, first trim the array.
-  if (i + 1 < prefixUrls.length) {
-    stack.entries = stack.entries.slice(0, i + 1);
-  }
+  // Trim the array to the prefix we are keeping.
+  stack.entries = stack.entries.slice(0, i + 1);
   for (; i < prefixUrls.length; ++i) {
     const url = prefixUrls[i];
     updateEntriesAndTitle(stack.entries, i, url);
