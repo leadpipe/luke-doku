@@ -36,6 +36,10 @@ declare global {
     readonly currentEntry: NavigationHistoryEntry | null;
     entries(): NavigationHistoryEntry[];
   }
+
+  interface Window {
+    readonly navigation: Navigation;
+  }
 }
 
 /**
