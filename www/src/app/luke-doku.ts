@@ -295,6 +295,12 @@ export class LukeDoku extends LitElement {
     this.nextPage = page;
     this.nextPageClass = pageClass;
     await this.updateComplete;
+    // Force a style recalculation. This ensures that newly inserted elements
+    // (like the page we are navigating to) have their initial styles (e.g. 
+    // the 'left' or 'right' class) computed before the 'transition' class
+    // is added. Without this, the browser may batch the insertion and class
+    // change, causing the element to appear instantly without animating.
+    this.offsetWidth;
     requestAnimationFrame(() => this.classList.add('transition'));
     log(`Navigating to page ${page} from ${this.page}`);
   }
