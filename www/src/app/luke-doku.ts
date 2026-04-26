@@ -2,6 +2,7 @@ import './enter-puzzle-page';
 import './events';
 import './puzzles-page';
 import './solve-page';
+import './review-page';
 import './sudoku-view';
 
 import {css, html, LitElement, TemplateResult} from 'lit';
@@ -30,7 +31,7 @@ import {
 import {getPuzzleDate, setPuzzleDateToToday} from './prefs';
 import {todayString} from './utils';
 
-type Page = 'loading' | 'solve' | 'puzzles' | 'enter-puzzle';
+type Page = 'loading' | 'solve' | 'puzzles' | 'enter-puzzle' | 'review';
 
 /** Top-level component. */
 @customElement('luke-doku')
@@ -90,6 +91,7 @@ export class LukeDoku extends LitElement {
       this.renderPage('puzzles', pageClasses),
       this.renderPage('solve', pageClasses),
       this.renderPage('enter-puzzle', pageClasses),
+      this.renderPage('review', pageClasses),
     ];
   }
 
@@ -110,6 +112,14 @@ export class LukeDoku extends LitElement {
             class=${ifDefined(pageClasses.get(page))}
             @transitionend=${this.pageTransitionEnd}
           ></solve-page>
+        `;
+      case 'review':
+        return html`
+          <review-page
+            .game=${this.game}
+            class=${ifDefined(pageClasses.get(page))}
+            @transitionend=${this.pageTransitionEnd}
+          ></review-page>
         `;
       case 'puzzles':
         return html`
@@ -177,7 +187,15 @@ export class LukeDoku extends LitElement {
       const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
       if (game) {
         this.game = game;
-        await this.showPage('solve', 'right');
+        await this.showPage('solve', this.page === 'review' ? 'left' : 'right');
+        return true;
+      }
+    }
+    if (hashState.path.length === 2 && hashState.path[1] === 'review') {
+      const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
+      if (game && game.playState === PlayState.COMPLETED) {
+        this.game = game;
+        await this.showPage('review', 'right');
         return true;
       }
     }

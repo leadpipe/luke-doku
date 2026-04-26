@@ -342,6 +342,21 @@ impl LocSet {
   }
 }
 
+impl Serialize for LocSet {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    use serde::ser::SerializeSeq;
+    let indices = self.as_boxed_indices();
+    let mut seq = serializer.serialize_seq(Some(indices.len()))?;
+    for e in indices.iter() {
+      seq.serialize_element(e)?;
+    }
+    seq.end()
+  }
+}
+
 impl Default for LocSet {
   /// Returns an empty set.
   fn default() -> Self {

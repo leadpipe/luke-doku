@@ -4,8 +4,11 @@ use crate::core::*;
 
 mod internals;
 
+use serde::Serialize;
+use wasm_bindgen::prelude::wasm_bindgen;
+
 /// A fact that can be deduced from a Sudoku grid.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
 pub enum Fact {
   /// Assignment: the given numeral has only one possible location in the given
   /// unit.  (Also known as a "hidden single.")
@@ -237,4 +240,11 @@ impl FactFinder {
     self.actual_asgmts.insert(asgmt);
     self.sukaku_map.apply(asgmt);
   }
+}
+
+#[wasm_bindgen(js_name = "deduceFacts")]
+pub fn deduce_facts(grid: &Grid) -> wasm_bindgen::JsValue {
+  let finder = FactFinder::new(grid);
+  let facts = finder.deduce_all();
+  serde_wasm_bindgen::to_value(&facts).unwrap()
 }

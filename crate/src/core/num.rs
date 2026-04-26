@@ -10,9 +10,11 @@ use std::num::NonZeroI8;
 use wasm_bindgen::convert::{FromWasmAbi, IntoWasmAbi, OptionFromWasmAbi, OptionIntoWasmAbi};
 use wasm_bindgen::describe::{inform, WasmDescribe, I8};
 
+use serde::Serialize;
+
 /// Identifies one of the 9 numerals that can can occupy a location of a
 /// Sudoku grid.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd)]
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
 pub struct Num(NonZeroI8);
 
 // Constant Num values, N1 through N9.
@@ -155,6 +157,20 @@ impl NumSet {
   /// Makes a new NumSet containing all numerals.
   pub const fn all() -> Self {
     NumSet(Bits9::ONES)
+  }
+}
+
+impl Serialize for NumSet {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    use serde::ser::SerializeSeq;
+    let mut seq = serializer.serialize_seq(Some(self.len() as usize))?;
+    for e in self.iter() {
+      seq.serialize_element(&e)?;
+    }
+    seq.end()
   }
 }
 

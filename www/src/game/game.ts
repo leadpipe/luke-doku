@@ -48,7 +48,7 @@ import {UndoStack} from './undo-stack';
 import {ensureExhaustiveSwitch} from './utils';
 
 /** Manages the game state for solving a sudoku interactively. */
-class BaseGame {
+export class BaseGame {
   private writableMarks: Marks;
   private readonly writableHistory: RecordedCommand[] = [];
   private readonly undoStack: UndoStack = new UndoStack();
@@ -563,8 +563,8 @@ export class Game extends BaseGame {
 }
 
 export interface GameWrapper {
-  readonly game: Game;
+  readonly game: BaseGame;
 }
 
 /** For use by tests only. */
-export const TEST_ONLY = {BaseGame};
+export const TEST_ONLY = {};
