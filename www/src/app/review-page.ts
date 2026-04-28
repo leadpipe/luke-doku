@@ -1,3 +1,5 @@
+import './game-clock';
+import './icon-button';
 import './sudoku-view';
 
 import {css, html, LitElement} from 'lit';
@@ -6,47 +8,59 @@ import {CompletionState} from '../game/command';
 import {Game} from '../game/game';
 import {PlaybackGame} from '../game/playback';
 import {deduceFacts} from '../wasm';
+import {navigateToPuzzle} from './nav';
+import {renderPuzzleTitle} from './utils';
 
 @customElement('review-page')
 export class ReviewPage extends LitElement {
   static override styles = css`
     :host {
+      height: 100vh;
       display: flex;
       flex-direction: column;
       align-items: center;
-      justify-content: center;
-      height: 100vh;
-      width: 100vw;
+      gap: var(--page-grid-gap);
+      --page-grid-gap: 8px;
+      --board-size: 380px;
+      --board-padding: 10px;
       background-color: var(--bg-color);
+    }
+    #top-panel {
+      margin-top: var(--page-grid-gap);
+      margin-bottom: 16px;
+      display: flex;
+      justify-content: space-between;
+      align-items: baseline;
+      width: var(--board-size);
     }
     .scrubber {
       width: 80%;
-      max-width: 500px;
+      max-width: var(--board-size);
       margin: 20px 0;
     }
     .info {
-      margin-bottom: 20px;
       text-align: center;
+      margin-bottom: 20px;
     }
     h2 {
-      margin: 0 0 10px 0;
+      margin-block: 8px;
     }
     sudoku-view {
-      max-width: 500px;
-      max-height: 500px;
+      max-width: var(--board-size);
+      max-height: var(--board-size);
       width: 100vw;
       aspect-ratio: 1 / 1;
     }
-    .header {
-      position: absolute;
-      top: 0;
-      left: 0;
-      padding: 10px;
+    #bottom-controls {
+      display: flex;
+      flex-direction: column;
+      height: 100%;
+      align-items: center;
+      width: var(--board-size);
     }
-    .header a {
-      color: var(--fg-color);
-      text-decoration: none;
-      font-weight: bold;
+    game-clock {
+      flex-grow: 1;
+      width: 100%;
     }
   `;
 
@@ -86,17 +100,47 @@ export class ReviewPage extends LitElement {
     }
   }
 
+  private goBack() {
+    if (this.game) {
+      navigateToPuzzle(this.game.sudoku);
+    }
+  }
+
+  private readonly keydownHandler = (event: KeyboardEvent) => {
+    if (!this.playback) return;
+    if (event.target instanceof HTMLInputElement) return;
+    
+    if (event.key === 'ArrowLeft') {
+      this.playback.index = Math.max(0, this.playback.index - 1);
+      this.updateFacts();
+    } else if (event.key === 'ArrowRight') {
+      this.playback.index = Math.min(this.playback.history.length, this.playback.index + 1);
+      this.updateFacts();
+    }
+  };
+
+  override connectedCallback(): void {
+    super.connectedCallback();
+    window.addEventListener('keydown', this.keydownHandler);
+  }
+
+  override disconnectedCallback(): void {
+    super.disconnectedCallback();
+    window.removeEventListener('keydown', this.keydownHandler);
+  }
+
   override render() {
     if (!this.playback) return html`<div>Loading...</div>`;
     const command = this.playback.currentCommand;
     return html`
-      <div class="header">
-        <a href="#/">← Home</a>
-      </div>
-      <div class="info">
-        <h2>Reviewing Game</h2>
-        <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
-        ${command ? html`<div>Action: ${command.command.constructor.name}</div>` : ''}
+      <div id="top-panel">
+        <icon-button
+          @click=${this.goBack}
+          iconName="arrow_back"
+          title="Return to the puzzle"
+          label="Puzzle"
+        ></icon-button>
+        <div style="flex: 1"></div>
       </div>
       <sudoku-view
         .gameWrapper=${this.playback.wrapper}
@@ -110,6 +154,17 @@ export class ReviewPage extends LitElement {
         .value=${this.playback.index.toString()}
         @input=${this.onScrub}
       />
+      <div class="info">
+        <h2>Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}</h2>
+        <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
+        ${command ? html`<div>Action: ${command.command.constructor.name}</div>` : ''}
+      </div>
+      <div id="bottom-controls">
+        <game-clock 
+          .game=${this.playback.wrapper.game}
+          .overrideElapsedMs=${command?.elapsedTimestamp}
+        ></game-clock>
+      </div>
     `;
   }
 }

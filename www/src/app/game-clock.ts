@@ -4,7 +4,7 @@ import './mat-icon';
 
 import {css, html, LitElement, PropertyValues} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
-import {Game} from '../game/game';
+import {BaseGame} from '../game/game';
 import {dispatchTypeSafeEvent} from './events';
 import {getShowClock, setShowClock} from './prefs';
 import {elapsedTimeString} from './utils';
@@ -48,18 +48,20 @@ export class GameClock extends LitElement {
     `;
   }
 
-  @property({attribute: false}) game: Game | null = null;
+  @property({attribute: false}) game: BaseGame | null = null;
+  @property({type: Number}) overrideElapsedMs?: number;
   @property({type: Boolean, reflect: true}) running = false;
 
   protected override updated(_changedProperties: PropertyValues): void {
     if (this.running) {
-      const elapsedMs = this.game?.elapsedMs ?? 0;
+      const elapsedMs = this.overrideElapsedMs ?? this.game?.elapsedMs ?? 0;
       window.setTimeout(() => this.clockTicked(), 1000 - (elapsedMs % 1000));
     }
   }
 
   private elapsedTime(): string {
-    return elapsedTimeString(this.game?.elapsedMs ?? 0);
+    const ms = this.overrideElapsedMs ?? this.game?.elapsedMs ?? 0;
+    return elapsedTimeString(ms);
   }
 
   private clockTicked() {

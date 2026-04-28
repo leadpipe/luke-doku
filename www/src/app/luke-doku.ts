@@ -216,6 +216,9 @@ export class LukeDoku extends LitElement {
         return true;
       }
     }
+    if (hashState.path.length === 2 && hashState.path[1] === 'review') {
+      return true;
+    }
     return false;
   }
 
