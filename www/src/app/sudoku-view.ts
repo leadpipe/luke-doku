@@ -553,6 +553,10 @@ export class SudokuView extends LitElement implements GridContainer {
     `,
   ];
 
+  protected renderForeground(): TemplateResult | TemplateResult[] | string {
+    return '';
+  }
+
   override render() {
     const {
       sideSize,
@@ -646,7 +650,7 @@ export class SudokuView extends LitElement implements GridContainer {
         <g id="clues">${clues && this.renderClues(clues, brokenLocs)}</g>
         <g id="solution">${game && this.renderGameState(game, brokenLocs)}</g>
         <g id="input">${this.input?.renderInGrid()}</g>
-        <g id="facts">${this.renderFacts()}</g>
+        ${this.renderForeground()}
       </svg>
       ${this.input?.renderMultiInputPopup() ??
       this.input?.renderDefaultInputPreview()}
@@ -720,30 +724,6 @@ export class SudokuView extends LitElement implements GridContainer {
     return answer;
   }
 
-  private renderFacts(): TemplateResult[] {
-    const answer: TemplateResult[] = [];
-    if (!this.facts) return answer;
-
-    const {cellCenter} = this;
-    for (const fact of this.facts) {
-      if ('SingleLoc' in fact) {
-        const {loc, num} = fact.SingleLoc;
-        const [x, y] = cellCenter(Loc.of(loc)!);
-        answer.push(svg`<circle cx=${x} cy=${y} r=${this._cellSize * 0.4} fill="none" stroke="green" stroke-width="3" opacity="0.5"/>`);
-      } else if ('SingleNum' in fact) {
-        const {loc, num} = fact.SingleNum;
-        const [x, y] = cellCenter(Loc.of(loc)!);
-        answer.push(svg`<circle cx=${x} cy=${y} r=${this._cellSize * 0.4} fill="none" stroke="blue" stroke-width="3" opacity="0.5"/>`);
-      } else if ('Subset' in fact) {
-        const {locs} = fact.Subset;
-        for (const loc of locs) {
-          const [x, y] = cellCenter(Loc.of(loc)!);
-          answer.push(svg`<rect x=${x - this._cellSize/2} y=${y - this._cellSize/2} width=${this._cellSize} height=${this._cellSize} fill="yellow" opacity="0.3"/>`);
-        }
-      }
-    }
-    return answer;
-  }
 
   private renderGameState(game: BaseGame, brokenLocs?: Set<Loc>) {
     if (
@@ -898,7 +878,6 @@ export class SudokuView extends LitElement implements GridContainer {
    * be automatically updated.
    */
   @property({attribute: false}) gameWrapper: GameWrapper | null = null;
-  @property({attribute: false}) facts?: any[];
   private sudoku: Sudoku | null = null;
   private trailColors: TrailColors | null = null;
 

@@ -1,6 +1,6 @@
 import './game-clock';
 import './icon-button';
-import './sudoku-view';
+import './replay-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
@@ -45,7 +45,7 @@ export class ReviewPage extends LitElement {
     h2 {
       margin-block: 8px;
     }
-    sudoku-view {
+    replay-view {
       max-width: var(--board-size);
       max-height: var(--board-size);
       width: 100vw;
@@ -142,10 +142,10 @@ export class ReviewPage extends LitElement {
         ></icon-button>
         <div style="flex: 1"></div>
       </div>
-      <sudoku-view
+      <replay-view
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
-      ></sudoku-view>
+      ></replay-view>
       <input
         class="scrubber"
         type="range"
