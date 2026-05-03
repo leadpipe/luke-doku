@@ -5,6 +5,7 @@ export enum ToWorkerMessageType {
   EVALUATE_PUZZLE = 'EVALUATE_PUZZLE',
   TEST_PUZZLE = 'TEST_PUZZLE',
   FIND_SYMMETRIES = 'FIND_SYMMETRIES',
+  DEDUCE_FACTS = 'DEDUCE_FACTS',
 }
 
 interface ToWorkerMessageBase {
@@ -46,11 +47,19 @@ export interface FindSymmetriesMessage extends ToWorkerMessageBase {
   readonly clues: string;
 }
 
+export interface DeduceFactsMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.DEDUCE_FACTS;
+
+  /** The clues of the puzzle for which to deduce facts, in GridString form. */
+  readonly grid: string;
+}
+
 export type ToWorkerMessage =
   | GeneratePuzzleMessage
   | EvaluatePuzzleMessage
   | TestPuzzleMessage
-  | FindSymmetriesMessage;
+  | FindSymmetriesMessage
+  | DeduceFactsMessage;
 
 export enum FromWorkerMessageType {
   ERROR_CAUGHT = 'ERROR_CAUGHT',
@@ -58,6 +67,7 @@ export enum FromWorkerMessageType {
   PUZZLE_EVALUATED = 'PUZZLE_EVALUATED',
   PUZZLE_TESTED = 'PUZZLE_TESTED',
   SYMMETRIES_FOUND = 'SYMMETRIES_FOUND',
+  FACTS_DEDUCED = 'FACTS_DEDUCED',
 }
 
 interface FromWorkerMessageBase {
@@ -171,9 +181,21 @@ export interface SymmetriesFoundMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+export interface FactsDeducedMessage extends FromWorkerMessageBase {
+  readonly toWorkerMessage: DeduceFactsMessage;
+  readonly type: FromWorkerMessageType.FACTS_DEDUCED;
+
+  /** The facts deduced from the grid. */
+  readonly facts: readonly any[];
+
+  /** How long it took to deduce facts, in milliseconds. */
+  readonly elapsedMs: number;
+}
+
 export type FromWorkerMessage =
   | ErrorCaughtMessage
   | PuzzleGeneratedMessage
   | PuzzleEvaluatedMessage
   | PuzzleTestedMessage
-  | SymmetriesFoundMessage;
+  | SymmetriesFoundMessage
+  | FactsDeducedMessage;

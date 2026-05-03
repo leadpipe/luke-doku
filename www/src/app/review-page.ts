@@ -7,7 +7,7 @@ import {customElement, property, state} from 'lit/decorators.js';
 import {CompletionState} from '../game/command';
 import {Game} from '../game/game';
 import {PlaybackGame} from '../game/playback';
-import {deduceFacts} from '../wasm';
+import {requestFactDeduction} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
 import {renderPuzzleTitle} from './utils';
 
@@ -78,17 +78,16 @@ export class ReviewPage extends LitElement {
     }
   }
 
-  private updateFacts() {
+  private async updateFacts() {
     if (!this.playback) return;
     const grid = this.playback.wrapper.game.marks.asGrid();
-    const wasmGrid = grid.toWasm();
+    const gridString = grid.toFlatString();
     try {
-      this.facts = deduceFacts(wasmGrid) || [];
+      const response = await requestFactDeduction(gridString);
+      this.facts = response.facts as any[];
     } catch (e) {
       console.error('Failed to deduce facts:', e);
       this.facts = [];
-    } finally {
-      wasmGrid.free();
     }
   }
 

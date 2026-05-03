@@ -1,6 +1,7 @@
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 import {
+  type DeduceFactsMessage,
   type ErrorCaughtMessage,
   type EvaluatePuzzleMessage,
   type FindSymmetriesMessage,
@@ -32,6 +33,9 @@ export async function handleToWorkerMessage(
       scope.postMessage(
         findSymmetries(wasm.Grid.newFromString(message.clues), message),
       );
+      break;
+    case ToWorkerMessageType.DEDUCE_FACTS:
+      scope.postMessage(deduceFacts(message));
       break;
     default:
       ensureExhaustiveSwitch(messageType);
@@ -167,6 +171,29 @@ function findSymmetries(
     type: FromWorkerMessageType.SYMMETRIES_FOUND,
     toWorkerMessage: m,
     symmetryMatches,
+    elapsedMs,
+  };
+}
+
+function deduceFacts(m: DeduceFactsMessage): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'deduceFacts', new Error('Invalid grid'));
+  }
+  const startTimeMs = performance.now();
+  let facts;
+  try {
+    facts = wasm.deduceFacts(grid) || [];
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'deduceFacts', e);
+  } finally {
+    grid.free();
+  }
+  const elapsedMs = performance.now() - startTimeMs;
+  return {
+    type: FromWorkerMessageType.FACTS_DEDUCED,
+    toWorkerMessage: m,
+    facts,
     elapsedMs,
   };
 }

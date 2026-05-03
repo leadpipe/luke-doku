@@ -11,6 +11,7 @@ import {
   type SymmetriesFoundMessage,
   type ToWorkerMessage,
   ToWorkerMessageType,
+  type FactsDeducedMessage,
 } from '../worker/worker-types';
 import {EventType, logEvent} from './analytics';
 
@@ -141,6 +142,14 @@ class WorkerQueue {
           });
           pending.resolve(e.data);
           break;
+        case FromWorkerMessageType.FACTS_DEDUCED:
+          logEvent(EventType.SYSTEM, {
+            category: 'worker facts deduced time',
+            detail: e.data.toWorkerMessage.grid,
+            elapsedMs: e.data.elapsedMs,
+          });
+          pending.resolve(e.data);
+          break;
         default:
           ensureExhaustiveSwitch(responseType);
       }
@@ -254,3 +263,23 @@ export async function requestPuzzleSymmetries(
     FromWorkerMessageType.SYMMETRIES_FOUND,
   ) as Promise<SymmetriesFoundMessage>;
 }
+
+/**
+ * Sends a message to the worker to deduce facts for a grid, and returns a promise
+ * that resolves to the deduced facts.
+ * @param grid The grid to deduce facts for, as a flat string.
+ * @returns A promise that resolves to the deduced facts.
+ */
+export async function requestFactDeduction(
+  grid: string,
+): Promise<FactsDeducedMessage> {
+  const message = {
+    type: ToWorkerMessageType.DEDUCE_FACTS,
+    grid,
+  };
+  return evaluateQueue.request(
+    message,
+    FromWorkerMessageType.FACTS_DEDUCED,
+  ) as Promise<FactsDeducedMessage>;
+}
+
