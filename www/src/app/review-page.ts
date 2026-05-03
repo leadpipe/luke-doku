@@ -58,6 +58,13 @@ export class ReviewPage extends LitElement {
       align-items: center;
       width: var(--board-size);
     }
+    .playback-controls {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 16px;
+      width: 100%;
+    }
     game-clock {
       flex-grow: 1;
       width: 100%;
@@ -67,15 +74,73 @@ export class ReviewPage extends LitElement {
   @property({attribute: false}) game: Game | null = null;
   @state() private playback: PlaybackGame | null = null;
   @state() private facts: any[] = [];
+  @state() private isPlayingForward = false;
+  @state() private isPlayingBackward = false;
+
+  private playIntervalId: number | null = null;
+  private interestingIndices: number[] = [];
 
   override willUpdate(changedProperties: Map<string, any>) {
     if (changedProperties.has('game') && this.game) {
       this.playback = new PlaybackGame(this.game.sudoku, this.game.history);
+      this.computeInterestingIndices();
       if (this.game.completionState === CompletionState.SOLVED) {
         this.playback.index = 0;
       }
       this.updateFacts();
+      // Start playback when arriving on the page
+      this.playForward();
     }
+  }
+
+  private computeInterestingIndices() {
+    if (!this.game) {
+      this.interestingIndices = [];
+      return;
+    }
+    const history = this.game.history;
+    if (history.length === 0) {
+      this.interestingIndices = [0];
+      return;
+    }
+
+    const indices = new Set<number>();
+    indices.add(0);
+    indices.add(history.length);
+
+    const totalTime = history[history.length - 1].elapsedTimestamp;
+    const avgTime = totalTime / history.length;
+
+    for (let i = 0; i < history.length; i++) {
+      const current = history[i];
+      const prev = i > 0 ? history[i - 1] : undefined;
+
+      // 1. Time gap > 3x average
+      const delta = current.elapsedTimestamp - (prev ? prev.elapsedTimestamp : 0);
+      if (delta >= 3 * avgTime) {
+        indices.add(i);
+      }
+
+      const cmdName = current.command.constructor.name;
+      const prevCmdName = prev?.command.constructor.name;
+
+      // 2. ActivateTrail or CreateTrail
+      if (cmdName === 'ActivateTrail' || cmdName === 'CreateTrail') {
+        indices.add(i);
+      }
+
+      // 3. Before sequence of UNDO commands
+      if (cmdName === 'Undo' && prevCmdName !== 'Undo') {
+        indices.add(i);
+      }
+
+      // 4. Before Resume
+      if (cmdName === 'Resume') {
+        indices.add(i);
+      }
+    }
+
+    this.interestingIndices = Array.from(indices).sort((a, b) => a - b);
   }
 
   private async updateFacts() {
@@ -91,7 +156,76 @@ export class ReviewPage extends LitElement {
     }
   }
 
+  private clearPlayInterval() {
+    if (this.playIntervalId !== null) {
+      window.clearInterval(this.playIntervalId);
+      this.playIntervalId = null;
+    }
+    this.isPlayingForward = false;
+    this.isPlayingBackward = false;
+  }
+
+  private playForward() {
+    this.clearPlayInterval();
+    this.isPlayingForward = true;
+    this.playIntervalId = window.setInterval(() => this.stepForward(true), 500);
+  }
+
+  private playBackward() {
+    this.clearPlayInterval();
+    this.isPlayingBackward = true;
+    this.playIntervalId = window.setInterval(() => this.stepBackward(true), 500);
+  }
+
+  private stepForward(fromInterval = false) {
+    if (!fromInterval) this.clearPlayInterval();
+    if (!this.playback) return;
+    if (this.playback.index < this.playback.history.length) {
+      this.playback.index++;
+      this.updateFacts();
+    } else if (fromInterval) {
+      this.clearPlayInterval();
+    }
+  }
+
+  private stepBackward(fromInterval = false) {
+    if (!fromInterval) this.clearPlayInterval();
+    if (!this.playback) return;
+    if (this.playback.index > 0) {
+      this.playback.index--;
+      this.updateFacts();
+    } else if (fromInterval) {
+      this.clearPlayInterval();
+    }
+  }
+
+  private skipForward() {
+    this.clearPlayInterval();
+    if (!this.playback) return;
+    const nextIdx = this.interestingIndices.find(idx => idx > this.playback!.index);
+    if (nextIdx !== undefined) {
+      this.playback.index = nextIdx;
+      this.updateFacts();
+    }
+  }
+
+  private skipBackward() {
+    this.clearPlayInterval();
+    if (!this.playback) return;
+    const reversed = [...this.interestingIndices].reverse();
+    const prevIdx = reversed.find(idx => idx < this.playback!.index);
+    if (prevIdx !== undefined) {
+      this.playback.index = prevIdx;
+      this.updateFacts();
+    }
+  }
+
+  private pause() {
+    this.clearPlayInterval();
+  }
+
   private onScrub(e: Event) {
+    this.clearPlayInterval();
     const input = e.target as HTMLInputElement;
     if (this.playback) {
       this.playback.index = parseInt(input.value, 10);
@@ -110,11 +244,23 @@ export class ReviewPage extends LitElement {
     if (event.target instanceof HTMLInputElement) return;
     
     if (event.key === 'ArrowLeft') {
-      this.playback.index = Math.max(0, this.playback.index - 1);
-      this.updateFacts();
+      this.stepBackward();
     } else if (event.key === 'ArrowRight') {
-      this.playback.index = Math.min(this.playback.history.length, this.playback.index + 1);
-      this.updateFacts();
+      this.stepForward();
+    } else if (event.key === ' ') {
+      event.preventDefault();
+      if (this.isPlayingForward) {
+        this.pause();
+      } else {
+        this.playForward();
+      }
+    } else if (event.key === 'Backspace') {
+      event.preventDefault();
+      if (this.isPlayingBackward) {
+        this.pause();
+      } else {
+        this.playBackward();
+      }
     }
   };
 
@@ -126,6 +272,7 @@ export class ReviewPage extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
+    this.clearPlayInterval();
   }
 
   override render() {
@@ -159,6 +306,53 @@ export class ReviewPage extends LitElement {
         ${command ? html`<div>Action: ${command.command.constructor.name}</div>` : ''}
       </div>
       <div id="bottom-controls">
+        <div class="playback-controls">
+          <icon-button
+            @click=${() => this.stepBackward()}
+            iconName="navigate_before"
+            iconSize="large"
+            title="Step backward"
+          ></icon-button>
+          <icon-button
+            @click=${this.skipBackward}
+            iconName="skip_previous"
+            iconSize="large"
+            title="Skip backward"
+          ></icon-button>
+          <icon-button
+            @click=${this.playBackward}
+            iconName="arrow_circle_left"
+            iconSize="large"
+            title="Play backward"
+            ?disabled=${this.isPlayingBackward}
+          ></icon-button>
+          <icon-button
+            @click=${this.pause}
+            iconName="pause"
+            iconSize="large"
+            title="Pause"
+            ?disabled=${!this.isPlayingForward && !this.isPlayingBackward}
+          ></icon-button>
+          <icon-button
+            @click=${this.playForward}
+            iconName="arrow_circle_right"
+            iconSize="large"
+            title="Play forward"
+            ?disabled=${this.isPlayingForward}
+          ></icon-button>
+          <icon-button
+            @click=${this.skipForward}
+            iconName="skip_next"
+            iconSize="large"
+            title="Skip forward"
+          ></icon-button>
+          <icon-button
+            @click=${() => this.stepForward()}
+            iconName="navigate_next"
+            iconSize="large"
+            title="Step forward"
+          ></icon-button>
+        </div>
         <game-clock 
           .game=${this.playback.wrapper.game}
           .overrideElapsedMs=${command?.elapsedTimestamp}
