@@ -145,7 +145,7 @@ export class ReviewPage extends LitElement {
 
   private async updateFacts() {
     if (!this.playback) return;
-    const grid = this.playback.wrapper.game.marks.asGrid();
+    const grid = this.playback.wrapper.game.asGrid();
     const gridString = grid.toFlatString();
     try {
       const response = await requestFactDeduction(gridString);

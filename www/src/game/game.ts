@@ -33,6 +33,7 @@ import {
   Undo,
   UndoToStart,
 } from './commands';
+import {Grid} from './grid';
 import {Loc} from './loc';
 import {Marks, ReadonlyMarks} from './marks';
 import {
@@ -156,21 +157,37 @@ export class BaseGame {
 
   isBlank(loc: Loc): boolean {
     const {activeTrail} = this.trails;
-    return activeTrail ? !activeTrail.get(loc) : !this.marks.getNums(loc);
+    if (activeTrail) {
+      if (activeTrail.get(loc) !== null) return false;
+    }
+    return !this.marks.getNums(loc);
   }
 
   getNum(loc: Loc): number | null {
     const {activeTrail} = this.trails;
-    return activeTrail ? activeTrail.get(loc) : this.marks.getNum(loc);
+    if (activeTrail) {
+      const num = activeTrail.get(loc);
+      if (num !== null) return num;
+    }
+    return this.marks.getNum(loc);
   }
 
   getNums(loc: Loc): ReadonlySet<number> | null {
     const {activeTrail} = this.trails;
     if (activeTrail) {
       const num = activeTrail.get(loc);
-      return num === null ? null : new Set([num]);
+      if (num !== null) return new Set([num]);
     }
     return this.marks.getNums(loc);
+  }
+
+  asGrid(): Grid {
+    const grid = new Grid();
+    for (const loc of Loc.ALL) {
+      const num = this.marks.getClue(loc) || this.getNum(loc);
+      if (num) grid.set(loc, num);
+    }
+    return grid;
   }
 
   get playState(): PlayState {
