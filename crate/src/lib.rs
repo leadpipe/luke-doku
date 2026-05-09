@@ -10,3 +10,4 @@ pub mod permute;
 pub mod random;
 pub mod solve;
 pub mod sym;
+pub mod time;

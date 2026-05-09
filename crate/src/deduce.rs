@@ -182,11 +182,19 @@ impl FactFinder {
   /// Returns the facts deducible from the current state of the grid, including
   /// any errors.
   pub fn deduce_all(&self) -> Vec<Fact> {
+    self.deduce_all_with_timeout(None).0
+  }
+
+  /// Returns the facts deducible from the current state of the grid, including
+  /// any errors, and stopping early if the max time is reached.
+  pub fn deduce_all_with_timeout(&self, max_time_ms: Option<f64>) -> (Vec<Fact>, bool) {
     let mut collector =
       internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.max_time_ms = max_time_ms;
     collector.collect(internals::ErrorMode::Collect).unwrap();
-    collector.facts
+    (collector.facts, collector.timed_out)
   }
+
 
   /// Returns the facts deducible from the current state of the grid, ignoring
   /// any errors: use this when the current state is known to be valid.
@@ -242,9 +250,16 @@ impl FactFinder {
   }
 }
 
+#[derive(Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct DeduceResult {
+  pub facts: Vec<Fact>,
+  pub timed_out: bool,
+}
+
 #[wasm_bindgen(js_name = "deduceFacts")]
-pub fn deduce_facts(grid: &Grid) -> wasm_bindgen::JsValue {
+pub fn deduce_facts(grid: &Grid, max_time_ms: Option<f64>) -> wasm_bindgen::JsValue {
   let finder = FactFinder::new(grid);
-  let facts = finder.deduce_all();
-  serde_wasm_bindgen::to_value(&facts).unwrap()
+  let (facts, timed_out) = finder.deduce_all_with_timeout(max_time_ms);
+  serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }

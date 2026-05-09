@@ -20,6 +20,9 @@ pub struct Collector {
   pub sukaku_map: SukakuMap,
   pub facts: Vec<Fact>,
   pub found: HashMap<Fact, ()>,
+  pub max_time_ms: Option<f64>,
+  pub start_time_ms: f64,
+  pub timed_out: bool,
 }
 
 /// The ways that the collector can handle errors during deduction.
@@ -41,7 +44,23 @@ impl Collector {
       sukaku_map,
       facts: Vec::new(),
       found: HashMap::new(),
+      max_time_ms: None,
+      start_time_ms: crate::time::now(),
+      timed_out: false,
     }
+  }
+
+  pub fn check_timeout(&mut self) -> bool {
+    if self.timed_out {
+      return true;
+    }
+    if let Some(max_time) = self.max_time_ms {
+      if crate::time::now() - self.start_time_ms > max_time {
+        self.timed_out = true;
+        return true;
+      }
+    }
+    false
   }
 
   pub fn add_fact(&mut self, fact: Fact) {
@@ -60,13 +79,22 @@ impl Collector {
     let mut sukaku_map = self.sukaku_map;
     let mut set_state = SetState::new();
     loop {
+      if self.check_timeout() {
+        break;
+      }
       let start = self.facts.len();
       if error_mode != ErrorMode::Ignore {
         find_errors(self, error_mode == ErrorMode::ShortCircuit)?;
       }
       let eliminations_start = self.facts.len();
       find_overlaps(self);
+      if self.check_timeout() {
+        break;
+      }
       find_subsets(self, &mut set_state);
+      if self.check_timeout() {
+        break;
+      }
       let eliminations_end = self.facts.len();
       find_hidden_singles(self);
       find_naked_singles(self);
@@ -343,11 +371,17 @@ pub const MAX_SET_SIZE: i32 = 4;
 fn find_subsets(collector: &mut Collector, set_state: &mut SetState) {
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
+      if collector.check_timeout() {
+        return;
+      }
       find_hidden_sets(collector, set_state, unit_id.to_unit(), size);
     }
   }
   for size in 2..=MAX_SET_SIZE {
     for unit_id in UnitId::all() {
+      if collector.check_timeout() {
+        return;
+      }
       find_naked_sets(collector, set_state, unit_id.to_unit(), size);
     }
   }

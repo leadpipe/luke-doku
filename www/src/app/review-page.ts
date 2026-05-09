@@ -148,7 +148,7 @@ export class ReviewPage extends LitElement {
     const grid = this.playback.wrapper.game.asGrid();
     const gridString = grid.toFlatString();
     try {
-      const response = await requestFactDeduction(gridString);
+      const response = await requestFactDeduction(gridString, 5000);
       this.facts = response.facts as any[];
     } catch (e) {
       console.error('Failed to deduce facts:', e);

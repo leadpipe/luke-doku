@@ -268,14 +268,17 @@ export async function requestPuzzleSymmetries(
  * Sends a message to the worker to deduce facts for a grid, and returns a promise
  * that resolves to the deduced facts.
  * @param grid The grid to deduce facts for, as a flat string.
+ * @param maxTimeMs The maximum amount of time to spend deducing facts.
  * @returns A promise that resolves to the deduced facts.
  */
 export async function requestFactDeduction(
   grid: string,
+  maxTimeMs: number,
 ): Promise<FactsDeducedMessage> {
   const message = {
     type: ToWorkerMessageType.DEDUCE_FACTS,
     grid,
+    maxTimeMs,
   };
   return evaluateQueue.request(
     message,

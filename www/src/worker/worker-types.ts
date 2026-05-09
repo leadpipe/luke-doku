@@ -52,6 +52,9 @@ export interface DeduceFactsMessage extends ToWorkerMessageBase {
 
   /** The clues of the puzzle for which to deduce facts, in GridString form. */
   readonly grid: string;
+
+  /** The maximum amount of time to spend deducing facts, in milliseconds. */
+  readonly maxTimeMs: number;
 }
 
 export type ToWorkerMessage =
@@ -187,6 +190,9 @@ export interface FactsDeducedMessage extends FromWorkerMessageBase {
 
   /** The facts deduced from the grid. */
   readonly facts: readonly any[];
+
+  /** True if the deduction timed out before finding all facts. */
+  readonly timedOut: boolean;
 
   /** How long it took to deduce facts, in milliseconds. */
   readonly elapsedMs: number;

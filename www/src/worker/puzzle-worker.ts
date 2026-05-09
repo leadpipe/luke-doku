@@ -181,9 +181,12 @@ function deduceFacts(m: DeduceFactsMessage): FromWorkerMessage {
     return toErrorCaught(m, 'deduceFacts', new Error('Invalid grid'));
   }
   const startTimeMs = performance.now();
-  let facts;
+  let facts: any[] = [];
+  let timedOut = false;
   try {
-    facts = wasm.deduceFacts(grid) || [];
+    const result = wasm.deduceFacts(grid, m.maxTimeMs);
+    facts = result?.facts || [];
+    timedOut = result?.timedOut || false;
   } catch (e: unknown) {
     return toErrorCaught(m, 'deduceFacts', e);
   } finally {
@@ -194,6 +197,7 @@ function deduceFacts(m: DeduceFactsMessage): FromWorkerMessage {
     type: FromWorkerMessageType.FACTS_DEDUCED,
     toWorkerMessage: m,
     facts,
+    timedOut,
     elapsedMs,
   };
 }
