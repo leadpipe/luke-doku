@@ -2,7 +2,6 @@ import type {TemplateResult} from 'lit';
 import type {ClassInfo} from 'lit/directives/class-map.js';
 import {Loc} from '../game/loc';
 import {Branded} from '../game/types';
-import type { PlayState } from '../game/game';
 
 export type Theme = 'dark' | 'light';
 export type ThemeOrAuto = Theme | 'auto';
@@ -51,6 +50,9 @@ export interface GridContainer {
 
   /** Calculates the center point of the cell at the given location. */
   cellCenter(loc: Loc): Point;
+
+  /** Converts a MouseEvent to a Loc based on grid dimensions. */
+  getLocFromEvent(event: MouseEvent): Loc | undefined;
 
   /** Renders a multi-value cell. */
   pushMultiValueCell(

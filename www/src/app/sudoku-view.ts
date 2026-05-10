@@ -31,6 +31,7 @@ import {
   devicePixels,
   GridContainer,
   Point,
+  toCss,
 } from './types';
 
 const COMPLETED_HALF_CYCLE_SEC = 10;
@@ -724,7 +725,6 @@ export class SudokuView extends LitElement implements GridContainer {
     return answer;
   }
 
-
   private renderGameState(game: BaseGame, brokenLocs?: Set<Loc>) {
     if (
       game.playState === PlayState.COMPLETED &&
@@ -1045,6 +1045,21 @@ export class SudokuView extends LitElement implements GridContainer {
     const {centers} = this;
     return [centers[loc.col], centers[loc.row]];
   };
+
+  private convertCoordinateToCellNumber(coord: number): number | undefined {
+    const sideSize = toCss(this.sideSize);
+    if (coord < 0 || coord >= sideSize) return undefined;
+    return Math.floor(coord / (sideSize / 9));
+  }
+
+  getLocFromEvent(event: MouseEvent): Loc | undefined {
+    const rect = this.svgElement.getBoundingClientRect();
+    const {padding} = this;
+    const col = this.convertCoordinateToCellNumber(event.x - rect.x - padding);
+    const row = this.convertCoordinateToCellNumber(event.y - rect.y - padding);
+    if (col === undefined || row === undefined) return undefined;
+    return Loc.of(row, col);
+  }
 
   private calcMetrics() {
     const rect = this.getBoundingClientRect();

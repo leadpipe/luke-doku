@@ -6,6 +6,7 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {CompletionState} from '../game/command';
 import {Game} from '../game/game';
+import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
 import {requestFactDeduction} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
@@ -69,6 +70,25 @@ export class ReviewPage extends LitElement {
       flex-grow: 1;
       width: 100%;
     }
+    .fact-panel {
+      width: var(--board-size);
+      max-height: 200px;
+      overflow-y: auto;
+      background: var(--gd);
+      padding: 8px;
+      border-radius: 4px;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+      font-size: 0.9em;
+    }
+    .fact-panel pre {
+      margin: 0;
+      white-space: pre-wrap;
+    }
+    .fact-panel h3 {
+      margin-top: 0;
+      margin-bottom: 8px;
+    }
   `;
 
   @property({attribute: false}) game: Game | null = null;
@@ -76,6 +96,7 @@ export class ReviewPage extends LitElement {
   @state() private facts: any[] = [];
   @state() private isPlayingForward = false;
   @state() private isPlayingBackward = false;
+  @state() private selectedLoc: Loc | null = null;
 
   private playIntervalId: number | null = null;
   private interestingIndices: number[] = [];
@@ -116,7 +137,8 @@ export class ReviewPage extends LitElement {
       const prev = i > 0 ? history[i - 1] : undefined;
 
       // 1. Time gap > 3x average
-      const delta = current.elapsedTimestamp - (prev ? prev.elapsedTimestamp : 0);
+      const delta =
+        current.elapsedTimestamp - (prev ? prev.elapsedTimestamp : 0);
       if (delta >= 3 * avgTime) {
         indices.add(i);
       }
@@ -174,7 +196,10 @@ export class ReviewPage extends LitElement {
   private playBackward() {
     this.clearPlayInterval();
     this.isPlayingBackward = true;
-    this.playIntervalId = window.setInterval(() => this.stepBackward(true), 500);
+    this.playIntervalId = window.setInterval(
+      () => this.stepBackward(true),
+      500,
+    );
   }
 
   private stepForward(fromInterval = false) {
@@ -202,7 +227,9 @@ export class ReviewPage extends LitElement {
   private skipForward() {
     this.clearPlayInterval();
     if (!this.playback) return;
-    const nextIdx = this.interestingIndices.find(idx => idx > this.playback!.index);
+    const nextIdx = this.interestingIndices.find(
+      idx => idx > this.playback!.index,
+    );
     if (nextIdx !== undefined) {
       this.playback.index = nextIdx;
       this.updateFacts();
@@ -239,10 +266,14 @@ export class ReviewPage extends LitElement {
     }
   }
 
+  private onCellSelected(e: CustomEvent<Loc | null>) {
+    this.selectedLoc = e.detail;
+  }
+
   private readonly keydownHandler = (event: KeyboardEvent) => {
     if (!this.playback) return;
     if (event.target instanceof HTMLInputElement) return;
-    
+
     if (event.key === 'ArrowLeft') {
       this.stepBackward();
     } else if (event.key === 'ArrowRight') {
@@ -291,6 +322,8 @@ export class ReviewPage extends LitElement {
       <replay-view
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
+        .selectedLoc=${this.selectedLoc}
+        @cell-selected=${this.onCellSelected}
       ></replay-view>
       <input
         class="scrubber"
@@ -301,9 +334,13 @@ export class ReviewPage extends LitElement {
         @input=${this.onScrub}
       />
       <div class="info">
-        <h2>Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}</h2>
+        <h2>
+          Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
+        </h2>
         <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
-        ${command ? html`<div>Action: ${command.command.constructor.name}</div>` : ''}
+        ${command ?
+          html`<div>Action: ${command.command.constructor.name}</div>`
+        : ''}
       </div>
       <div id="bottom-controls">
         <div class="playback-controls">
@@ -353,10 +390,41 @@ export class ReviewPage extends LitElement {
             title="Step forward"
           ></icon-button>
         </div>
-        <game-clock 
+        ${this.renderSelectedFacts()}
+        <game-clock
           .game=${this.playback.wrapper.game}
           .overrideElapsedMs=${command?.elapsedTimestamp}
         ></game-clock>
+      </div>
+    `;
+  }
+
+  private renderSelectedFacts() {
+    if (!this.selectedLoc) {
+      return html`<div class="fact-panel">Select a cell to see facts</div>`;
+    }
+    const locIndex = this.selectedLoc.index;
+    const relevantFacts = this.facts.filter(fact => {
+      if ('SingleLoc' in fact) return fact.SingleLoc.loc === locIndex;
+      if ('SingleNum' in fact) return fact.SingleNum.loc === locIndex;
+      if ('Subset' in fact) return fact.Subset.locs.includes(locIndex);
+      return false;
+    });
+
+    if (relevantFacts.length === 0) {
+      return html`<div class="fact-panel">
+        No deduced facts for this cell
+      </div>`;
+    }
+
+    return html`
+      <div class="fact-panel">
+        <h3>Facts for Cell</h3>
+        <ul>
+          ${relevantFacts.map(
+            fact => html`<li><pre>${JSON.stringify(fact, null, 2)}</pre></li>`,
+          )}
+        </ul>
       </div>
     `;
   }

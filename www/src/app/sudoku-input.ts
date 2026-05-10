@@ -382,7 +382,8 @@ export class SudokuInput implements ReactiveController {
           class=${activeTrail?.isEmpty ?
             `solution trail trail-${activeTrail.id} trailhead`
           : activeTrail ? `solution trail trail-${activeTrail.id}`
-          : host.isEnteringClues() ? 'clue' : 'solution'}
+          : host.isEnteringClues() ? 'clue'
+          : 'solution'}
         >
           ${resultToText(defaultResult)}
         </text>
@@ -403,19 +404,8 @@ export class SudokuInput implements ReactiveController {
   private halfCentersGap = devicePixels(0);
   private multiHover?: ClockInputResult;
 
-  private convertCoordinateToCellNumber(coord: number): number | undefined {
-    const sideSize = toCss(this.host.sideSize);
-    if (coord < 0 || coord >= sideSize) return undefined;
-    return Math.floor(coord / (sideSize / 9));
-  }
-
   private convertEventToLoc(event: MouseEvent): Loc | undefined {
-    const rect = this.host.svgElement.getBoundingClientRect();
-    const {padding} = this.host;
-    const col = this.convertCoordinateToCellNumber(event.x - rect.x - padding);
-    const row = this.convertCoordinateToCellNumber(event.y - rect.y - padding);
-    if (col === undefined || row === undefined) return undefined;
-    return Loc.of(row, col);
+    return this.host.getLocFromEvent(event);
   }
 
   /** Finds the number, or the close button, on the multi-input popup. */

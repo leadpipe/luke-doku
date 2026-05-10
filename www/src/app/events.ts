@@ -18,6 +18,11 @@ declare global {
      * contents of a cell. The event detail says which cell.
      */
     'cell-modified': CustomEvent<Loc>;
+    /**
+     * Sent by replay-view when the user selects a cell for review.
+     * The event detail says which cell, or null if unselected.
+     */
+    'cell-selected': CustomEvent<Loc | null>;
   }
 
   interface WindowEventMap {
