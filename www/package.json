@@ -5,7 +5,8 @@
   "type": "module",
   "scripts": {
     "build:wasm": "wasm-pack build ../crate --target web --out-name luke_doku",
-    "build": "npm run build:wasm && tsc --noEmit && vite build",
+    "build": "npm run build:wasm && npm run typecheck && vite build",
+    "typecheck": "tsc --noEmit",
     "start": "http-server dist",
     "dev": "npm run build:wasm && vite",
     "test-setup": "npm run build:wasm && npm install luke-doku-rust",
