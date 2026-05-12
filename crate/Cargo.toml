@@ -24,6 +24,7 @@ seq-macro = "0.3"
 serde = {version = "1.0.217", features = ["derive"]}
 serde-wasm-bindgen = "0.6"
 static_assertions = "1.1"
+ts-rs = "8.1"
 wasm-bindgen = "0.2.100"
 
 # The `console_error_panic_hook` crate provides better debugging of panics by

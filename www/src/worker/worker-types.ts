@@ -184,12 +184,14 @@ export interface SymmetriesFoundMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+import type { Fact } from '../facts/Fact';
+
 export interface FactsDeducedMessage extends FromWorkerMessageBase {
   readonly toWorkerMessage: DeduceFactsMessage;
   readonly type: FromWorkerMessageType.FACTS_DEDUCED;
 
   /** The facts deduced from the grid. */
-  readonly facts: readonly any[];
+  readonly facts: readonly Fact[];
 
   /** True if the deduction timed out before finding all facts. */
   readonly timedOut: boolean;

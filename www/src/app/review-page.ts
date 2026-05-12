@@ -9,6 +9,7 @@ import {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
 import {requestFactDeduction} from '../system/puzzle-service';
+import type {Fact} from '../facts/Fact';
 import {navigateToPuzzle} from './nav';
 import {renderPuzzleTitle} from './utils';
 
@@ -93,7 +94,7 @@ export class ReviewPage extends LitElement {
 
   @property({attribute: false}) game: Game | null = null;
   @state() private playback: PlaybackGame | null = null;
-  @state() private facts: any[] = [];
+  @state() private facts: readonly Fact[] = [];
   @state() private isPlayingForward = false;
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
@@ -171,7 +172,7 @@ export class ReviewPage extends LitElement {
     const gridString = grid.toFlatString();
     try {
       const response = await requestFactDeduction(gridString, 5000);
-      this.facts = response.facts as any[];
+      this.facts = response.facts;
     } catch (e) {
       console.error('Failed to deduce facts:', e);
       this.facts = [];
@@ -405,16 +406,14 @@ export class ReviewPage extends LitElement {
     }
     const locIndex = this.selectedLoc.index;
     const relevantFacts = this.facts.filter(fact => {
-      if ('SingleLoc' in fact) return fact.SingleLoc.loc === locIndex;
-      if ('SingleNum' in fact) return fact.SingleNum.loc === locIndex;
-      if ('Subset' in fact) return fact.Subset.locs.includes(locIndex);
+      if (fact.type === 'SingleLoc') return fact.loc === locIndex;
+      if (fact.type === 'SingleNum') return fact.loc === locIndex;
+      if (fact.type === 'Subset') return fact.locs.includes(locIndex);
       return false;
     });
 
     if (relevantFacts.length === 0) {
-      return html`<div class="fact-panel">
-        No deduced facts for this cell
-      </div>`;
+      return html`<div class="fact-panel">No deduced facts for this cell</div>`;
     }
 
     return html`

@@ -47,7 +47,8 @@ macro_rules! define_id_types {
         $index_doc:expr,
         $all_doc:expr
     ) => {
-        #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+        #[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, ts_rs::TS)]
+        #[ts(export, export_to = "../../www/src/facts/")]
         $(#[$outer])*
         pub struct $type_name($int_type);
 

@@ -8,7 +8,9 @@ use serde::Serialize;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A fact that can be deduced from a Sudoku grid.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
+#[serde(tag = "type")]
 pub enum Fact {
   /// Assignment: the given numeral has only one possible location in the given
   /// unit.  (Also known as a "hidden single.")
@@ -250,7 +252,8 @@ impl FactFinder {
   }
 }
 
-#[derive(Serialize)]
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
 #[serde(rename_all = "camelCase")]
 pub struct DeduceResult {
   pub facts: Vec<Fact>,

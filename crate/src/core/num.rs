@@ -14,8 +14,9 @@ use serde::Serialize;
 
 /// Identifies one of the 9 numerals that can can occupy a location of a
 /// Sudoku grid.
-#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
-pub struct Num(NonZeroI8);
+#[derive(Clone, Copy, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
+pub struct Num(#[ts(type = "number")] NonZeroI8);
 
 // Constant Num values, N1 through N9.
 seq!(K in 1..=9 {
@@ -140,8 +141,9 @@ impl fmt::Display for Num {
 }
 
 /// A set of `Num`s.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub struct NumSet(pub Bits9);
+#[derive(Clone, Copy, Eq, Hash, PartialEq, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
+pub struct NumSet(#[ts(type = "Array<number>")] pub Bits9);
 
 impl NumSet {
   /// Makes a new empty NumSet.

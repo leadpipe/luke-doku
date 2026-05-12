@@ -4,11 +4,13 @@ import {Loc} from '../game/loc';
 import {ReplayInput} from './replay-input';
 import {SudokuView} from './sudoku-view';
 
+import type {Fact} from '../facts/Fact';
+
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
   private readonly replayInput = new ReplayInput(this);
 
-  @property({attribute: false}) facts?: any[];
+  @property({attribute: false}) facts?: readonly Fact[];
   @property({attribute: false}) selectedLoc: Loc | null = null;
 
   protected override renderForeground() {
@@ -31,20 +33,20 @@ export class ReplayView extends SudokuView {
 
     const {cellCenter} = this;
     for (const fact of this.facts) {
-      if ('SingleLoc' in fact) {
-        const {loc, num} = fact.SingleLoc;
+      if (fact.type === 'SingleLoc') {
+        const {loc} = fact;
         const [x, y] = cellCenter(Loc.of(loc)!);
         answer.push(
           svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="green" stroke-width="3" opacity="0.5"/>`,
         );
-      } else if ('SingleNum' in fact) {
-        const {loc, num} = fact.SingleNum;
+      } else if (fact.type === 'SingleNum') {
+        const {loc} = fact;
         const [x, y] = cellCenter(Loc.of(loc)!);
         answer.push(
           svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="blue" stroke-width="3" opacity="0.5"/>`,
         );
-      } else if ('Subset' in fact) {
-        const {locs} = fact.Subset;
+      } else if (fact.type === 'Subset') {
+        const {locs} = fact;
         for (const loc of locs) {
           const [x, y] = cellCenter(Loc.of(loc)!);
           answer.push(

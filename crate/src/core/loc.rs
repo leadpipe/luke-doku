@@ -286,8 +286,9 @@ impl IntoWasmAbi for Band {
 }
 
 /// A set of `Loc`s.
-#[derive(Clone, Copy, Eq, Hash, PartialEq)]
-pub struct LocSet(pub Bits3x27);
+#[derive(Clone, Copy, Eq, Hash, PartialEq, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
+pub struct LocSet(#[ts(type = "Array<number>")] pub Bits3x27);
 
 impl LocSet {
   /// Makes a new empty LocSet.

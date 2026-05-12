@@ -48,7 +48,9 @@ define_id_types! {
 }
 
 /// One of a row, column, or block.
-#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize)]
+#[derive(Clone, Copy, Debug, Eq, Hash, Ord, PartialEq, PartialOrd, Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../../www/src/facts/")]
+#[serde(tag = "type", content = "id")]
 pub enum Unit {
   Blk(Blk),
   Row(Row),
