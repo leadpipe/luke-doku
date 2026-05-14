@@ -1,4 +1,5 @@
 import {Loc as GameLoc} from '../game/loc';
+import { ensureExhaustiveSwitch } from '../game/utils';
 import type {Fact} from './Fact';
 import type {Loc} from './Loc';
 import type {LocSet} from './LocSet';
@@ -75,6 +76,9 @@ export function shorthandFact(fact: Fact): string {
     case 'Implication':
       const antecedents = fact.antecedents.map(shorthandFact).join(' & ');
       return `${antecedents} ➔ ${shorthandFact(fact.consequent)}`;
+
+    default:
+      ensureExhaustiveSwitch(fact);
   }
 }
 
@@ -116,5 +120,8 @@ export function describeFact(fact: Fact): string {
       const antecedentsDesc = fact.antecedents.map(describeFact).join(' and ');
       const consequentDesc = describeFact(fact.consequent);
       return `${consequentDesc}, because ${antecedentsDesc}`;
+
+    default:
+      ensureExhaustiveSwitch(fact);
   }
 }
