@@ -2,7 +2,7 @@
   "compilerOptions": {
     "target": "ES2024",
     "module": "es2022",
-    "lib": ["DOM", "WebWorker", "ES2024"],
+    "lib": ["DOM", "DOM.Iterable", "WebWorker", "ES2024"],
     "moduleResolution": "Node",
     "esModuleInterop": true,
     "isolatedModules": true,
@@ -15,11 +15,11 @@
     "experimentalDecorators": true,
     "noImplicitOverride": true,
     "sourceMap": true,
-    "useDefineForClassFields": false
+    "useDefineForClassFields": false,
+    "types": ["mocha", "chai", "sinon", "gtag.js"]
   },
   "include": [
     "./src",
-    "node_modules/jest-expect-message/types/index.d.ts",
     "node_modules/lit-scss-loader/types.d.ts",
     "eslint.config.cjs"
   ]
