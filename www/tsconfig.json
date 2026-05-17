@@ -10,6 +10,7 @@
     "skipDefaultLibCheck": true,
     "strict": true,
     "baseUrl": "./",
+    "rootDir": "./",
     "outDir": "./dist",
     "forceConsistentCasingInFileNames": true,
     "experimentalDecorators": true,
@@ -21,6 +22,7 @@
   "include": [
     "./src",
     "node_modules/lit-scss-loader/types.d.ts",
-    "eslint.config.cjs"
+    "eslint.config.cjs",
+    "vite.config.ts"
   ]
 }
