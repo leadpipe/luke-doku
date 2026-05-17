@@ -68,9 +68,9 @@ describe('Fact formatting utilities', () => {
       unit: {type: 'Row', id: 0},
       cross_unit: {type: 'Blk', id: 0},
     };
-    expect(shorthandFact(fact)).to.equal('5: R1 x B1');
+    expect(shorthandFact(fact)).to.equal('5 ∈ R1 x B1');
     expect(describeFact(fact)).to.equal(
-      '5: R1 x B1: 5 in Row 1 is restricted to Block 1',
+      '5 ∈ R1 x B1: 5 in Row 1 is restricted to Block 1',
     );
   });
 

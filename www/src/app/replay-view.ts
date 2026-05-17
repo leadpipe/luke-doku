@@ -1,4 +1,4 @@
-import {svg, TemplateResult} from 'lit';
+import {css, svg, TemplateResult} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 import {Loc} from '../game/loc';
 import {ReplayInput} from './replay-input';
@@ -8,6 +8,18 @@ import type {Fact} from '../facts/Fact';
 
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
+  static override styles = [
+    ...SudokuView.styles,
+    css`
+      .subset-line {
+        stroke: gray;
+        stroke-width: 3;
+        opacity: 0.5;
+        fill: none;
+      }
+    `,
+  ];
+
   private readonly replayInput = new ReplayInput(this);
 
   @property({attribute: false}) facts?: readonly Fact[];
@@ -46,12 +58,23 @@ export class ReplayView extends SudokuView {
           svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="blue" stroke-width="3" opacity="0.5"/>`,
         );
       } else if (fact.type === 'Subset') {
-        const {locs} = fact;
+        const {locs, unit} = fact;
         for (const loc of locs) {
           const [x, y] = cellCenter(Loc.of(loc)!);
-          answer.push(
-            svg`<rect x=${x - this.cellSize / 2} y=${y - this.cellSize / 2} width=${this.cellSize} height=${this.cellSize} fill="yellow" opacity="0.3"/>`,
-          );
+          if (unit.type === 'Row') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+            );
+          } else if (unit.type === 'Col') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+            );
+          } else if (unit.type === 'Blk') {
+            const size = this.cellSize / 2;
+            answer.push(
+              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+            );
+          }
         }
       }
     }

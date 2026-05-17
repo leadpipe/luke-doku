@@ -10,8 +10,11 @@ import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
 import {requestFactDeduction} from '../system/puzzle-service';
 import type {Fact} from '../facts/Fact';
+import {describeFact} from '../facts/format';
+import {compareFacts, nub, unitContains} from '../facts/utils';
 import {navigateToPuzzle} from './nav';
 import {renderPuzzleTitle} from './utils';
+import { ensureExhaustiveSwitch } from '../game/utils';
 
 @customElement('review-page')
 export class ReviewPage extends LitElement {
@@ -172,7 +175,7 @@ export class ReviewPage extends LitElement {
     const gridString = grid.toFlatString();
     try {
       const response = await requestFactDeduction(gridString, 5000);
-      this.facts = response.facts;
+      this.facts = [...response.facts].sort(compareFacts);
     } catch (e) {
       console.error('Failed to deduce facts:', e);
       this.facts = [];
@@ -404,12 +407,30 @@ export class ReviewPage extends LitElement {
     if (!this.selectedLoc) {
       return html`<div class="fact-panel">Select a cell to see facts</div>`;
     }
-    const locIndex = this.selectedLoc.index;
+    const loc = this.selectedLoc;
+    const locIndex = loc.index;
+    
     const relevantFacts = this.facts.filter(fact => {
-      if (fact.type === 'SingleLoc') return fact.loc === locIndex;
-      if (fact.type === 'SingleNum') return fact.loc === locIndex;
-      if (fact.type === 'Subset') return fact.locs.includes(locIndex);
-      return false;
+      const base = nub(fact);
+      switch (base.type) {
+        case 'SingleLoc':
+        case 'SingleNum':
+        case 'SpeculativeAssignment':
+        case 'NoNum':
+          return base.loc === locIndex;
+        case 'NoLoc':
+          return unitContains(base.unit, loc);
+        case 'Conflict':
+          return base.locs.includes(locIndex);
+        case 'Overlap':
+          return unitContains(base.unit, loc) && unitContains(base.cross_unit, loc);
+        case 'Subset':
+          return base.locs.includes(locIndex);
+        case 'Implication':
+          return false;
+        default:
+          ensureExhaustiveSwitch(base);
+      }
     });
 
     if (relevantFacts.length === 0) {
@@ -421,7 +442,7 @@ export class ReviewPage extends LitElement {
         <h3>Facts for Cell</h3>
         <ul>
           ${relevantFacts.map(
-            fact => html`<li><pre>${JSON.stringify(fact, null, 2)}</pre></li>`,
+            fact => html`<li>${describeFact(fact)}</li>`,
           )}
         </ul>
       </div>
