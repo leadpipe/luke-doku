@@ -4,6 +4,8 @@ import {Loc} from '../game/loc';
 import {ReplayInput} from './replay-input';
 import {SudokuView} from './sudoku-view';
 
+import {nub} from '../facts/utils';
+import type {Unit} from '../facts/Unit';
 import type {Fact} from '../facts/Fact';
 
 @customElement('replay-view')
@@ -15,6 +17,18 @@ export class ReplayView extends SudokuView {
         stroke: gray;
         stroke-width: 3;
         opacity: 0.5;
+        fill: none;
+      }
+      .assignment-border {
+        stroke: green;
+        stroke-width: 3;
+        opacity: 0.8;
+        fill: none;
+      }
+      .error-border {
+        stroke: red;
+        stroke-width: 3;
+        opacity: 0.8;
         fill: none;
       }
     `,
@@ -43,7 +57,69 @@ export class ReplayView extends SudokuView {
     const answer: TemplateResult[] = [];
     if (!this.facts) return answer;
 
-    const {cellCenter} = this;
+    const {cellCenter, cellSize} = this;
+
+    const assignmentLocs = new Set<number>();
+    const errorLocs = new Set<number>();
+    const errorUnits = new Map<string, Unit>();
+
+    for (const fact of this.facts) {
+      const base = nub(fact);
+      if (
+        base.type === 'SingleLoc' ||
+        base.type === 'SingleNum' ||
+        base.type === 'SpeculativeAssignment'
+      ) {
+        assignmentLocs.add(base.loc);
+      } else if (base.type === 'NoNum') {
+        errorLocs.add(base.loc);
+      } else if (base.type === 'Conflict' || base.type === 'NoLoc') {
+        const {unit} = base;
+        errorUnits.set(`${unit.type}-${unit.id}`, unit);
+      }
+    }
+
+    for (const unit of errorUnits.values()) {
+      let topLeftIndex = 0;
+      let bottomRightIndex = 0;
+      if (unit.type === 'Row') {
+        topLeftIndex = Loc.of(unit.id, 0).index;
+        bottomRightIndex = Loc.of(unit.id, 8).index;
+      } else if (unit.type === 'Col') {
+        topLeftIndex = Loc.of(0, unit.id).index;
+        bottomRightIndex = Loc.of(8, unit.id).index;
+      } else if (unit.type === 'Blk') {
+        const r0 = Math.floor(unit.id / 3) * 3;
+        const c0 = (unit.id % 3) * 3;
+        topLeftIndex = Loc.of(r0, c0).index;
+        bottomRightIndex = Loc.of(r0 + 2, c0 + 2).index;
+      }
+      
+      const tl = Loc.of(topLeftIndex);
+      const br = Loc.of(bottomRightIndex);
+      const [tlX, tlY] = cellCenter(tl);
+      const [brX, brY] = cellCenter(br);
+      const x = tlX - cellSize / 2;
+      const y = tlY - cellSize / 2;
+      const width = brX + cellSize / 2 - x;
+      const height = brY + cellSize / 2 - y;
+      
+      answer.push(
+        svg`<rect class="error-border" x=${x} y=${y} width=${width} height=${height} rx=${cellSize * 0.1}/>`
+      );
+    }
+
+    const allLocs = new Set([...assignmentLocs, ...errorLocs]);
+    for (const locIndex of allLocs) {
+      const loc = Loc.of(locIndex);
+      const [x, y] = cellCenter(loc);
+      const isError = errorLocs.has(locIndex);
+      const cssClass = isError ? 'error-border' : 'assignment-border';
+      answer.push(
+        svg`<rect class="${cssClass}" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize} rx=${cellSize * 0.1}/>`
+      );
+    }
+
     for (const fact of this.facts) {
       if (fact.type === 'SingleLoc') {
         const {loc} = fact;
