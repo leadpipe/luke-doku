@@ -1,5 +1,6 @@
 import './game-clock';
 import './icon-button';
+import './puzzle-rating';
 import './replay-view';
 
 import {css, html, LitElement} from 'lit';
@@ -13,7 +14,7 @@ import type {Fact} from '../facts/Fact';
 import {describeFact} from '../facts/format';
 import {compareFacts, nub, unitContains} from '../facts/utils';
 import {navigateToPuzzle} from './nav';
-import {renderPuzzleTitle} from './utils';
+import {elapsedTimeString, renderPuzzleTitle} from './utils';
 import { ensureExhaustiveSwitch } from '../game/utils';
 
 @customElement('review-page')
@@ -313,6 +314,14 @@ export class ReviewPage extends LitElement {
   override render() {
     if (!this.playback) return html`<div>Loading...</div>`;
     const command = this.playback.currentCommand;
+    const prevCommand =
+      this.playback.index >= 2 ?
+        this.playback.history[this.playback.index - 2]
+      : undefined;
+    const nextCommand =
+      this.playback.index < this.playback.history.length ?
+        this.playback.history[this.playback.index]
+      : undefined;
     return html`
       <div id="top-panel">
         <icon-button
@@ -341,9 +350,19 @@ export class ReviewPage extends LitElement {
         <h2>
           Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
         </h2>
+        <puzzle-rating .game=${this.game ?? undefined}></puzzle-rating>
         <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
         ${command ?
-          html`<div>Action: ${command.command.constructor.name}</div>`
+          html`
+            <div>Action: ${command.command.constructor.name}</div>
+            ${command.command.constructor.name === 'Resume' ?
+              html`<div>Time: ${new Date((command.command as any).timestamp).toLocaleString()}</div>`
+            : html`<div>Time spent: ${elapsedTimeString(command.elapsedTimestamp - (prevCommand ? prevCommand.elapsedTimestamp : 0))}</div>`
+            }
+          `
+        : ''}
+        ${nextCommand ?
+          html`<div>Next: ${nextCommand.command.constructor.name} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
         : ''}
       </div>
       <div id="bottom-controls">
