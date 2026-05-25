@@ -5,17 +5,17 @@ import './replay-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
-import {CompletionState, CommandTag} from '../game/command';
-import {Game} from '../game/game';
-import {Loc} from '../game/loc';
-import {PlaybackGame} from '../game/playback';
-import {requestFactDeduction} from '../system/puzzle-service';
 import type {Fact} from '../facts/Fact';
 import {describeFact} from '../facts/format';
 import {compareFacts, nub, unitContains} from '../facts/utils';
+import {CommandTag, CompletionState} from '../game/command';
+import {Game} from '../game/game';
+import {Loc} from '../game/loc';
+import {PlaybackGame} from '../game/playback';
+import {ensureExhaustiveSwitch} from '../game/utils';
+import {requestFactDeduction} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
-import { ensureExhaustiveSwitch } from '../game/utils';
 
 @customElement('review-page')
 export class ReviewPage extends LitElement {
@@ -160,9 +160,29 @@ export class ReviewPage extends LitElement {
     const totalTime = history[history.length - 1].elapsedTimestamp;
     const avgTime = totalTime / history.length;
 
+    const isTrailCommand = (tag: CommandTag | undefined) => {
+      return (
+        tag === CommandTag.CREATE_TRAIL ||
+        tag === CommandTag.ACTIVATE_TRAIL ||
+        tag === CommandTag.TOGGLE_TRAIL_VISIBILITY ||
+        tag === CommandTag.TOGGLE_TRAILS_ACTIVE
+        // Note we leave out ARCHIVE_TRAIL and COPY_FROM_TRAIL
+      );
+    };
+
+    const isUndoRedo = (tag: CommandTag | undefined) => {
+      return (
+        tag === CommandTag.UNDO ||
+        tag === CommandTag.REDO ||
+        tag === CommandTag.UNDO_TO_START ||
+        tag === CommandTag.REDO_TO_END
+      );
+    };
+
     for (let i = 0; i < history.length; i++) {
       const current = history[i];
       const prev = i > 0 ? history[i - 1] : undefined;
+      const prevPrev = i > 1 ? history[i - 2] : undefined;
 
       // 1. Time gap > 5x average
       const delta =
@@ -173,14 +193,25 @@ export class ReviewPage extends LitElement {
 
       const cmdTag = current.command.tag();
       const prevCmdTag = prev?.command.tag();
+      const prevPrevCmdTag = prevPrev?.command.tag();
 
-      // 2. ActivateTrail or CreateTrail
-      if (cmdTag === CommandTag.ACTIVATE_TRAIL || cmdTag === CommandTag.CREATE_TRAIL) {
+      // 2. Trail commands (first in a series, and COPY_FROM_TRAIL)
+      if (isTrailCommand(cmdTag) && !isTrailCommand(prevCmdTag)) {
+        indices.add(i);
+      }
+      if (prevCmdTag === CommandTag.COPY_FROM_TRAIL) {
         indices.add(i);
       }
 
-      // 3. Before sequence of UNDO commands
-      if (cmdTag === CommandTag.UNDO && prevCmdTag !== CommandTag.UNDO) {
+      // 3. Undo/Redo commands (first in series, and after last in series if > 1)
+      if (isUndoRedo(cmdTag) && !isUndoRedo(prevCmdTag)) {
+        indices.add(i);
+      }
+      if (
+        !isUndoRedo(cmdTag) &&
+        isUndoRedo(prevCmdTag) &&
+        isUndoRedo(prevPrevCmdTag)
+      ) {
         indices.add(i);
       }
 
@@ -359,10 +390,12 @@ export class ReviewPage extends LitElement {
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
         .selectedLoc=${this.selectedLoc}
-        .actionLoc=${command && 'loc' in command.command ? (command.command as any).loc : null}
+        .actionLoc=${command && 'loc' in command.command ?
+          (command.command as any).loc
+        : null}
         @cell-selected=${this.onCellSelected}
       ></replay-view>
-      
+
       <div id="middle-controls">
         <input
           class="scrubber"
@@ -372,7 +405,9 @@ export class ReviewPage extends LitElement {
           .value=${this.playback.index.toString()}
           @input=${this.onScrub}
         />
-        <div class="move-counter">Move ${this.playback.index} / ${this.playback.history.length}</div>
+        <div class="move-counter">
+          Move ${this.playback.index} / ${this.playback.history.length}
+        </div>
         <div class="playback-controls">
           <icon-button
             @click=${() => this.stepBackward()}
@@ -408,7 +443,8 @@ export class ReviewPage extends LitElement {
             iconName="play_arrow"
             iconSize="large"
             title="Play forward"
-            ?disabled=${this.isPlayingForward || this.playback.index === this.playback.history.length}
+            ?disabled=${this.isPlayingForward ||
+            this.playback.index === this.playback.history.length}
           ></icon-button>
           <icon-button
             @click=${this.skipForward}
@@ -432,13 +468,27 @@ export class ReviewPage extends LitElement {
           html`
             <div>Action: ${command.command.toString()}</div>
             ${command.command.tag() === CommandTag.RESUME ?
-              html`<div>Time: ${new Date((command.command as any).timestamp).toLocaleString()}</div>`
-            : html`<div>Time spent: ${elapsedTimeString(command.elapsedTimestamp - (prevCommand ? prevCommand.elapsedTimestamp : 0))}</div>`
-            }
+              html`<div>
+                Time:
+                ${new Date((command.command as any).timestamp).toLocaleString()}
+              </div>`
+            : html`<div>
+                Time spent:
+                ${elapsedTimeString(
+                  command.elapsedTimestamp -
+                    (prevCommand ? prevCommand.elapsedTimestamp : 0),
+                )}
+              </div>`}
           `
         : ''}
         ${nextCommand ?
-          html`<div>Next: ${nextCommand.command.toString()} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
+          html`<div>
+            Next: ${nextCommand.command.toString()}
+            (${elapsedTimeString(
+              nextCommand.elapsedTimestamp -
+                (command ? command.elapsedTimestamp : 0),
+            )})
+          </div>`
         : ''}
       </div>
 
@@ -463,7 +513,7 @@ export class ReviewPage extends LitElement {
     }
     const loc = this.selectedLoc;
     const locIndex = loc.index;
-    
+
     const relevantFacts = this.facts.filter(fact => {
       const base = nub(fact);
       switch (base.type) {
@@ -477,7 +527,9 @@ export class ReviewPage extends LitElement {
         case 'Conflict':
           return base.locs.includes(locIndex);
         case 'Overlap':
-          return unitContains(base.unit, loc) && unitContains(base.cross_unit, loc);
+          return (
+            unitContains(base.unit, loc) && unitContains(base.cross_unit, loc)
+          );
         case 'Subset':
           return base.locs.includes(locIndex);
         case 'Implication':
@@ -495,9 +547,7 @@ export class ReviewPage extends LitElement {
       <div class="fact-panel">
         <h3>Facts for Cell</h3>
         <ul>
-          ${relevantFacts.map(
-            fact => html`<li>${describeFact(fact)}</li>`,
-          )}
+          ${relevantFacts.map(fact => html`<li>${describeFact(fact)}</li>`)}
         </ul>
       </div>
     `;
