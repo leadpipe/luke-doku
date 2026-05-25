@@ -359,6 +359,7 @@ export class ReviewPage extends LitElement {
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
         .selectedLoc=${this.selectedLoc}
+        .actionLoc=${command && 'loc' in command.command ? (command.command as any).loc : null}
         @cell-selected=${this.onCellSelected}
       ></replay-view>
       

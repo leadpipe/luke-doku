@@ -31,6 +31,15 @@ export class ReplayView extends SudokuView {
         opacity: 0.8;
         fill: none;
       }
+      @keyframes pulse-action {
+        0% { opacity: 0.1; }
+        50% { opacity: 0.4; }
+        100% { opacity: 0.1; }
+      }
+      .action-highlight {
+        fill: gold;
+        animation: pulse-action 1.5s infinite;
+      }
     `,
   ];
 
@@ -38,12 +47,21 @@ export class ReplayView extends SudokuView {
 
   @property({attribute: false}) facts?: readonly Fact[];
   @property({attribute: false}) selectedLoc: Loc | null = null;
+  @property({attribute: false}) actionLoc: Loc | null = null;
 
   protected override renderForeground() {
     return svg`
+      <g id="action-highlight">${this.renderActionHighlight()}</g>
       <g id="selection">${this.renderSelectionHighlight()}</g>
       <g id="facts">${this.renderFacts()}</g>
     `;
+  }
+
+  private renderActionHighlight(): TemplateResult | string {
+    if (!this.actionLoc) return '';
+    const {cellCenter, cellSize} = this;
+    const [x, y] = cellCenter(this.actionLoc);
+    return svg`<rect class="action-highlight" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize}/>`;
   }
 
   private renderSelectionHighlight(): TemplateResult | string {
