@@ -158,7 +158,7 @@ export class SetNum extends Assign<CommandTag.SET_NUM> {
   }
 
   protected override stateAsString(): string {
-    return `${this.loc}, ${this.num}`;
+    return `${this.num} ➔ ${this.loc}`;
   }
 
   override tag(): CommandTag.SET_NUM {
@@ -184,7 +184,7 @@ export class SetNums extends Assign<CommandTag.SET_NUMS> {
   }
 
   protected override stateAsString(): string {
-    return `${this.loc}, {${[...this.nums].join()}}`;
+    return `{${[...this.nums].join()}} ➔ ${this.loc}`;
   }
 
   override tag(): CommandTag.SET_NUMS {

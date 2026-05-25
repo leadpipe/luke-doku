@@ -5,7 +5,7 @@ import './replay-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
-import {CompletionState} from '../game/command';
+import {CompletionState, CommandTag} from '../game/command';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
@@ -141,28 +141,28 @@ export class ReviewPage extends LitElement {
       const current = history[i];
       const prev = i > 0 ? history[i - 1] : undefined;
 
-      // 1. Time gap > 3x average
+      // 1. Time gap > 5x average
       const delta =
         current.elapsedTimestamp - (prev ? prev.elapsedTimestamp : 0);
-      if (delta >= 3 * avgTime) {
+      if (delta >= 5 * avgTime) {
         indices.add(i);
       }
 
-      const cmdName = current.command.constructor.name;
-      const prevCmdName = prev?.command.constructor.name;
+      const cmdTag = current.command.tag();
+      const prevCmdTag = prev?.command.tag();
 
       // 2. ActivateTrail or CreateTrail
-      if (cmdName === 'ActivateTrail' || cmdName === 'CreateTrail') {
+      if (cmdTag === CommandTag.ACTIVATE_TRAIL || cmdTag === CommandTag.CREATE_TRAIL) {
         indices.add(i);
       }
 
       // 3. Before sequence of UNDO commands
-      if (cmdName === 'Undo' && prevCmdName !== 'Undo') {
+      if (cmdTag === CommandTag.UNDO && prevCmdTag !== CommandTag.UNDO) {
         indices.add(i);
       }
 
       // 4. Before Resume
-      if (cmdName === 'Resume') {
+      if (cmdTag === CommandTag.RESUME) {
         indices.add(i);
       }
     }
@@ -347,22 +347,18 @@ export class ReviewPage extends LitElement {
         @input=${this.onScrub}
       />
       <div class="info">
-        <h2>
-          Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
-        </h2>
-        <puzzle-rating .game=${this.game ?? undefined}></puzzle-rating>
         <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
         ${command ?
           html`
-            <div>Action: ${command.command.constructor.name}</div>
-            ${command.command.constructor.name === 'Resume' ?
+            <div>Action: ${command.command.toString()}</div>
+            ${command.command.tag() === CommandTag.RESUME ?
               html`<div>Time: ${new Date((command.command as any).timestamp).toLocaleString()}</div>`
             : html`<div>Time spent: ${elapsedTimeString(command.elapsedTimestamp - (prevCommand ? prevCommand.elapsedTimestamp : 0))}</div>`
             }
           `
         : ''}
         ${nextCommand ?
-          html`<div>Next: ${nextCommand.command.constructor.name} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
+          html`<div>Next: ${nextCommand.command.toString()} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
         : ''}
       </div>
       <div id="bottom-controls">
@@ -414,6 +410,10 @@ export class ReviewPage extends LitElement {
           ></icon-button>
         </div>
         ${this.renderSelectedFacts()}
+        <h2>
+          Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
+        </h2>
+        <puzzle-rating .game=${this.game ?? undefined}></puzzle-rating>
         <game-clock
           .game=${this.playback.wrapper.game}
           .overrideElapsedMs=${command?.elapsedTimestamp}

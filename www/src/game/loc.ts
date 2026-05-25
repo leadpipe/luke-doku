@@ -22,7 +22,7 @@ export class Loc extends Object {
 
   /** The location as an ordered pair, and 1-based rather than 0-based. */
   override toString(): string {
-    return `(${this.row + 1}, ${this.col + 1})`;
+    return `R${this.row + 1}C${this.col + 1}`;
   }
 
   /** The "peer" locations, that belong to the same row, column, or block. */

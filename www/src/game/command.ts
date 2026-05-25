@@ -77,7 +77,13 @@ export abstract class Command<TagValue extends CommandTag = CommandTag>
    * relevant state.
    */
   override toString(): string {
-    return `${this.constructor.name}(${this.stateAsString()})`;
+    const name = CommandTag[this.tag()]
+      .toLowerCase()
+      .split('_')
+      .map(w => w.charAt(0).toUpperCase() + w.slice(1))
+      .join(' ');
+    const state = this.stateAsString();
+    return state ? `${name} (${state})` : name;
   }
 
   /**

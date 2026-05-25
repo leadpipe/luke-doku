@@ -7,16 +7,10 @@ import type {Num} from './Num';
 import type {NumSet} from './NumSet';
 import type {Unit} from './Unit';
 
-/** Formats a location as standard notation. Example: "R1C3" */
-export function formatLoc(loc: Loc): string {
-  const gameLoc = GameLoc.of(loc);
-  return `R${gameLoc.row + 1}C${gameLoc.col + 1}`;
-}
-
 /** Formats a set of locations. Example: "{R1C3, R1C5}" */
 export function formatLocs(locs: LocSet): string {
   if (locs.length === 0) return '{}';
-  return `{${locs.map(formatLoc).join(', ')}}`;
+  return `{${locs.map(l => GameLoc.of(l).toString()).join(', ')}}`;
 }
 
 /** Formats a numeral (Num is 1-based 1..9). Example: "5" */
@@ -53,16 +47,16 @@ export function shorthandFact(fact: Fact): string {
   switch (fact.type) {
     case 'SingleLoc':
     case 'SingleNum':
-      return `${formatNum(fact.num)} ➔ ${formatLoc(fact.loc)}`;
+      return `${formatNum(fact.num)} ➔ ${GameLoc.of(fact.loc).toString()}`;
 
     case 'SpeculativeAssignment':
-      return `${formatNum(fact.num)} ➔ ${formatLoc(fact.loc)}?`;
+      return `${formatNum(fact.num)} ➔ ${GameLoc.of(fact.loc).toString()}?`;
 
     case 'NoLoc':
       return `${formatNum(fact.num)} ∉ ${formatUnitShorthand(fact.unit)}`;
 
     case 'NoNum':
-      return `∅ ➔ ${formatLoc(fact.loc)}`;
+      return `∅ ➔ ${GameLoc.of(fact.loc).toString()}`;
 
     case 'Conflict':
       return `⚡ ${formatNum(fact.num)} ∈ ${formatUnitShorthand(fact.unit)}`;
@@ -88,19 +82,19 @@ export function describeFact(fact: Fact): string {
 
   switch (fact.type) {
     case 'SingleLoc':
-      return `${shorthand}: Only one location for ${formatNum(fact.num)} in ${formatUnit(fact.unit)} (${formatLoc(fact.loc)})`;
+      return `${shorthand}: Only one location for ${formatNum(fact.num)} in ${formatUnit(fact.unit)} (${GameLoc.of(fact.loc).toString()})`;
 
     case 'SingleNum':
-      return `${shorthand}: Only one possible number for ${formatLoc(fact.loc)} (${formatNum(fact.num)})`;
+      return `${shorthand}: Only one possible number for ${GameLoc.of(fact.loc).toString()} (${formatNum(fact.num)})`;
 
     case 'SpeculativeAssignment':
-      return `${shorthand}: Speculative assignment of ${formatNum(fact.num)} to ${formatLoc(fact.loc)}`;
+      return `${shorthand}: Speculative assignment of ${formatNum(fact.num)} to ${GameLoc.of(fact.loc).toString()}`;
 
     case 'NoLoc':
       return `${shorthand}: ${formatNum(fact.num)} cannot be placed anywhere in ${formatUnit(fact.unit)}`;
 
     case 'NoNum':
-      return `${shorthand}: ${formatLoc(fact.loc)} has no possible numbers`;
+      return `${shorthand}: ${GameLoc.of(fact.loc).toString()} has no possible numbers`;
 
     case 'Conflict':
       return `${shorthand}: Conflict! ${formatNum(fact.num)} appears in ${formatUnit(fact.unit)} at multiple locations: ${formatLocs(fact.locs)}`;
