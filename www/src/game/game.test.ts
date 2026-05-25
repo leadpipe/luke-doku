@@ -1,11 +1,10 @@
 import {expect} from '@esm-bundle/chai';
 import {CreateTrail, Redo, Undo} from './commands';
 import {FAKE_HISTORY} from './fake-data';
-import {BaseGame, Game, PlayState, TEST_ONLY} from './game';
+import {BaseGame} from './game';
 import {Grid} from './grid';
 import {Loc} from './loc';
 import {Sudoku} from './sudoku';
-
 
 describe('Game', () => {
   function newSudoku(clues: Grid) {
@@ -27,7 +26,7 @@ describe('Game', () => {
     clues.set(Loc.of(1), 9);
     const sudoku = newSudoku(clues);
     expect(() => new BaseGame(sudoku, FAKE_HISTORY)).to.throw(
-      /failed to execute SetNums/,
+      /failed to execute Set Nums/,
     );
   });
 
