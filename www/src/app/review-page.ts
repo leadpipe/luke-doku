@@ -30,6 +30,7 @@ export class ReviewPage extends LitElement {
       --board-size: 380px;
       --board-padding: 10px;
       background-color: var(--bg-color);
+      overflow-y: auto;
     }
     #top-panel {
       margin-top: var(--page-grid-gap);
@@ -38,42 +39,46 @@ export class ReviewPage extends LitElement {
       justify-content: space-between;
       align-items: baseline;
       width: var(--board-size);
-    }
-    .scrubber {
-      width: 80%;
-      max-width: var(--board-size);
-      margin: 20px 0;
-    }
-    .info {
-      text-align: center;
-      margin-bottom: 20px;
-    }
-    h2 {
-      margin-block: 8px;
+      flex-shrink: 0;
     }
     replay-view {
       max-width: var(--board-size);
       max-height: var(--board-size);
       width: 100vw;
       aspect-ratio: 1 / 1;
+      flex-shrink: 0;
     }
-    #bottom-controls {
+    #middle-controls {
       display: flex;
       flex-direction: column;
-      height: 100%;
       align-items: center;
       width: var(--board-size);
+      flex-shrink: 0;
+    }
+    .scrubber {
+      width: 100%;
+      margin-top: 8px;
+      margin-bottom: 4px;
+    }
+    .move-counter {
+      margin-bottom: 8px;
+      font-weight: 500;
     }
     .playback-controls {
       display: flex;
       justify-content: center;
       gap: 12px;
+      width: 100%;
       margin-bottom: 16px;
-      width: 100%;
     }
-    game-clock {
-      flex-grow: 1;
-      width: 100%;
+    .action-section {
+      text-align: center;
+      margin-bottom: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      min-height: 60px;
+      flex-shrink: 0;
     }
     .fact-panel {
       width: var(--board-size);
@@ -85,6 +90,7 @@ export class ReviewPage extends LitElement {
       box-sizing: border-box;
       margin-bottom: 16px;
       font-size: 0.9em;
+      flex-shrink: 0;
     }
     .fact-panel pre {
       margin: 0;
@@ -93,6 +99,23 @@ export class ReviewPage extends LitElement {
     .fact-panel h3 {
       margin-top: 0;
       margin-bottom: 8px;
+    }
+    #bottom-info {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: var(--board-size);
+      margin-top: auto;
+      padding-bottom: 24px;
+      flex-shrink: 0;
+    }
+    h2 {
+      margin-block: 8px;
+      text-align: center;
+    }
+    game-clock {
+      width: 100%;
+      margin-top: 8px;
     }
   `;
 
@@ -338,30 +361,17 @@ export class ReviewPage extends LitElement {
         .selectedLoc=${this.selectedLoc}
         @cell-selected=${this.onCellSelected}
       ></replay-view>
-      <input
-        class="scrubber"
-        type="range"
-        min="0"
-        max=${this.playback.history.length}
-        .value=${this.playback.index.toString()}
-        @input=${this.onScrub}
-      />
-      <div class="info">
-        <div>Move ${this.playback.index} / ${this.playback.history.length}</div>
-        ${command ?
-          html`
-            <div>Action: ${command.command.toString()}</div>
-            ${command.command.tag() === CommandTag.RESUME ?
-              html`<div>Time: ${new Date((command.command as any).timestamp).toLocaleString()}</div>`
-            : html`<div>Time spent: ${elapsedTimeString(command.elapsedTimestamp - (prevCommand ? prevCommand.elapsedTimestamp : 0))}</div>`
-            }
-          `
-        : ''}
-        ${nextCommand ?
-          html`<div>Next: ${nextCommand.command.toString()} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
-        : ''}
-      </div>
-      <div id="bottom-controls">
+      
+      <div id="middle-controls">
+        <input
+          class="scrubber"
+          type="range"
+          min="0"
+          max=${this.playback.history.length}
+          .value=${this.playback.index.toString()}
+          @input=${this.onScrub}
+        />
+        <div class="move-counter">Move ${this.playback.index} / ${this.playback.history.length}</div>
         <div class="playback-controls">
           <icon-button
             @click=${() => this.stepBackward()}
@@ -409,7 +419,26 @@ export class ReviewPage extends LitElement {
             title="Step forward"
           ></icon-button>
         </div>
-        ${this.renderSelectedFacts()}
+      </div>
+
+      <div class="action-section">
+        ${command ?
+          html`
+            <div>Action: ${command.command.toString()}</div>
+            ${command.command.tag() === CommandTag.RESUME ?
+              html`<div>Time: ${new Date((command.command as any).timestamp).toLocaleString()}</div>`
+            : html`<div>Time spent: ${elapsedTimeString(command.elapsedTimestamp - (prevCommand ? prevCommand.elapsedTimestamp : 0))}</div>`
+            }
+          `
+        : ''}
+        ${nextCommand ?
+          html`<div>Next: ${nextCommand.command.toString()} (${elapsedTimeString(nextCommand.elapsedTimestamp - (command ? command.elapsedTimestamp : 0))})</div>`
+        : ''}
+      </div>
+
+      ${this.renderSelectedFacts()}
+
+      <div id="bottom-info">
         <h2>
           Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
         </h2>
