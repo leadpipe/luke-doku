@@ -379,19 +379,22 @@ export class ReviewPage extends LitElement {
             iconName="navigate_before"
             iconSize="large"
             title="Step backward"
+            ?disabled=${this.playback.index === 0}
           ></icon-button>
           <icon-button
             @click=${this.skipBackward}
             iconName="skip_previous"
             iconSize="large"
             title="Skip backward"
+            ?disabled=${this.playback.index === 0}
           ></icon-button>
           <icon-button
             @click=${this.playBackward}
-            iconName="arrow_circle_left"
+            iconName="play_arrow"
+            ?flip=${true}
             iconSize="large"
             title="Play backward"
-            ?disabled=${this.isPlayingBackward}
+            ?disabled=${this.isPlayingBackward || this.playback.index === 0}
           ></icon-button>
           <icon-button
             @click=${this.pause}
@@ -402,22 +405,24 @@ export class ReviewPage extends LitElement {
           ></icon-button>
           <icon-button
             @click=${this.playForward}
-            iconName="arrow_circle_right"
+            iconName="play_arrow"
             iconSize="large"
             title="Play forward"
-            ?disabled=${this.isPlayingForward}
+            ?disabled=${this.isPlayingForward || this.playback.index === this.playback.history.length}
           ></icon-button>
           <icon-button
             @click=${this.skipForward}
             iconName="skip_next"
             iconSize="large"
             title="Skip forward"
+            ?disabled=${this.playback.index === this.playback.history.length}
           ></icon-button>
           <icon-button
             @click=${() => this.stepForward()}
             iconName="navigate_next"
             iconSize="large"
             title="Step forward"
+            ?disabled=${this.playback.index === this.playback.history.length}
           ></icon-button>
         </div>
       </div>

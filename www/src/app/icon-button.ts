@@ -34,7 +34,7 @@ export class IconButton extends LitElement {
   override render() {
     return html`
       <button ?disabled=${this.disabled} title=${this.title}>
-        <mat-icon name=${this.iconName} size=${this.iconSize}></mat-icon>
+        <mat-icon name=${this.iconName} size=${this.iconSize} ?flip=${this.flip}></mat-icon>
       </button>
       ${this.label}
     `;
@@ -45,6 +45,7 @@ export class IconButton extends LitElement {
   @property({type: Boolean}) disabled = false;
   @property() override title: string = '';
   @property() label: string = '';
+  @property({type: Boolean}) flip = false;
 }
 
 declare global {

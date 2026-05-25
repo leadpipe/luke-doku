@@ -29,14 +29,19 @@ export class MatIcon extends LitElement {
     .material-icons.large {
       font-size: 48px;
     }
+
+    .flip {
+      transform: scaleX(-1);
+    }
   `;
 
   override render() {
-    return html`<span class="material-icons ${this.size}">${this.name}</span>`;
+    return html`<span class="material-icons ${this.size} ${this.flip ? 'flip' : ''}">${this.name}</span>`;
   }
 
   @property() name: string = '';
   @property() size: string = '';
+  @property({type: Boolean}) flip = false;
 }
 
 declare global {
