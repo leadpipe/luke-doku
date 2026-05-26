@@ -168,6 +168,16 @@ export class Marks {
   }
 
   /**
+   * Tells whether the given location is blank (empty).
+   *
+   * @param loc Which location to check.
+   * @returns Whether the cell is blank.
+   */
+  isBlank(loc: Loc): boolean {
+    return this.cells[loc.index] === null;
+  }
+
+  /**
    * Tells whether the given numeral is negated in the given location.
    *
    * @param loc Which location to check.

@@ -4,9 +4,9 @@ import {Loc} from '../game/loc';
 import {ReplayInput} from './replay-input';
 import {SudokuView} from './sudoku-view';
 
-import {nub} from '../facts/utils';
-import type {Unit} from '../facts/Unit';
 import type {Fact} from '../facts/Fact';
+import type {Unit} from '../facts/Unit';
+import {nub, unitContains} from '../facts/utils';
 
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
@@ -32,13 +32,22 @@ export class ReplayView extends SudokuView {
         fill: none;
       }
       @keyframes pulse-action {
-        0% { opacity: 0.1; }
-        50% { opacity: 0.4; }
-        100% { opacity: 0.1; }
+        0% {
+          opacity: 0.1;
+        }
+        50% {
+          opacity: 0.4;
+        }
+        100% {
+          opacity: 0.1;
+        }
       }
       .action-highlight {
         fill: gold;
         animation: pulse-action 1.5s infinite;
+      }
+      .fact-detail-text {
+        fill: var(--multi-value-default) !important;
       }
     `,
   ];
@@ -47,6 +56,7 @@ export class ReplayView extends SudokuView {
 
   @property({attribute: false}) facts?: readonly Fact[];
   @property({attribute: false}) selectedLoc: Loc | null = null;
+  @property({attribute: false}) selectedFact: Fact | null = null;
   @property({attribute: false}) actionLoc: Loc | null = null;
 
   protected override renderForeground() {
@@ -54,7 +64,84 @@ export class ReplayView extends SudokuView {
       <g id="action-highlight">${this.renderActionHighlight()}</g>
       <g id="selection">${this.renderSelectionHighlight()}</g>
       <g id="facts">${this.renderFacts()}</g>
+      <g id="fact-details">${this.renderSelectedFactDetails()}</g>
     `;
+  }
+
+  private renderSelectedFactDetails(): TemplateResult[] {
+    const answer: TemplateResult[] = [];
+    if (!this.selectedFact) return answer;
+
+    const fact = nub(this.selectedFact);
+    const {cellCenter} = this;
+
+    if (
+      fact.type === 'SingleLoc' ||
+      fact.type === 'SingleNum' ||
+      fact.type === 'SpeculativeAssignment'
+    ) {
+      const [x, y] = cellCenter(Loc.of(fact.loc)!);
+      answer.push(
+        svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
+      );
+    } else if (fact.type === 'Subset') {
+      for (const locIndex of fact.locs) {
+        const loc = Loc.of(locIndex);
+        const [x, y] = cellCenter(loc);
+        this.pushMultiValueCell(
+          new Set(fact.nums),
+          x,
+          y,
+          false,
+          false,
+          false,
+          () => ({'default-result': true}),
+          answer,
+        );
+      }
+    } else if (fact.type === 'Conflict') {
+      for (const locIndex of fact.locs) {
+        const loc = Loc.of(locIndex);
+        const [x, y] = cellCenter(loc);
+        answer.push(
+          svg`<text x=${x} y=${y} class="solution broken">${fact.num}</text>`,
+        );
+      }
+    } else if (fact.type === 'Overlap') {
+      const intersection = [...Loc.ALL].filter(
+        loc =>
+          unitContains(fact.unit, loc) && unitContains(fact.cross_unit, loc),
+      );
+      for (const loc of intersection) {
+        if (!this.isBlank(loc)) continue;
+
+        const [x, y] = cellCenter(loc);
+
+        if (fact.unit.type === 'Row') {
+          answer.push(
+            svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+          );
+        } else if (fact.unit.type === 'Col') {
+          answer.push(
+            svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+          );
+        } else if (fact.unit.type === 'Blk') {
+          const size = this.cellSize / 2;
+          answer.push(
+            svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+          );
+        }
+
+        const angle = 2 * fact.num * (Math.PI / 12);
+        const textRadius = this.cellSize * 0.35;
+        const numX = x + Math.sin(angle) * textRadius;
+        const numY = y - Math.cos(angle) * textRadius;
+        answer.push(
+          svg`<text x=${numX} y=${numY} class="solution clock-text fact-detail-text">${fact.num}</text>`,
+        );
+      }
+    }
+    return answer;
   }
 
   private renderActionHighlight(): TemplateResult | string {
@@ -112,7 +199,7 @@ export class ReplayView extends SudokuView {
         topLeftIndex = Loc.of(r0, c0).index;
         bottomRightIndex = Loc.of(r0 + 2, c0 + 2).index;
       }
-      
+
       const tl = Loc.of(topLeftIndex);
       const br = Loc.of(bottomRightIndex);
       const [tlX, tlY] = cellCenter(tl);
@@ -121,9 +208,9 @@ export class ReplayView extends SudokuView {
       const y = tlY - cellSize / 2;
       const width = brX + cellSize / 2 - x;
       const height = brY + cellSize / 2 - y;
-      
+
       answer.push(
-        svg`<rect class="error-border" x=${x} y=${y} width=${width} height=${height} rx=${cellSize * 0.1}/>`
+        svg`<rect class="error-border" x=${x} y=${y} width=${width} height=${height} rx=${cellSize * 0.1}/>`,
       );
     }
 
@@ -134,25 +221,27 @@ export class ReplayView extends SudokuView {
       const isError = errorLocs.has(locIndex);
       const cssClass = isError ? 'error-border' : 'assignment-border';
       answer.push(
-        svg`<rect class="${cssClass}" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize} rx=${cellSize * 0.1}/>`
+        svg`<rect class="${cssClass}" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize} rx=${cellSize * 0.1}/>`,
       );
     }
 
     for (const fact of this.facts) {
-      if (fact.type === 'SingleLoc') {
-        const {loc} = fact;
+      if (this.selectedFact && fact !== this.selectedFact) continue;
+      const base = nub(fact);
+      if (base.type === 'SingleLoc') {
+        const {loc} = base;
         const [x, y] = cellCenter(Loc.of(loc)!);
         answer.push(
           svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="green" stroke-width="3" opacity="0.5"/>`,
         );
-      } else if (fact.type === 'SingleNum') {
-        const {loc} = fact;
+      } else if (base.type === 'SingleNum') {
+        const {loc} = base;
         const [x, y] = cellCenter(Loc.of(loc)!);
         answer.push(
           svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="blue" stroke-width="3" opacity="0.5"/>`,
         );
-      } else if (fact.type === 'Subset') {
-        const {locs, unit} = fact;
+      } else if (base.type === 'Subset') {
+        const {locs, unit} = base;
         for (const loc of locs) {
           const [x, y] = cellCenter(Loc.of(loc)!);
           if (unit.type === 'Row') {

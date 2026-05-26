@@ -160,7 +160,7 @@ export class BaseGame {
     if (activeTrail) {
       if (activeTrail.get(loc) !== null) return false;
     }
-    return !this.marks.getNums(loc);
+    return this.marks.isBlank(loc);
   }
 
   getNum(loc: Loc): number | null {

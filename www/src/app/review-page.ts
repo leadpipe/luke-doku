@@ -125,6 +125,7 @@ export class ReviewPage extends LitElement {
   @state() private isPlayingForward = false;
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
+  @state() private selectedFact: Fact | null = null;
 
   private playIntervalId: number | null = null;
   private interestingIndices: number[] = [];
@@ -225,6 +226,8 @@ export class ReviewPage extends LitElement {
   }
 
   private async updateFacts() {
+    this.selectedLoc = null;
+    this.selectedFact = null;
     if (!this.playback) return;
     const grid = this.playback.wrapper.game.asGrid();
     const gridString = grid.toFlatString();
@@ -327,6 +330,40 @@ export class ReviewPage extends LitElement {
 
   private onCellSelected(e: CustomEvent<Loc | null>) {
     this.selectedLoc = e.detail;
+    if (this.selectedLoc) {
+      const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
+      this.selectedFact = relevantFacts.length > 0 ? relevantFacts[0] : null;
+    } else {
+      this.selectedFact = null;
+    }
+  }
+
+  private computeRelevantFacts(loc: Loc): Fact[] {
+    const locIndex = loc.index;
+    return this.facts.filter(fact => {
+      const base = nub(fact);
+      switch (base.type) {
+        case 'SingleLoc':
+        case 'SingleNum':
+        case 'SpeculativeAssignment':
+        case 'NoNum':
+          return base.loc === locIndex;
+        case 'NoLoc':
+          return unitContains(base.unit, loc);
+        case 'Conflict':
+          return base.locs.includes(locIndex);
+        case 'Overlap':
+          return (
+            unitContains(base.unit, loc) && unitContains(base.cross_unit, loc)
+          );
+        case 'Subset':
+          return base.locs.includes(locIndex);
+        case 'Implication':
+          return false;
+        default:
+          ensureExhaustiveSwitch(base);
+      }
+    });
   }
 
   private readonly keydownHandler = (event: KeyboardEvent) => {
@@ -390,6 +427,7 @@ export class ReviewPage extends LitElement {
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
         .selectedLoc=${this.selectedLoc}
+        .selectedFact=${this.selectedFact}
         .actionLoc=${command && 'loc' in command.command ?
           (command.command as any).loc
         : null}
@@ -511,33 +549,8 @@ export class ReviewPage extends LitElement {
     if (!this.selectedLoc) {
       return html`<div class="fact-panel">Select a cell to see facts</div>`;
     }
-    const loc = this.selectedLoc;
-    const locIndex = loc.index;
 
-    const relevantFacts = this.facts.filter(fact => {
-      const base = nub(fact);
-      switch (base.type) {
-        case 'SingleLoc':
-        case 'SingleNum':
-        case 'SpeculativeAssignment':
-        case 'NoNum':
-          return base.loc === locIndex;
-        case 'NoLoc':
-          return unitContains(base.unit, loc);
-        case 'Conflict':
-          return base.locs.includes(locIndex);
-        case 'Overlap':
-          return (
-            unitContains(base.unit, loc) && unitContains(base.cross_unit, loc)
-          );
-        case 'Subset':
-          return base.locs.includes(locIndex);
-        case 'Implication':
-          return false;
-        default:
-          ensureExhaustiveSwitch(base);
-      }
-    });
+    const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
 
     if (relevantFacts.length === 0) {
       return html`<div class="fact-panel">No deduced facts for this cell</div>`;
@@ -546,9 +559,24 @@ export class ReviewPage extends LitElement {
     return html`
       <div class="fact-panel">
         <h3>Facts for Cell</h3>
-        <ul>
-          ${relevantFacts.map(fact => html`<li>${describeFact(fact)}</li>`)}
-        </ul>
+        <div style="display: flex; flex-direction: column; gap: 6px;">
+          ${relevantFacts.map(
+            fact => html`
+              <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
+                <input
+                  type="radio"
+                  name="selectedFact"
+                  .checked=${this.selectedFact === fact}
+                  @change=${() => {
+                    this.selectedFact = fact;
+                  }}
+                  style="margin-top: 2px;"
+                />
+                <span>${describeFact(fact)}</span>
+              </label>
+            `,
+          )}
+        </div>
       </div>
     `;
   }
