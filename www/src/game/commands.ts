@@ -167,11 +167,14 @@ export class SetNum extends Assign<CommandTag.SET_NUM> {
 }
 
 export class SetNums extends Assign<CommandTag.SET_NUMS> {
+  readonly nums: ReadonlySet<number>;
+
   constructor(
     loc: Loc,
-    readonly nums: ReadonlySet<number>,
+    nums: ReadonlySet<number>,
   ) {
     super(loc);
+    this.nums = new Set(nums);
   }
 
   override apply(internals: GameInternals): boolean {
