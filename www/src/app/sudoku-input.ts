@@ -66,6 +66,7 @@ export class SudokuInput implements ReactiveController {
     host.addEventListener('pointercancel', this.cancelHandler);
     host.addEventListener('pointerdown', this.downHandler);
     host.addEventListener('pointerup', this.upHandler);
+    host.addEventListener('touchmove', this.touchMoveHandler, {passive: false});
   }
 
   hostDisconnected(): void {
@@ -77,6 +78,7 @@ export class SudokuInput implements ReactiveController {
     host.removeEventListener('pointercancel', this.cancelHandler);
     host.removeEventListener('pointerdown', this.downHandler);
     host.removeEventListener('pointerup', this.upHandler);
+    host.removeEventListener('touchmove', this.touchMoveHandler);
   }
 
   isHoverLoc(loc: Loc): boolean {
@@ -447,6 +449,8 @@ export class SudokuInput implements ReactiveController {
     this.handlePointerDown(event);
   private readonly upHandler = (event: PointerEvent) =>
     this.handlePointerUp(event);
+  private readonly touchMoveHandler = (event: Event) =>
+    event.preventDefault();
 
   private handlePointerHovering(event: PointerEvent) {
     const {multiInput, host} = this;

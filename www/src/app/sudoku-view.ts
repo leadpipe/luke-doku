@@ -58,6 +58,7 @@ export class SudokuView extends LitElement implements GridContainer {
         flex-direction: column;
         align-items: center;
         background-color: var(--gf);
+        touch-action: none;
         user-select: none;
         -webkit-user-select: none;
 
