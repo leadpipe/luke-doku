@@ -36,41 +36,57 @@ export function unitContains(unit: Unit, loc: GameLoc): boolean {
 }
 
 /**
- * Orders facts primarily by type, following the order:
+ * Orders facts primarily by total number of antecedents, then by type.
+ * Type order follows:
+ * Conflict, NoLoc, NoNum, Implication (nub is error),
  * SingleLoc, SingleNum, SpeculativeAssignment, Implication (nub is assignment),
- * Conflict, NoLoc, NoNum, Implication (nub is error), Subset, Overlap, other Implications.
+ * Subset, Overlap, other Implications.
  */
 export function compareFacts(a: Fact, b: Fact): number {
+  const diffAntecedents = getTotalAntecedents(a) - getTotalAntecedents(b);
+  if (diffAntecedents !== 0) {
+    return diffAntecedents;
+  }
   return getFactRank(a) - getFactRank(b);
 }
 
+export function getTotalAntecedents(fact: Fact): number {
+  if (fact.type !== 'Implication') {
+    return 0;
+  }
+  let total = fact.antecedents.length;
+  for (const ant of fact.antecedents) {
+    total += getTotalAntecedents(ant);
+  }
+  return total;
+}
+
 function getFactRank(fact: Fact): number {
-  switch (fact.type) {
-    case 'SingleLoc': return 10;
-    case 'SingleNum': return 20;
-    case 'SpeculativeAssignment': return 30;
-    
-    case 'Conflict': return 70;
-    case 'NoLoc': return 80;
-    case 'NoNum': return 90;
-    
-    case 'Subset': return 130;
-    case 'Overlap': return 140;
-    
-    case 'Implication': {
-      const base = nub(fact);
-      switch (base.type) {
-        case 'SingleLoc': return 40;
-        case 'SingleNum': return 50;
-        case 'SpeculativeAssignment': return 60;
-        case 'Conflict': return 100;
-        case 'NoLoc': return 110;
-        case 'NoNum': return 120;
-        default: return 150;
-      }
-    }
+  const base = nub(fact);
+  switch (base.type) {
+    case 'Conflict':
+      return 10;
+    case 'NoLoc':
+      return 20;
+    case 'NoNum':
+      return 30;
+
+    case 'SingleLoc':
+      return 70;
+    case 'SingleNum':
+      return 80;
+    case 'SpeculativeAssignment':
+      return 90;
+
+    case 'Subset':
+      return 130;
+    case 'Overlap':
+      return 140;
+
+    case 'Implication':
+      return 1000; // Can't happen, nub never returns an Implication.
+
     default:
-      ensureExhaustiveSwitch(fact);
-      return 1000;
+      ensureExhaustiveSwitch(base);
   }
 }
