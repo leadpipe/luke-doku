@@ -224,14 +224,26 @@ export class LukeDoku extends LitElement {
 
   private async startProcess() {
     await this.updateComplete;
+    if (getPuzzleDate() < todayString) {
+      // It's a new day. If the URL already points to one of today's puzzles
+      // (e.g. a direct link), honor it; otherwise redirect to the puzzle of
+      // the day.
+      const hashState = getHashState();
+      const urlPuzzleId =
+        hashState.path.length >= 1 ? PuzzleId.parse(hashState.path[0]) : null;
+      if (urlPuzzleId?.date === todayString) {
+        setPuzzleDateToToday();
+        if (await this.showPageForPath(hashState)) {
+          return;
+        }
+      }
+      await this.goToPuzzleOfTheDay();
+      return;
+    }
     if (await this.showPageForPath(getHashState())) {
       return;
     }
-    if (getPuzzleDate() < todayString) {
-      await this.goToPuzzleOfTheDay();
-    } else {
-      await this.goToOngoingGameOrPuzzles();
-    }
+    await this.goToOngoingGameOrPuzzles();
   }
 
   private async tryToLoadGameFromCluesOrId(
