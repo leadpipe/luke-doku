@@ -793,7 +793,7 @@ export class SudokuView extends LitElement implements GridContainer {
           nums,
           x,
           y,
-          !!trails.activeTrail?.get(loc),
+          !!trails.activeTrail?.get(loc) || this.isFactDetailLoc(loc),
           !!input?.isHoverLoc(loc),
           !!input?.isInputLoc(loc),
           num => ({
@@ -804,6 +804,10 @@ export class SudokuView extends LitElement implements GridContainer {
         );
       }
     }
+  }
+
+  protected isFactDetailLoc(_loc: Loc): boolean {
+    return false;
   }
 
   pushMultiValueCell(

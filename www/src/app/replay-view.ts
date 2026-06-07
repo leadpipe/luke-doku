@@ -6,7 +6,7 @@ import {SudokuView} from './sudoku-view';
 
 import type {Fact} from '../facts/Fact';
 import type {Unit} from '../facts/Unit';
-import {nub, unitContains} from '../facts/utils';
+import {getTotalAntecedents, nub, unitContains} from '../facts/utils';
 
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
@@ -19,10 +19,11 @@ export class ReplayView extends SudokuView {
         opacity: 0.5;
         fill: none;
       }
-      .assignment-border {
-        stroke: green;
+      .overlap-line {
+        stroke: #6688aa;
         stroke-width: 3;
-        opacity: 0.8;
+        stroke-dasharray: 6 4;
+        opacity: 0.5;
         fill: none;
       }
       .error-border {
@@ -144,6 +145,27 @@ export class ReplayView extends SudokuView {
     return answer;
   }
 
+  protected override isFactDetailLoc(loc: Loc): boolean {
+    if (!this.selectedFact) return false;
+    const fact = nub(this.selectedFact);
+    switch (fact.type) {
+      case 'SingleLoc':
+      case 'SingleNum':
+      case 'SpeculativeAssignment':
+        return loc.index === fact.loc;
+      case 'Subset':
+        return fact.locs.includes(loc.index);
+      case 'Conflict':
+        return fact.locs.includes(loc.index);
+      case 'Overlap':
+        return (
+          unitContains(fact.unit, loc) && unitContains(fact.cross_unit, loc)
+        );
+      default:
+        return false;
+    }
+  }
+
   private renderActionHighlight(): TemplateResult | string {
     if (!this.actionLoc) return '';
     const {cellCenter, cellSize} = this;
@@ -167,6 +189,7 @@ export class ReplayView extends SudokuView {
     const assignmentLocs = new Set<number>();
     const errorLocs = new Set<number>();
     const errorUnits = new Map<string, Unit>();
+    let hasSubsets = false;
 
     for (const fact of this.facts) {
       const base = nub(fact);
@@ -181,6 +204,8 @@ export class ReplayView extends SudokuView {
       } else if (base.type === 'Conflict' || base.type === 'NoLoc') {
         const {unit} = base;
         errorUnits.set(`${unit.type}-${unit.id}`, unit);
+      } else if (base.type === 'Subset') {
+        hasSubsets = true;
       }
     }
 
@@ -214,33 +239,37 @@ export class ReplayView extends SudokuView {
       );
     }
 
-    const allLocs = new Set([...assignmentLocs, ...errorLocs]);
-    for (const locIndex of allLocs) {
+    for (const locIndex of errorLocs) {
       const loc = Loc.of(locIndex);
       const [x, y] = cellCenter(loc);
-      const isError = errorLocs.has(locIndex);
-      const cssClass = isError ? 'error-border' : 'assignment-border';
       answer.push(
-        svg`<rect class="${cssClass}" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize} rx=${cellSize * 0.1}/>`,
+        svg`<rect class="error-border" x=${x - cellSize / 2} y=${y - cellSize / 2} width=${cellSize} height=${cellSize} rx=${cellSize * 0.1}/>`,
       );
     }
+
+    const hasAssignmentsOrErrors =
+      assignmentLocs.size > 0 || errorLocs.size > 0 || errorUnits.size > 0;
 
     for (const fact of this.facts) {
       if (this.selectedFact && fact !== this.selectedFact) continue;
       const base = nub(fact);
-      if (base.type === 'SingleLoc') {
+      if (
+        base.type === 'SingleLoc' ||
+        base.type === 'SingleNum' ||
+        base.type === 'SpeculativeAssignment'
+      ) {
         const {loc} = base;
         const [x, y] = cellCenter(Loc.of(loc)!);
-        answer.push(
-          svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="green" stroke-width="3" opacity="0.5"/>`,
+        const color = base.type === 'SingleNum' ? 'blue' : 'green';
+        const totalAntecedents = getTotalAntecedents(fact);
+        const radius = Math.max(
+          cellSize * 0.15,
+          (cellSize * 0.4) / (1 + 0.2 * totalAntecedents),
         );
-      } else if (base.type === 'SingleNum') {
-        const {loc} = base;
-        const [x, y] = cellCenter(Loc.of(loc)!);
         answer.push(
-          svg`<circle cx=${x} cy=${y} r=${this.cellSize * 0.4} fill="none" stroke="blue" stroke-width="3" opacity="0.5"/>`,
+          svg`<circle cx=${x} cy=${y} r=${radius} fill="none" stroke="${color}" stroke-width="3" opacity="0.5"/>`,
         );
-      } else if (base.type === 'Subset') {
+      } else if (base.type === 'Subset' && !hasAssignmentsOrErrors) {
         const {locs, unit} = base;
         for (const loc of locs) {
           const [x, y] = cellCenter(Loc.of(loc)!);
@@ -256,6 +285,33 @@ export class ReplayView extends SudokuView {
             const size = this.cellSize / 2;
             answer.push(
               svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+            );
+          }
+        }
+      } else if (
+        base.type === 'Overlap' &&
+        !hasAssignmentsOrErrors &&
+        !hasSubsets
+      ) {
+        for (const loc of Loc.ALL) {
+          if (
+            !unitContains(base.unit, loc) ||
+            !unitContains(base.cross_unit, loc)
+          )
+            continue;
+          const [x, y] = cellCenter(loc);
+          if (base.unit.type === 'Row') {
+            answer.push(
+              svg`<line class="overlap-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+            );
+          } else if (base.unit.type === 'Col') {
+            answer.push(
+              svg`<line class="overlap-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+            );
+          } else if (base.unit.type === 'Blk') {
+            const size = this.cellSize / 2;
+            answer.push(
+              svg`<rect class="overlap-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
             );
           }
         }
