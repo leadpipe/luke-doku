@@ -6,7 +6,12 @@ import {SudokuView} from './sudoku-view';
 
 import type {Fact} from '../facts/Fact';
 import type {Unit} from '../facts/Unit';
-import {getTotalAntecedents, nub, unitContains} from '../facts/utils';
+import {
+  flattenImplication,
+  getTotalAntecedents,
+  nub,
+  unitContains,
+} from '../facts/utils';
 
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
@@ -50,6 +55,37 @@ export class ReplayView extends SudokuView {
       .fact-detail-text {
         fill: var(--multi-value-default) !important;
       }
+      @keyframes fade-in {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 1;
+        }
+      }
+      @keyframes fade-in-ghosted {
+        from {
+          opacity: 0;
+        }
+        to {
+          opacity: 0.6;
+        }
+      }
+      .animated-fade {
+        opacity: 0;
+        animation: fade-in 0.3s ease-out forwards;
+      }
+      .animated-fade.ghosted {
+        animation-name: fade-in-ghosted;
+      }
+      .ghosted {
+        opacity: 0.6 !important;
+      }
+      .ghosted .subset-line,
+      .ghosted .overlap-line,
+      .ghosted .error-border {
+        stroke-dasharray: 4 4;
+      }
     `,
   ];
 
@@ -73,132 +109,43 @@ export class ReplayView extends SudokuView {
     const answer: TemplateResult[] = [];
     if (!this.selectedFact) return answer;
 
-    const fact = nub(this.selectedFact);
+    const {antecedents, nub: finalNub} = flattenImplication(
+      this.selectedFact,
+    );
+
+    const facts = [...antecedents, finalNub];
+    const occupiedLocs = new Set<number>();
+    const groups: TemplateResult[] = [];
+
+    for (let i = facts.length - 1; i >= 0; i--) {
+      const fact = facts[i];
+      const parts = this.renderSingleFactDetails(fact, occupiedLocs);
+
+      if (parts.length > 0) {
+        const delayMs = i * 100;
+        const isGhosted = i < facts.length - 1;
+        const classes = isGhosted ? 'animated-fade ghosted' : 'animated-fade';
+        groups.push(
+          svg`<g class="${classes}" style="animation-delay: ${delayMs}ms">${parts}</g>`,
+        );
+      }
+    }
+
+    return groups.reverse();
+  }
+
+  private renderSingleFactDetails(fact: Fact, occupiedLocs: Set<number>): TemplateResult[] {
+    const answer: TemplateResult[] = [];
     const {cellCenter} = this;
 
     if (fact.type === 'SingleLoc') {
-      const [x, y] = cellCenter(Loc.of(fact.loc)!);
-      answer.push(
-        svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
-      );
-      if (fact.unit.type === 'Row') {
-        answer.push(
-          svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-        );
-      } else if (fact.unit.type === 'Col') {
-        answer.push(
-          svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-        );
-      } else if (fact.unit.type === 'Blk') {
-        const size = this.cellSize / 2;
-        answer.push(
-          svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-        );
-      }
-    } else if (fact.type === 'SingleNum') {
-      const [x, y] = cellCenter(Loc.of(fact.loc)!);
-      answer.push(
-        svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
-      );
-      for (let i = 1; i <= 9; i++) {
-        if (i === fact.num) continue;
-        const angle = 2 * i * (Math.PI / 12);
-        const textRadius = this.cellSize * 0.35;
-        const numX = x + Math.sin(angle) * textRadius;
-        const numY = y - Math.cos(angle) * textRadius;
-        answer.push(
-          svg`<text x=${numX} y=${numY} class="solution clock-text broken" opacity="0.3">x</text>`,
-        );
-      }
-    } else if (fact.type === 'SpeculativeAssignment') {
-      const [x, y] = cellCenter(Loc.of(fact.loc)!);
-      answer.push(
-        svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
-      );
-      const textRadius = this.cellSize * 0.35;
-      for (const angle of [
-        Math.PI / 4,
-        (3 * Math.PI) / 4,
-        (5 * Math.PI) / 4,
-        (7 * Math.PI) / 4,
-      ]) {
-        const qX = x + Math.sin(angle) * textRadius;
-        const qY = y - Math.cos(angle) * textRadius;
-        answer.push(
-          svg`<text x=${qX} y=${qY} class="solution clock-text" style="opacity: 0.3">?</text>`,
-        );
-      }
-    } else if (fact.type === 'NoNum') {
-      const [x, y] = cellCenter(Loc.of(fact.loc)!);
-      for (let i = 1; i <= 9; i++) {
-        const angle = 2 * i * (Math.PI / 12);
-        const textRadius = this.cellSize * 0.35;
-        const numX = x + Math.sin(angle) * textRadius;
-        const numY = y - Math.cos(angle) * textRadius;
-        answer.push(
-          svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
-        );
-      }
-    } else if (fact.type === 'NoLoc') {
-      for (const loc of Loc.ALL) {
-        if (unitContains(fact.unit, loc) && this.isBlank(loc)) {
-          const [x, y] = cellCenter(loc);
-          if (fact.unit.type === 'Row') {
-            answer.push(
-              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-            );
-          } else if (fact.unit.type === 'Col') {
-            answer.push(
-              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-            );
-          } else if (fact.unit.type === 'Blk') {
-            const size = this.cellSize / 2;
-            answer.push(
-              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-            );
-          }
-          const angle = 2 * fact.num * (Math.PI / 12);
-          const textRadius = this.cellSize * 0.35;
-          const numX = x + Math.sin(angle) * textRadius;
-          const numY = y - Math.cos(angle) * textRadius;
-          answer.push(
-            svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
-          );
-        }
-      }
-    } else if (fact.type === 'Subset') {
-      for (const locIndex of fact.locs) {
-        const loc = Loc.of(locIndex);
-        const [x, y] = cellCenter(loc);
-        this.pushMultiValueCell(
-          new Set(fact.nums),
-          x,
-          y,
-          false,
-          false,
-          false,
-          () => ({'default-result': true}),
-          answer,
-        );
-      }
-    } else if (fact.type === 'Conflict') {
-      for (const locIndex of fact.locs) {
-        const loc = Loc.of(locIndex);
+      const loc = Loc.of(fact.loc)!;
+      if (!occupiedLocs.has(loc.index)) {
+        occupiedLocs.add(loc.index);
         const [x, y] = cellCenter(loc);
         answer.push(
-          svg`<text x=${x} y=${y} class="solution broken">${fact.num}</text>`,
+          svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
         );
-      }
-    } else if (fact.type === 'Overlap') {
-      const intersection = [...Loc.ALL].filter(
-        loc =>
-          unitContains(fact.unit, loc) && unitContains(fact.cross_unit, loc),
-      );
-      for (const loc of intersection) {
-        if (!this.isBlank(loc)) continue;
-
-        const [x, y] = cellCenter(loc);
-
         if (fact.unit.type === 'Row') {
           answer.push(
             svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
@@ -213,14 +160,172 @@ export class ReplayView extends SudokuView {
             svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
           );
         }
-
-        const angle = 2 * fact.num * (Math.PI / 12);
-        const textRadius = this.cellSize * 0.35;
-        const numX = x + Math.sin(angle) * textRadius;
-        const numY = y - Math.cos(angle) * textRadius;
+      }
+    } else if (fact.type === 'SingleNum') {
+      const loc = Loc.of(fact.loc)!;
+      if (!occupiedLocs.has(loc.index)) {
+        occupiedLocs.add(loc.index);
+        const [x, y] = cellCenter(loc);
         answer.push(
-          svg`<text x=${numX} y=${numY} class="solution clock-text fact-detail-text">${fact.num}</text>`,
+          svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
         );
+        for (let i = 1; i <= 9; i++) {
+          if (i === fact.num) continue;
+          const angle = 2 * i * (Math.PI / 12);
+          const textRadius = this.cellSize * 0.35;
+          const numX = x + Math.sin(angle) * textRadius;
+          const numY = y - Math.cos(angle) * textRadius;
+          answer.push(
+            svg`<text x=${numX} y=${numY} class="solution clock-text broken" opacity="0.3">x</text>`,
+          );
+        }
+      }
+    } else if (fact.type === 'SpeculativeAssignment') {
+      const loc = Loc.of(fact.loc)!;
+      if (!occupiedLocs.has(loc.index)) {
+        occupiedLocs.add(loc.index);
+        const [x, y] = cellCenter(loc);
+        answer.push(
+          svg`<text x=${x} y=${y} class="solution fact-detail-text">${fact.num}</text>`,
+        );
+        const textRadius = this.cellSize * 0.35;
+        for (const angle of [
+          Math.PI / 4,
+          (3 * Math.PI) / 4,
+          (5 * Math.PI) / 4,
+          (7 * Math.PI) / 4,
+        ]) {
+          const qX = x + Math.sin(angle) * textRadius;
+          const qY = y - Math.cos(angle) * textRadius;
+          answer.push(
+            svg`<text x=${qX} y=${qY} class="solution clock-text" style="opacity: 0.3">?</text>`,
+          );
+        }
+      }
+    } else if (fact.type === 'NoNum') {
+      const loc = Loc.of(fact.loc)!;
+      if (!occupiedLocs.has(loc.index)) {
+        occupiedLocs.add(loc.index);
+        const [x, y] = cellCenter(loc);
+        for (let i = 1; i <= 9; i++) {
+          const angle = 2 * i * (Math.PI / 12);
+          const textRadius = this.cellSize * 0.35;
+          const numX = x + Math.sin(angle) * textRadius;
+          const numY = y - Math.cos(angle) * textRadius;
+          answer.push(
+            svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
+          );
+        }
+      }
+    } else if (fact.type === 'NoLoc') {
+      for (const loc of Loc.ALL) {
+        if (unitContains(fact.unit, loc) && this.isBlank(loc)) {
+          if (!occupiedLocs.has(loc.index)) {
+            occupiedLocs.add(loc.index);
+            const [x, y] = cellCenter(loc);
+            if (fact.unit.type === 'Row') {
+              answer.push(
+                svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+              );
+            } else if (fact.unit.type === 'Col') {
+              answer.push(
+                svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+              );
+            } else if (fact.unit.type === 'Blk') {
+              const size = this.cellSize / 2;
+              answer.push(
+                svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+              );
+            }
+            const angle = 2 * fact.num * (Math.PI / 12);
+            const textRadius = this.cellSize * 0.35;
+            const numX = x + Math.sin(angle) * textRadius;
+            const numY = y - Math.cos(angle) * textRadius;
+            answer.push(
+              svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
+            );
+          }
+        }
+      }
+    } else if (fact.type === 'Subset') {
+      for (const locIndex of fact.locs) {
+        if (!occupiedLocs.has(locIndex)) {
+          occupiedLocs.add(locIndex);
+          const loc = Loc.of(locIndex);
+          const [x, y] = cellCenter(loc);
+          
+          if (fact.unit.type === 'Row') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+            );
+          } else if (fact.unit.type === 'Col') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+            );
+          } else if (fact.unit.type === 'Blk') {
+            const size = this.cellSize / 2;
+            answer.push(
+              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+            );
+          }
+
+          this.pushMultiValueCell(
+            new Set(fact.nums),
+            x,
+            y,
+            false,
+            false,
+            false,
+            () => ({'default-result': true}),
+            answer,
+          );
+        }
+      }
+    } else if (fact.type === 'Conflict') {
+      for (const locIndex of fact.locs) {
+        if (!occupiedLocs.has(locIndex)) {
+          occupiedLocs.add(locIndex);
+          const loc = Loc.of(locIndex);
+          const [x, y] = cellCenter(loc);
+          answer.push(
+            svg`<text x=${x} y=${y} class="solution broken">${fact.num}</text>`,
+          );
+        }
+      }
+    } else if (fact.type === 'Overlap') {
+      const intersection = [...Loc.ALL].filter(
+        loc =>
+          unitContains(fact.unit, loc) && unitContains(fact.cross_unit, loc),
+      );
+      for (const loc of intersection) {
+        if (!this.isBlank(loc)) continue;
+        if (!occupiedLocs.has(loc.index)) {
+          // DO NOT ADD to occupiedLocs. Overlaps can appear together.
+          const [x, y] = cellCenter(loc);
+
+          if (fact.unit.type === 'Row') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+            );
+          } else if (fact.unit.type === 'Col') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+            );
+          } else if (fact.unit.type === 'Blk') {
+            const size = this.cellSize / 2;
+            answer.push(
+              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+            );
+          }
+
+          const angle = 2 * fact.num * (Math.PI / 12);
+          const textRadius = this.cellSize * 0.35;
+          const numX = x + Math.sin(angle) * textRadius;
+          const numY = y - Math.cos(angle) * textRadius;
+          answer.push(
+            svg`<text x=${numX} y=${numY} class="solution clock-text fact-detail-text">${fact.num}</text>`,
+          );
+        }
       }
     }
     return answer;
@@ -228,26 +333,36 @@ export class ReplayView extends SudokuView {
 
   protected override isFactDetailLoc(loc: Loc): boolean {
     if (!this.selectedFact) return false;
-    const fact = nub(this.selectedFact);
-    switch (fact.type) {
-      case 'SingleLoc':
-      case 'SingleNum':
-      case 'SpeculativeAssignment':
-      case 'NoNum':
-        return loc.index === fact.loc;
-      case 'NoLoc':
-        return unitContains(fact.unit, loc);
-      case 'Subset':
-        return fact.locs.includes(loc.index);
-      case 'Conflict':
-        return fact.locs.includes(loc.index);
-      case 'Overlap':
-        return (
-          unitContains(fact.unit, loc) && unitContains(fact.cross_unit, loc)
-        );
-      default:
-        return false;
+    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
+    const facts = [...antecedents, finalNub];
+
+    for (const fact of facts) {
+      switch (fact.type) {
+        case 'SingleLoc':
+        case 'SingleNum':
+        case 'SpeculativeAssignment':
+        case 'NoNum':
+          if (loc.index === fact.loc) return true;
+          break;
+        case 'NoLoc':
+          if (unitContains(fact.unit, loc)) return true;
+          break;
+        case 'Subset':
+        case 'Conflict':
+          if (fact.locs.includes(loc.index)) return true;
+          break;
+        case 'Overlap':
+          if (
+            unitContains(fact.unit, loc) &&
+            unitContains(fact.cross_unit, loc)
+          )
+            return true;
+          break;
+        default:
+          break;
+      }
     }
+    return false;
   }
 
   private renderActionHighlight(): TemplateResult | string {

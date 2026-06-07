@@ -16,6 +16,45 @@ export function nub(fact: Fact): Fact {
 }
 
 /**
+ * Flattens an Implication into a sequence of antecedents and the ultimate consequent.
+ */
+export function flattenImplication(fact: Fact): {
+  antecedents: Fact[];
+  nub: Fact;
+} {
+  if (fact.type !== 'Implication') {
+    return {antecedents: [], nub: fact};
+  }
+
+  const antecedents: Fact[] = [];
+
+  function collect(f: Fact) {
+    if (f.type === 'Implication') {
+      for (const ant of f.antecedents) {
+        collect(ant);
+      }
+      collect(f.consequent);
+    } else {
+      antecedents.push(f);
+    }
+  }
+
+  for (const ant of fact.antecedents) {
+    collect(ant);
+  }
+
+  let current = fact.consequent;
+  while (current.type === 'Implication') {
+    for (const ant of current.antecedents) {
+      collect(ant);
+    }
+    current = current.consequent;
+  }
+
+  return {antecedents, nub: current};
+}
+
+/**
  * Tells whether the given unit contains the given location.
  */
 export function unitContains(unit: Unit, loc: GameLoc): boolean {
