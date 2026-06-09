@@ -9,6 +9,7 @@ import type {Fact} from '../facts/Fact';
 import {describeFact} from '../facts/format';
 import {compareFacts, nub, unitContains} from '../facts/utils';
 import {CommandTag, CompletionState} from '../game/command';
+import {SetNum} from '../game/commands';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
@@ -413,6 +414,37 @@ export class ReviewPage extends LitElement {
       this.playback.index < this.playback.history.length ?
         this.playback.history[this.playback.index]
       : undefined;
+
+    let effectiveSelectedFact = this.selectedFact;
+    if (
+      this.isPlayingForward &&
+      nextCommand &&
+      nextCommand.command.tag() === CommandTag.SET_NUM
+    ) {
+      const setNumCmd = nextCommand.command as SetNum;
+      const locIndex = setNumCmd.loc.index;
+      const num = setNumCmd.num;
+
+      const matchingFact = this.facts.find(f => {
+        const base = nub(f);
+        return (
+          (base.type === 'SingleLoc' || base.type === 'SingleNum') &&
+          base.loc === locIndex &&
+          base.num === num
+        );
+      });
+
+      if (matchingFact) {
+        effectiveSelectedFact = matchingFact;
+      } else {
+        effectiveSelectedFact = {
+          type: 'SpeculativeAssignment',
+          loc: locIndex,
+          num: num,
+        };
+      }
+    }
+
     return html`
       <div id="top-panel">
         <icon-button
@@ -427,7 +459,7 @@ export class ReviewPage extends LitElement {
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
         .selectedLoc=${this.selectedLoc}
-        .selectedFact=${this.selectedFact}
+        .selectedFact=${effectiveSelectedFact}
         .actionLoc=${command && 'loc' in command.command ?
           (command.command as any).loc
         : null}
