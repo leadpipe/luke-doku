@@ -243,7 +243,7 @@ export class LukeDoku extends LitElement {
     if (await this.showPageForPath(getHashState())) {
       return;
     }
-    await this.goToOngoingGameOrPuzzles();
+    await this.goToOngoingGameOrPuzzles(window.location.href);
   }
 
   private async tryToLoadGameFromCluesOrId(
@@ -286,7 +286,7 @@ export class LukeDoku extends LitElement {
     if (await this.shouldStayOnPage(getHashState())) {
       return;
     }
-    await this.goToOngoingGameOrPuzzles();
+    await this.goToOngoingGameOrPuzzles(window.location.href);
   };
 
   private async goToPuzzleOfTheDay() {
@@ -296,10 +296,19 @@ export class LukeDoku extends LitElement {
     setPuzzleDateToToday();
   }
 
-  private async goToOngoingGameOrPuzzles() {
+  private async goToOngoingGameOrPuzzles(expectedUrl?: string) {
     const db = await openDb();
+    if (expectedUrl && window.location.href !== expectedUrl) {
+      return;
+    }
     for await (const cursor of iterateOngoingPuzzlesDesc(db)) {
+      if (expectedUrl && window.location.href !== expectedUrl) {
+        return;
+      }
       await navigateToPuzzle(Sudoku.fromDatabaseRecord(cursor.value));
+      return;
+    }
+    if (expectedUrl && window.location.href !== expectedUrl) {
       return;
     }
     await navigateHome();
