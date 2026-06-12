@@ -18,6 +18,18 @@ import {requestFactDeduction} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
 
+function getFactAssignment(fact: Fact): {loc: number; num: number} | null {
+  const base = nub(fact);
+  if (
+    base.type === 'SingleLoc' ||
+    base.type === 'SingleNum' ||
+    base.type === 'SpeculativeAssignment'
+  ) {
+    return {loc: base.loc, num: base.num};
+  }
+  return null;
+}
+
 @customElement('review-page')
 export class ReviewPage extends LitElement {
   static override styles = css`
@@ -117,6 +129,53 @@ export class ReviewPage extends LitElement {
     game-clock {
       width: 100%;
       margin-top: 8px;
+    }
+    .apply-fact-container {
+      margin-top: 12px;
+      display: flex;
+      justify-content: center;
+    }
+    .apply-fact-button {
+      background-color: var(--hover-loc, #bdd4f9);
+      color: var(--text-color, #000);
+      border: 1px solid var(--gc, #ccc);
+      padding: 6px 16px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-weight: 500;
+      font-family: inherit;
+      transition:
+        background-color 0.2s,
+        transform 0.1s;
+    }
+    .apply-fact-button:hover {
+      background-color: var(--selection-fill, #bdfe);
+    }
+    .apply-fact-button:active {
+      transform: scale(0.98);
+    }
+    .deviation-count {
+      color: var(--multi-value-default, #0a0);
+      font-weight: bold;
+    }
+    .digression-active {
+      color: var(--multi-value-default, #0a0);
+    }
+    .reset-digression-button {
+      margin-top: 4px;
+      margin-bottom: 8px;
+      background: none;
+      border: 1px solid var(--gc, #ccc);
+      color: var(--text-color);
+      padding: 4px 12px;
+      border-radius: 12px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-family: inherit;
+      transition: background-color 0.2s;
+    }
+    .reset-digression-button:hover {
+      background-color: var(--gd, #ddd);
     }
   `;
 
@@ -268,6 +327,7 @@ export class ReviewPage extends LitElement {
   private stepForward(fromInterval = false) {
     if (!fromInterval) this.clearPlayInterval();
     if (!this.playback) return;
+    if (this.playback.deviations.length > 0) return;
     if (this.playback.index < this.playback.history.length) {
       this.playback.index++;
       this.updateFacts();
@@ -279,11 +339,37 @@ export class ReviewPage extends LitElement {
   private stepBackward(fromInterval = false) {
     if (!fromInterval) this.clearPlayInterval();
     if (!this.playback) return;
-    if (this.playback.index > 0) {
+    if (this.playback.deviations.length > 0) {
+      this.playback.popDeviation();
+      this.updateFacts();
+    } else if (this.playback.index > 0) {
       this.playback.index--;
       this.updateFacts();
     } else if (fromInterval) {
       this.clearPlayInterval();
+    }
+  }
+
+  private applySelectedFact(assignment: {loc: number; num: number}) {
+    if (!this.playback) return;
+    this.clearPlayInterval();
+
+    const gameLoc = Loc.of(assignment.loc);
+    if (!gameLoc) return;
+
+    const cmd = new SetNum(gameLoc, assignment.num);
+    this.playback.addDeviation(cmd);
+
+    this.selectedLoc = null;
+    this.selectedFact = null;
+
+    this.updateFacts();
+  }
+
+  private exitDigression() {
+    if (this.playback) {
+      this.playback.clearDeviations();
+      this.updateFacts();
     }
   }
 
@@ -333,6 +419,23 @@ export class ReviewPage extends LitElement {
     this.selectedLoc = e.detail;
     if (this.selectedLoc) {
       const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
+
+      const isOnAlternatePath =
+        this.playback && this.playback.deviations.length > 0;
+      if (isOnAlternatePath) {
+        const assignments = relevantFacts
+          .map(getFactAssignment)
+          .filter((a): a is {loc: number; num: number} => a !== null);
+        const uniqueNums = Array.from(new Set(assignments.map(a => a.num)));
+        if (uniqueNums.length === 1) {
+          this.applySelectedFact({
+            loc: this.selectedLoc.index,
+            num: uniqueNums[0],
+          });
+          return;
+        }
+      }
+
       this.selectedFact = relevantFacts.length > 0 ? relevantFacts[0] : null;
     } else {
       this.selectedFact = null;
@@ -405,13 +508,24 @@ export class ReviewPage extends LitElement {
 
   override render() {
     if (!this.playback) return html`<div>Loading...</div>`;
-    const command = this.playback.currentCommand;
+
+    const combinedHistory = [
+      ...this.playback.history.slice(0, this.playback.index),
+      ...this.playback.deviations,
+    ];
+    const command =
+      combinedHistory.length > 0 ?
+        combinedHistory[combinedHistory.length - 1]
+      : undefined;
     const prevCommand =
-      this.playback.index >= 2 ?
-        this.playback.history[this.playback.index - 2]
+      combinedHistory.length >= 2 ?
+        combinedHistory[combinedHistory.length - 2]
       : undefined;
     const nextCommand =
-      this.playback.index < this.playback.history.length ?
+      (
+        this.playback.deviations.length === 0 &&
+        this.playback.index < this.playback.history.length
+      ) ?
         this.playback.history[this.playback.index]
       : undefined;
 
@@ -445,6 +559,9 @@ export class ReviewPage extends LitElement {
       }
     }
 
+    const assignment =
+      effectiveSelectedFact ? getFactAssignment(effectiveSelectedFact) : null;
+
     return html`
       <div id="top-panel">
         <icon-button
@@ -475,23 +592,45 @@ export class ReviewPage extends LitElement {
           .value=${this.playback.index.toString()}
           @input=${this.onScrub}
         />
-        <div class="move-counter">
-          Move ${this.playback.index} / ${this.playback.history.length}
+        <div
+          class="move-counter ${this.playback.deviations.length > 0 ?
+            'digression-active'
+          : ''}"
+        >
+          ${this.playback.deviations.length > 0 ?
+            html`Move ${this.playback.index}
+              <span class="deviation-count"
+                >+${this.playback.deviations.length}</span
+              >
+              / ${this.playback.history.length}`
+          : html`Move ${this.playback.index} / ${this.playback.history.length}`}
         </div>
+        ${this.playback.deviations.length > 0 ?
+          html`
+            <button
+              class="reset-digression-button"
+              @click=${this.exitDigression}
+            >
+              Exit Alternate Path
+            </button>
+          `
+        : ''}
         <div class="playback-controls">
           <icon-button
             @click=${() => this.stepBackward()}
             iconName="navigate_before"
             iconSize="large"
             title="Step backward"
-            ?disabled=${this.playback.index === 0}
+            ?disabled=${this.playback.index === 0 &&
+            this.playback.deviations.length === 0}
           ></icon-button>
           <icon-button
             @click=${this.skipBackward}
             iconName="skip_previous"
             iconSize="large"
             title="Skip backward"
-            ?disabled=${this.playback.index === 0}
+            ?disabled=${this.playback.index === 0 ||
+            this.playback.deviations.length > 0}
           ></icon-button>
           <icon-button
             @click=${this.playBackward}
@@ -499,7 +638,9 @@ export class ReviewPage extends LitElement {
             ?flip=${true}
             iconSize="large"
             title="Play backward"
-            ?disabled=${this.isPlayingBackward || this.playback.index === 0}
+            ?disabled=${this.isPlayingBackward ||
+            this.playback.index === 0 ||
+            this.playback.deviations.length > 0}
           ></icon-button>
           <icon-button
             @click=${this.pause}
@@ -514,21 +655,24 @@ export class ReviewPage extends LitElement {
             iconSize="large"
             title="Play forward"
             ?disabled=${this.isPlayingForward ||
-            this.playback.index === this.playback.history.length}
+            this.playback.index === this.playback.history.length ||
+            this.playback.deviations.length > 0}
           ></icon-button>
           <icon-button
             @click=${this.skipForward}
             iconName="skip_next"
             iconSize="large"
             title="Skip forward"
-            ?disabled=${this.playback.index === this.playback.history.length}
+            ?disabled=${this.playback.index === this.playback.history.length ||
+            this.playback.deviations.length > 0}
           ></icon-button>
           <icon-button
             @click=${() => this.stepForward()}
             iconName="navigate_next"
             iconSize="large"
             title="Step forward"
-            ?disabled=${this.playback.index === this.playback.history.length}
+            ?disabled=${this.playback.index === this.playback.history.length ||
+            this.playback.deviations.length > 0}
           ></icon-button>
         </div>
       </div>
@@ -563,6 +707,18 @@ export class ReviewPage extends LitElement {
       </div>
 
       ${this.renderSelectedFacts()}
+      ${assignment ?
+        html`
+          <div class="apply-fact-container">
+            <button
+              class="apply-fact-button"
+              @click=${() => this.applySelectedFact(assignment)}
+            >
+              Apply Fact to Grid
+            </button>
+          </div>
+        `
+      : ''}
 
       <div id="bottom-info">
         <h2>
@@ -594,7 +750,9 @@ export class ReviewPage extends LitElement {
         <div style="display: flex; flex-direction: column; gap: 6px;">
           ${relevantFacts.map(
             fact => html`
-              <label style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;">
+              <label
+                style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
+              >
                 <input
                   type="radio"
                   name="selectedFact"
