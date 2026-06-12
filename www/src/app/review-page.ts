@@ -560,7 +560,7 @@ export class ReviewPage extends LitElement {
     }
 
     const assignment =
-      effectiveSelectedFact ? getFactAssignment(effectiveSelectedFact) : null;
+      this.selectedFact ? getFactAssignment(this.selectedFact) : null;
 
     return html`
       <div id="top-panel">
