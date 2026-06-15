@@ -546,6 +546,32 @@ pub fn search_disproofs_native(
   }
 }
 
+#[wasm_bindgen(js_name = "calculateProductivity")]
+pub fn calculate_productivity(grid: &Grid, loc: Loc, num: Num) -> usize {
+  let mut base_ledger = match crate::solve::ledger::Ledger::new(grid) {
+    Ok(l) => l,
+    Err(_) => return 0,
+  };
+
+  if base_ledger.apply_implications().is_err() {
+    return 0;
+  }
+  let base_solved = 81 - base_ledger.unset().len();
+
+  let mut test_ledger = base_ledger;
+  test_ledger.eliminate(num, loc);
+  if test_ledger.apply_implications().is_err() {
+    return 0;
+  }
+  let new_solved = 81 - test_ledger.unset().len();
+
+  if new_solved > base_solved {
+    (new_solved - base_solved) as usize
+  } else {
+    0
+  }
+}
+
 #[wasm_bindgen(js_name = "searchDisproofs")]
 pub fn search_disproofs(
   grid: &Grid,
@@ -794,5 +820,28 @@ mod tests {
     }
     assert!(!found_l02_2);
     assert!(found_l02_3);
+  }
+
+  #[test]
+  fn test_calculate_productivity() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 1 5 6 | 7 8 9
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            4 . . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            . 4 . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .",
+    )
+    .unwrap();
+    // Candidates at L11 (R0C0): {2, 3}
+    // If we eliminate 2 (N2), L11 should be forced to 3 (N3), solving at least 1 cell.
+    let prod = calculate_productivity(&grid, L11, N2);
+    assert!(prod >= 1);
   }
 }

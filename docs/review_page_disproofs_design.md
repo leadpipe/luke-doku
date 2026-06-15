@@ -124,6 +124,8 @@ The `currentIndices` vector is incremented lexicographically. To avoid combinato
   - The speculative assignment(s) and the contradiction it leads to (e.g., _"Speculating 5 at R2C3 leads to a conflict for 5 in Row 2"_).
   - **Productivity**: An indicator showing how many cells can be solved using standard direct deductions once this disproof's elimination is applied (e.g., _"Productivity: +12 cells"_).
     - _Note on Productivity Calculation_: Because calculating downstream productivity for every found trail is computationally expensive, this is done **asynchronously in the background**. Disproofs initially appear with a loading state for their productivity score, and are re-sorted as the worker finishes calculating them.
+    - _WASM Optimization_: This is computed by calling the WASM function `calculateProductivity(grid, loc, num)`. This function is highly optimized via `Ledger` bitwise propagation and does not construct logical implication trees.
+
 
 ```
 +--------------------------------------------------+
@@ -194,12 +196,13 @@ The core logic for finding disproofs has been successfully implemented in the Ru
    - Any future combinations that contain an already `invalid_subset` are aggressively skipped, drastically reducing the search space for depth >= 2.
 4. **WASM Bindings**:
    - Exported `searchDisproofs` to WASM, which accepts the `Grid`, a `SearchProgress` object, `maxDepth`, and `maxTimeMs`.
+   - Exported `calculateProductivity` to WASM to calculate a single-antecedent disproof's productivity asynchronously.
    - `ts-rs` macros automatically export TypeScript definitions (`SearchProgress`, `SearchDisproofsResult`, etc.) to the `www/src/facts/` directory.
 5. **Testing**:
-   - Covered by a full suite of unit tests, including tests for combinations at depth 1 and depth 2 (conflicts).
+   - Covered by a full suite of unit tests, including tests for combinations at depth 1 and depth 2 (conflicts), and a test for `calculateProductivity` verifying downstream propagation counts.
 
 ### What Remains (Frontend & Integration):
 - Integrating `searchDisproofs` in a Web Worker (or equivalent) in the TS frontend to prevent blocking the UI.
 - Managing the `SearchProgress` state between worker calls based on the active step in the review timeline.
-- Calculating "Productivity" for found disproofs in the background.
+- Integrating the asynchronous `calculateProductivity` calls on the Web Worker background thread.
 - Building the UI panels ("Logical Trails"), Trail Preview Mode, and applying multi-antecedent constraints visually to the board.

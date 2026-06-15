@@ -75,6 +75,11 @@ impl Ledger {
     eliminate_peers_in_plane(self.asgmts.num_plane(num), loc);
   }
 
+  /// Eliminates a specific candidate (numeral at location) from the ledger's possibilities.
+  pub fn eliminate(&mut self, num: Num, loc: Loc) {
+    self.asgmts.remove(Asgmt { num, loc });
+  }
+
   /// Assigns the given numeral to the given location, then applies all
   /// following implied assignments.  Returns an error if it's an invalid
   /// Sudoku, or the set of locations that have just two possible assignments.
