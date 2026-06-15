@@ -1,5 +1,5 @@
 [package]
-name = "luke-doku"
+name = "luke-doku-rust"
 version = "1.0.0"
 edition = "2021"
 description = "Unlimited Sudoku on any device."
@@ -7,6 +7,7 @@ repository = "https://github.com/leadpipe/luke-doku/"
 license = "Apache-2.0"
 
 [lib]
+name = "luke_doku"
 crate-type = ["cdylib", "rlib"]
 
 [dependencies]
