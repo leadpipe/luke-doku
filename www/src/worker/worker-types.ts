@@ -1,3 +1,5 @@
+import type {Fact} from '../facts/Fact';
+import type {SearchProgress} from '../facts/SearchProgress';
 import * as wasm from '../wasm';
 
 export enum ToWorkerMessageType {
@@ -6,6 +8,8 @@ export enum ToWorkerMessageType {
   TEST_PUZZLE = 'TEST_PUZZLE',
   FIND_SYMMETRIES = 'FIND_SYMMETRIES',
   DEDUCE_FACTS = 'DEDUCE_FACTS',
+  SEARCH_DISPROOFS = 'SEARCH_DISPROOFS',
+  CALCULATE_PRODUCTIVITY = 'CALCULATE_PRODUCTIVITY',
 }
 
 interface ToWorkerMessageBase {
@@ -57,12 +61,46 @@ export interface DeduceFactsMessage extends ToWorkerMessageBase {
   readonly maxTimeMs: number;
 }
 
+export interface SearchDisproofsMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.SEARCH_DISPROOFS;
+
+  /** The current grid state, in GridString form. */
+  readonly grid: string;
+
+  /** The puzzle solutions, in GridString form, to avoid disproving assignments that are part of the solution. */
+  readonly solutions?: readonly string[];
+
+  /** The current search progress, to resume from. */
+  readonly progress?: SearchProgress;
+
+  /** The maximum depth of combinations to search. */
+  readonly maxDepth?: number;
+
+  /** The maximum execution time for this slice, in milliseconds. */
+  readonly maxTimeMs?: number;
+}
+
+export interface CalculateProductivityMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.CALCULATE_PRODUCTIVITY;
+
+  /** The current grid state, in GridString form. */
+  readonly grid: string;
+
+  /** The location (cell index 0-80) of the elimination. */
+  readonly loc: number;
+
+  /** The candidate number (1-9) to eliminate. */
+  readonly num: number;
+}
+
 export type ToWorkerMessage =
   | GeneratePuzzleMessage
   | EvaluatePuzzleMessage
   | TestPuzzleMessage
   | FindSymmetriesMessage
-  | DeduceFactsMessage;
+  | DeduceFactsMessage
+  | SearchDisproofsMessage
+  | CalculateProductivityMessage;
 
 export enum FromWorkerMessageType {
   ERROR_CAUGHT = 'ERROR_CAUGHT',
@@ -71,6 +109,8 @@ export enum FromWorkerMessageType {
   PUZZLE_TESTED = 'PUZZLE_TESTED',
   SYMMETRIES_FOUND = 'SYMMETRIES_FOUND',
   FACTS_DEDUCED = 'FACTS_DEDUCED',
+  DISPROOFS_SEARCHED = 'DISPROOFS_SEARCHED',
+  PRODUCTIVITY_CALCULATED = 'PRODUCTIVITY_CALCULATED',
 }
 
 interface FromWorkerMessageBase {
@@ -184,8 +224,6 @@ export interface SymmetriesFoundMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
-import type { Fact } from '../facts/Fact';
-
 export interface FactsDeducedMessage extends FromWorkerMessageBase {
   readonly toWorkerMessage: DeduceFactsMessage;
   readonly type: FromWorkerMessageType.FACTS_DEDUCED;
@@ -200,10 +238,37 @@ export interface FactsDeducedMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+export interface DisproofsSearchedMessage extends FromWorkerMessageBase {
+  readonly type: FromWorkerMessageType.DISPROOFS_SEARCHED;
+  readonly toWorkerMessage: SearchDisproofsMessage;
+
+  /** The facts deduced from the disproof search. */
+  readonly disproofs: readonly Fact[];
+
+  /** The progress of the disproof search. */
+  readonly progress: SearchProgress;
+
+  /** How long the search slice took, in milliseconds. */
+  readonly elapsedMs: number;
+}
+
+export interface ProductivityCalculatedMessage extends FromWorkerMessageBase {
+  readonly type: FromWorkerMessageType.PRODUCTIVITY_CALCULATED;
+  readonly toWorkerMessage: CalculateProductivityMessage;
+
+  /** The productivity of the candidate disproof (number of downstream solved cells). */
+  readonly productivity: number;
+
+  /** How long the calculation took, in milliseconds. */
+  readonly elapsedMs: number;
+}
+
 export type FromWorkerMessage =
   | ErrorCaughtMessage
   | PuzzleGeneratedMessage
   | PuzzleEvaluatedMessage
   | PuzzleTestedMessage
   | SymmetriesFoundMessage
-  | FactsDeducedMessage;
+  | FactsDeducedMessage
+  | DisproofsSearchedMessage
+  | ProductivityCalculatedMessage;

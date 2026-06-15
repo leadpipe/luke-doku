@@ -1,6 +1,8 @@
+import type {SearchDisproofsResult} from '../facts/SearchDisproofsResult';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 import {
+  type CalculateProductivityMessage,
   type DeduceFactsMessage,
   type ErrorCaughtMessage,
   type EvaluatePuzzleMessage,
@@ -9,6 +11,7 @@ import {
   FromWorkerMessageType,
   GeneratePuzzleMessage,
   PuzzleGeneratedMessage,
+  type SearchDisproofsMessage,
   type TestPuzzleMessage,
   ToWorkerMessage,
   ToWorkerMessageType,
@@ -36,6 +39,12 @@ export async function handleToWorkerMessage(
       break;
     case ToWorkerMessageType.DEDUCE_FACTS:
       scope.postMessage(deduceFacts(message));
+      break;
+    case ToWorkerMessageType.SEARCH_DISPROOFS:
+      scope.postMessage(searchDisproofs(message));
+      break;
+    case ToWorkerMessageType.CALCULATE_PRODUCTIVITY:
+      scope.postMessage(calculateProductivity(message));
       break;
     default:
       ensureExhaustiveSwitch(messageType);
@@ -218,6 +227,79 @@ function toErrorCaught(
   return answer;
 }
 
+function searchDisproofs(m: SearchDisproofsMessage): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'searchDisproofs', new Error('Invalid grid'));
+  }
+  let solutions: wasm.SolvedGrid[] | undefined;
+  const startTimeMs = performance.now();
+  try {
+    if (m.solutions) {
+      solutions = [];
+      for (const s of m.solutions) {
+        const sg = wasm.Grid.newFromString(s)?.solvedGrid();
+        if (sg) {
+          solutions.push(sg);
+        }
+      }
+    }
+    const result = wasm.searchDisproofs(
+      grid,
+      solutions,
+      m.progress,
+      m.maxDepth,
+      m.maxTimeMs,
+    ) as SearchDisproofsResult;
+
+    // Once wasm.searchDisproofs succeeds, ownership of `solutions` has been transferred to WASM/Rust.
+    // We set solutions to undefined so we don't try to free them in finally.
+    solutions = undefined;
+
+    const elapsedMs = performance.now() - startTimeMs;
+    return {
+      type: FromWorkerMessageType.DISPROOFS_SEARCHED,
+      toWorkerMessage: m,
+      disproofs: result.disproofs,
+      progress: result.progress,
+      elapsedMs,
+    };
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'searchDisproofs', e);
+  } finally {
+    grid.free();
+    if (solutions) {
+      for (const sg of solutions) {
+        sg.free();
+      }
+    }
+  }
+}
+
+function calculateProductivity(
+  m: CalculateProductivityMessage,
+): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'calculateProductivity', new Error('Invalid grid'));
+  }
+  const startTimeMs = performance.now();
+  try {
+    const productivity = wasm.calculateProductivity(grid, m.loc, m.num);
+    const elapsedMs = performance.now() - startTimeMs;
+    return {
+      type: FromWorkerMessageType.PRODUCTIVITY_CALCULATED,
+      toWorkerMessage: m,
+      productivity,
+      elapsedMs,
+    };
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'calculateProductivity', e);
+  } finally {
+    grid.free();
+  }
+}
+
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
  * we'll still count as matching it.
@@ -231,4 +313,6 @@ export const TEST_ONLY = {
   generatePuzzle,
   evaluatePuzzle,
   testPuzzle,
+  searchDisproofs,
+  calculateProductivity,
 };
