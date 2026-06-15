@@ -387,13 +387,20 @@ fn get_speculative_antecedents(fact: &Fact, antecedents: &mut Vec<Asgmt>) {
 
 pub fn search_disproofs_native(
   grid: &Grid,
+  solutions: &[SolvedGrid],
   progress: Option<SearchProgress>,
   max_depth: Option<u32>,
   max_time_ms: Option<f64>,
 ) -> SearchDisproofsResult {
   let max_depth = max_depth.unwrap_or(2);
   let base_finder = FactFinder::new(grid);
-  let mut candidates: Vec<Asgmt> = base_finder.remaining_asgmts.iter().collect();
+  let mut solutions_asgmt_set = AsgmtSet::new();
+  for solution in solutions {
+    solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
+  }
+  let mut candidates: Vec<Asgmt> = (base_finder.remaining_asgmts - solutions_asgmt_set)
+    .iter()
+    .collect();
   candidates.sort();
 
   let mut progress = progress.unwrap_or_else(|| SearchProgress {
@@ -505,6 +512,7 @@ pub fn search_disproofs_native(
 #[wasm_bindgen(js_name = "searchDisproofs")]
 pub fn search_disproofs(
   grid: &Grid,
+  solutions: Option<Vec<SolvedGrid>>,
   progress: wasm_bindgen::JsValue,
   max_depth: Option<u32>,
   max_time_ms: Option<f64>,
@@ -515,7 +523,8 @@ pub fn search_disproofs(
     Some(serde_wasm_bindgen::from_value(progress).unwrap())
   };
 
-  let result = search_disproofs_native(grid, progress, max_depth, max_time_ms);
+  let solutions = solutions.unwrap_or_default();
+  let result = search_disproofs_native(grid, &solutions, progress, max_depth, max_time_ms);
   serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
@@ -584,7 +593,7 @@ mod tests {
     // Speculative L02=2 should lead to L00=3, L01=3 (Conflict)
     // Speculative L02=3 should lead to L00=2, L01=2 (Conflict)
 
-    let res = search_disproofs_native(&grid, None, Some(1), Some(1000.0));
+    let res = search_disproofs_native(&grid, &[], None, Some(1), Some(1000.0));
 
     assert!(!res.disproofs.is_empty());
 
@@ -646,7 +655,7 @@ mod tests {
       invalid_subsets: Vec::new(),
       is_complete: false,
     };
-    let res = search_disproofs_native(&grid, Some(progress), Some(2), Some(2000.0));
+    let res = search_disproofs_native(&grid, &[], Some(progress), Some(2), Some(2000.0));
 
     assert!(!res.disproofs.is_empty());
 
@@ -682,5 +691,72 @@ mod tests {
       }
     }
     assert!(found_depth_2_conflict);
+  }
+
+  #[test]
+  fn test_search_disproofs_excludes_solution() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 1 5 6 | 7 8 9
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            4 . . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            . 4 . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .",
+    )
+    .unwrap();
+
+    // In a normal search (without solutions), both L02=2 and L02=3 are found as disproofs.
+    // Let's pass a solution that assigns L02=2 (using the swapped solved grid).
+    let solved_str = r"
+      4 3 2 | 1 5 6 | 7 8 9
+      1 5 6 | 7 8 9 | 4 3 2
+      7 8 9 | 4 3 2 | 1 5 6
+      ------+------+------
+      2 1 4 | 3 6 5 | 8 9 7
+      3 6 5 | 8 9 7 | 2 1 4
+      8 9 7 | 2 1 4 | 3 6 5
+      ------+------+------
+      5 7 8 | 9 4 3 | 6 2 1
+      9 4 3 | 6 2 1 | 5 7 8
+      6 2 1 | 5 7 8 | 9 4 3
+    ";
+    let solved_grid = Grid::from_str(solved_str).unwrap();
+    let solved_sg = SolvedGrid::try_from(&solved_grid).unwrap();
+
+    let res = search_disproofs_native(&grid, &[solved_sg], None, Some(1), Some(1000.0));
+
+    // We should NOT find the disproof for L02=2, but we SHOULD still find the disproof for L02=3.
+    let mut found_l02_2 = false;
+    let mut found_l02_3 = false;
+
+    for fact in &res.disproofs {
+      if let Fact::Implication {
+        antecedents,
+        consequent,
+      } = fact
+      {
+        if antecedents.len() == 1 {
+          if let Fact::SpeculativeAssignment { loc, num } = &antecedents[0] {
+            if loc.index() == 2 {
+              if num.index() == 1 {
+                found_l02_2 = true;
+                assert!(consequent.is_error());
+              } else if num.index() == 2 {
+                found_l02_3 = true;
+                assert!(consequent.is_error());
+              }
+            }
+          }
+        }
+      }
+    }
+    assert!(!found_l02_2);
+    assert!(found_l02_3);
   }
 }
