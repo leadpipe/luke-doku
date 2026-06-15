@@ -178,9 +178,9 @@ For multi-antecedent disproofs (e.g., $A \wedge B \implies \bot$), the constrain
 
 ---
 
-## 5. Implementation Status: Rust Backend (Completed)
+## 5. Implementation Status: Rust Backend & Worker Layer (Completed)
 
-The core logic for finding disproofs has been successfully implemented in the Rust backend (`crate/src/deduce.rs` and `crate/src/deduce/internals.rs`). This lays the foundation for the frontend to consume and display these logical trails.
+The core logic for finding disproofs has been successfully implemented in the Rust backend (`crate/src/deduce.rs` and `crate/src/deduce/internals.rs`), and the background processing architecture is integrated in the TS frontend.
 
 ### What is Completed:
 1. **Fact Representation**: 
@@ -198,11 +198,14 @@ The core logic for finding disproofs has been successfully implemented in the Ru
    - Exported `searchDisproofs` to WASM, which accepts the `Grid`, a `SearchProgress` object, `maxDepth`, and `maxTimeMs`.
    - Exported `calculateProductivity` to WASM to calculate a single-antecedent disproof's productivity asynchronously.
    - `ts-rs` macros automatically export TypeScript definitions (`SearchProgress`, `SearchDisproofsResult`, etc.) to the `www/src/facts/` directory.
-5. **Testing**:
-   - Covered by a full suite of unit tests, including tests for combinations at depth 1 and depth 2 (conflicts), and a test for `calculateProductivity` verifying downstream propagation counts.
+5. **Web Worker Integration**:
+   - Integrated `searchDisproofs` and `calculateProductivity` in the Web Worker (`www/src/worker/puzzle-worker.ts`).
+   - Exposed them in `puzzle-service.ts` via `requestDisproofSearch` and `requestProductivityCalculation`.
+6. **Multi-Threaded Worker Queue Strategy**:
+   - Added two dedicated Web Worker threads (`disproofsQueue` and `productivityQueue`) to allow running disproof searches and productivity updates in parallel without blocking standard deduction calculations or puzzle generation tasks.
+7. **Testing**:
+   - Covered by a full suite of Rust unit tests and TypeScript Web Worker unit tests (`www/src/worker/puzzle-worker.test.ts`).
 
-### What Remains (Frontend & Integration):
-- Integrating `searchDisproofs` in a Web Worker (or equivalent) in the TS frontend to prevent blocking the UI.
+### What Remains (Frontend UI):
 - Managing the `SearchProgress` state between worker calls based on the active step in the review timeline.
-- Integrating the asynchronous `calculateProductivity` calls on the Web Worker background thread.
 - Building the UI panels ("Logical Trails"), Trail Preview Mode, and applying multi-antecedent constraints visually to the board.
