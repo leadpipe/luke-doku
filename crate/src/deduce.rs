@@ -322,11 +322,16 @@ fn find_subset_largest_element_index(subset: &[usize], combination: &[usize]) ->
   }
 }
 
-fn advance_search(combination: &mut Vec<usize>, invalid_subsets: &[Vec<usize>], k: usize) -> bool {
+fn advance_search(
+  combination: &mut Vec<usize>,
+  invalid_subsets: &[Vec<usize>],
+  conflict_p: Option<usize>,
+  k: usize,
+) -> bool {
   if combination.is_empty() {
     return false;
   }
-  let mut min_p = None;
+  let mut min_p = conflict_p;
   for subset in invalid_subsets {
     if let Some(p) = find_subset_largest_element_index(subset, combination) {
       match min_p {
@@ -356,6 +361,21 @@ fn advance_search(combination: &mut Vec<usize>, invalid_subsets: &[Vec<usize>], 
       }
       p -= 1;
     }
+  }
+}
+
+fn increment_depth(progress: &mut SearchProgress, max_depth: u32, candidates_len: usize) -> bool {
+  progress.depth += 1;
+  if progress.depth > max_depth {
+    progress.is_complete = true;
+    return false;
+  }
+  if candidates_len >= progress.depth as usize {
+    progress.current_indices = (0..progress.depth as usize).collect();
+    true
+  } else {
+    progress.is_complete = true;
+    false
   }
 }
 
@@ -441,6 +461,31 @@ pub fn search_disproofs_native(
       break;
     }
 
+    // Check for internal compatibility among the current combination of candidates.
+    let mut incompatible_at = None;
+    let mut foreclosed = AsgmtSet::new();
+    for p in 0..progress.current_indices.len() {
+      let asgmt = candidates[progress.current_indices[p]];
+      if foreclosed.contains(asgmt) {
+        incompatible_at = Some(p);
+        break;
+      }
+      foreclosed |= asgmt.to_eliminations();
+    }
+
+    if let Some(p) = incompatible_at {
+      if !advance_search(
+        &mut progress.current_indices,
+        &progress.invalid_subsets,
+        Some(p),
+        candidates.len(),
+      ) && !increment_depth(&mut progress, max_depth, candidates.len())
+      {
+        break;
+      }
+      continue;
+    }
+
     let spec_asgmts: Vec<Asgmt> = progress
       .current_indices
       .iter()
@@ -487,19 +532,11 @@ pub fn search_disproofs_native(
     if !advance_search(
       &mut progress.current_indices,
       &progress.invalid_subsets,
+      None,
       candidates.len(),
-    ) {
-      progress.depth += 1;
-      if progress.depth > max_depth {
-        progress.is_complete = true;
-        break;
-      }
-      if candidates.len() >= progress.depth as usize {
-        progress.current_indices = (0..progress.depth as usize).collect();
-      } else {
-        progress.is_complete = true;
-        break;
-      }
+    ) && !increment_depth(&mut progress, max_depth, candidates.len())
+    {
+      break;
     }
   }
 
@@ -551,19 +588,19 @@ mod tests {
   fn test_advance_search() {
     let mut comb = vec![0, 3, 5];
     let invalid = vec![vec![0, 3]];
-    let ok = advance_search(&mut comb, &invalid, 10);
+    let ok = advance_search(&mut comb, &invalid, None, 10);
     assert!(ok);
     assert_eq!(comb, vec![0, 4, 5]);
 
     let mut comb2 = vec![2, 7, 9];
     let invalid2 = vec![vec![2, 9]];
-    let ok2 = advance_search(&mut comb2, &invalid2, 10);
+    let ok2 = advance_search(&mut comb2, &invalid2, None, 10);
     assert!(ok2);
     assert_eq!(comb2, vec![2, 8, 9]);
 
     let mut comb3 = vec![7, 8, 9];
     let invalid3 = vec![vec![7, 8, 9]];
-    let ok3 = advance_search(&mut comb3, &invalid3, 10);
+    let ok3 = advance_search(&mut comb3, &invalid3, None, 10);
     assert!(!ok3); // exhausted
   }
 
@@ -634,59 +671,58 @@ mod tests {
             . . . | . . . | . . .
             . . . | . . . | . . .
             - - - + - - - + - - -
+            4 . . | . . . | . . .
             . . . | . . . | . . .
-            . . . | . . . | . . .
-            . . . | . . . | . . .
+            . . 2 | . . . | . . .
             - - - + - - - + - - -
-            . . . | . . . | . . .
+            . 3 . | . . . | . . .
             . . . | . . . | . . .
             . . . | . . . | . . .",
     )
     .unwrap();
 
-    // R0C0 and R0C1 are empty. They don't have 4 in their columns.
-    // 4 is a valid candidate for both R0C0 and R0C1.
-    // Speculatively assigning 4 to R0C0 AND 4 to R0C1 should lead to a conflict (two 4s in Row 0).
-    // This requires depth 2.
+    let finder = FactFinder::new(&grid);
+    let mut solutions_asgmt_set = AsgmtSet::new();
+    let mut candidates: Vec<Asgmt> = (finder.remaining_asgmts - solutions_asgmt_set)
+      .iter()
+      .collect();
+    candidates.sort();
+
+    let target1 = Asgmt::new(N2, L11); // R0C0 = 2
+    let target2 = Asgmt::new(N4, L13); // R0C2 = 4
+
+    let idx1 = candidates.iter().position(|&c| c == target1).unwrap();
+    let idx2 = candidates.iter().position(|&c| c == target2).unwrap();
+
+    let mut current_indices = vec![idx1, idx2];
+    current_indices.sort();
 
     let progress = SearchProgress {
       depth: 2,
-      current_indices: vec![0, 1],
+      current_indices,
       invalid_subsets: Vec::new(),
       is_complete: false,
     };
+
     let res = search_disproofs_native(&grid, &[], Some(progress), Some(2), Some(2000.0));
 
     assert!(!res.disproofs.is_empty());
 
     let mut found_depth_2_conflict = false;
     for fact in &res.disproofs {
-      if let Fact::Implication {
-        antecedents,
-        consequent,
-      } = fact
-      {
-        if antecedents.len() == 2 {
-          if let (
-            Fact::SpeculativeAssignment {
-              loc: loc1,
-              num: num1,
-            },
-            Fact::SpeculativeAssignment {
-              loc: loc2,
-              num: num2,
-            },
-          ) = (&antecedents[0], &antecedents[1])
-          {
-            if num1.index() == num2.index() {
-              // They should both be the same number, and they should be in row 0
-              assert!(
-                loc1.row() == loc2.row() || loc1.col() == loc2.col() || loc1.blk() == loc2.blk()
-              );
-              found_depth_2_conflict = true;
-              assert!(consequent.is_error());
-            }
-          }
+      let mut error_ants = Vec::new();
+      get_speculative_antecedents(fact, &mut error_ants);
+      if error_ants.len() == 2 {
+        let asgmt1 = error_ants[0];
+        let asgmt2 = error_ants[1];
+        // Verify we found the expected pair (R0C0=2 and R0C2=4, in either order)
+        let is_r0c0_2 = asgmt1.loc.index() == 0 && asgmt1.num.index() == 1;
+        let is_r0c2_4 = asgmt2.loc.index() == 2 && asgmt2.num.index() == 3;
+        let is_r0c0_2_rev = asgmt2.loc.index() == 0 && asgmt2.num.index() == 1;
+        let is_r0c2_4_rev = asgmt1.loc.index() == 2 && asgmt1.num.index() == 3;
+        if (is_r0c0_2 && is_r0c2_4) || (is_r0c0_2_rev && is_r0c2_4_rev) {
+          found_depth_2_conflict = true;
+          assert!(fact.is_error());
         }
       }
     }
