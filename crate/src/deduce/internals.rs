@@ -106,16 +106,88 @@ impl Collector {
 
       if !antecedents.is_empty() {
         for fact in self.facts[start..].iter_mut() {
-          *fact = Fact::Implication {
-            antecedents: narrow_antecedents(
-              &fact,
-              antecedents.as_slice(),
-              &antecedent_eliminations,
-              remaining_asgmts,
-              sukaku_map,
-            ),
-            consequent: Box::new(fact.clone()),
-          };
+          let required = narrow_antecedents(
+            &fact,
+            antecedents.as_slice(),
+            &antecedent_eliminations,
+            remaining_asgmts,
+            sukaku_map,
+          );
+          if !required.is_empty() {
+            *fact = Fact::Implication {
+              antecedents: required,
+              consequent: Box::new(fact.clone()),
+            };
+          }
+        }
+      }
+      if eliminations_start == eliminations_end {
+        break;
+      }
+      antecedents = self.facts[eliminations_start..eliminations_end].to_vec();
+      antecedent_eliminations = eliminations.clone();
+      remaining_asgmts = self.remaining_asgmts;
+      sukaku_map = self.sukaku_map;
+      let all_eliminated_asgmts = eliminations.iter().fold(AsgmtSet::new(), |acc, x| acc | *x);
+      self.remaining_asgmts -= all_eliminated_asgmts;
+      self.sukaku_map.eliminate(&all_eliminated_asgmts);
+    }
+    Ok(())
+  }
+
+  pub fn collect_with_speculative(
+    &mut self,
+    speculative_facts: Vec<Fact>,
+    base_remaining_asgmts: AsgmtSet,
+    base_sukaku_map: SukakuMap,
+  ) -> Result<(), Invalid> {
+    let mut antecedents = speculative_facts;
+    let mut antecedent_eliminations: Vec<AsgmtSet> = antecedents
+      .iter()
+      .map(|fact| fact.as_eliminations())
+      .collect();
+    let mut remaining_asgmts = base_remaining_asgmts;
+    let mut sukaku_map = base_sukaku_map;
+    let mut set_state = SetState::new();
+    loop {
+      if self.check_timeout() {
+        break;
+      }
+      let start = self.facts.len();
+      find_errors(self, false)?;
+      let eliminations_start = self.facts.len();
+      find_overlaps(self);
+      if self.check_timeout() {
+        break;
+      }
+      find_subsets(self, &mut set_state);
+      if self.check_timeout() {
+        break;
+      }
+      let eliminations_end = self.facts.len();
+      find_hidden_singles(self);
+      find_naked_singles(self);
+
+      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+
+      if !antecedents.is_empty() {
+        for fact in self.facts[start..].iter_mut() {
+          let required = narrow_antecedents(
+            &fact,
+            antecedents.as_slice(),
+            &antecedent_eliminations,
+            remaining_asgmts,
+            sukaku_map,
+          );
+          if !required.is_empty() {
+            *fact = Fact::Implication {
+              antecedents: required,
+              consequent: Box::new(fact.clone()),
+            };
+          }
         }
       }
       if eliminations_start == eliminations_end {
@@ -167,7 +239,6 @@ fn narrow_antecedents(
     }
   }
   result.reverse();
-  assert!(!result.is_empty(), "Antecedents can't be empty");
   result
 }
 
@@ -216,7 +287,10 @@ impl Fact {
           }
         }
       }
-      Fact::SpeculativeAssignment { .. } | Fact::Conflict { .. } => (),
+      Fact::Conflict { num, locs, .. } => {
+        return !(eliminations.num_locs(*num) & *locs).is_empty();
+      }
+      Fact::SpeculativeAssignment { .. } => (),
     }
     false
   }
@@ -341,16 +415,19 @@ fn find_overlaps(collector: &mut Collector) {
         .collect();
       if !antecedents.is_empty() {
         for fact in collector.facts[start..].iter_mut() {
-          *fact = Fact::Implication {
-            antecedents: narrow_antecedents(
-              &fact,
-              antecedents.as_slice(),
-              &antecedent_eliminations,
-              prev_remaining_asgmts,
-              collector.sukaku_map,
-            ),
-            consequent: Box::new(fact.clone()),
-          };
+          let required = narrow_antecedents(
+            &fact,
+            antecedents.as_slice(),
+            &antecedent_eliminations,
+            prev_remaining_asgmts,
+            collector.sukaku_map,
+          );
+          if !required.is_empty() {
+            *fact = Fact::Implication {
+              antecedents: required,
+              consequent: Box::new(fact.clone()),
+            };
+          }
         }
       }
       if start == collector.facts.len() {
