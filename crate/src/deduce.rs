@@ -273,9 +273,70 @@ pub struct DeduceResult {
   pub timed_out: bool,
 }
 
+#[derive(Deserialize)]
+pub struct WasmAsgmt {
+  pub loc: i8,
+  pub num: i8,
+}
+
+pub fn apply_constraints(finder: &mut FactFinder, constraints: &[Vec<WasmAsgmt>]) {
+  let mut changed = true;
+  while changed {
+    changed = false;
+    for constraint in constraints {
+      let mut active_asgmts = Vec::new();
+      let mut inactive_asgmts = Vec::new();
+
+      for wa in constraint {
+        let asgmt = Asgmt::new(Num::new(wa.num).unwrap(), Loc::new(wa.loc).unwrap());
+        if finder.actual_asgmts.contains(asgmt) {
+          active_asgmts.push(asgmt);
+        } else if finder.remaining_asgmts.contains(asgmt) {
+          inactive_asgmts.push(asgmt);
+        }
+      }
+
+      if active_asgmts.len() == constraint.len() {
+        finder.remaining_asgmts = AsgmtSet::new();
+        changed = false;
+        break;
+      } else if active_asgmts.len() == constraint.len() - 1 && inactive_asgmts.len() == 1 {
+        let target = inactive_asgmts[0];
+        let mut elim_set = AsgmtSet::new();
+        elim_set.insert(target);
+        finder.remaining_asgmts -= elim_set;
+        finder.sukaku_map.eliminate(&elim_set);
+        changed = true;
+      } else if constraint.len() == 1 && inactive_asgmts.len() == 1 {
+        let target = inactive_asgmts[0];
+        let mut elim_set = AsgmtSet::new();
+        elim_set.insert(target);
+        finder.remaining_asgmts -= elim_set;
+        finder.sukaku_map.eliminate(&elim_set);
+        changed = true;
+      }
+    }
+  }
+}
+
 #[wasm_bindgen(js_name = "deduceFacts")]
-pub fn deduce_facts(grid: &Grid, max_time_ms: Option<f64>) -> wasm_bindgen::JsValue {
-  let finder = FactFinder::new(grid);
+pub fn deduce_facts(
+  grid: &Grid,
+  eliminations: wasm_bindgen::JsValue,
+  max_time_ms: Option<f64>,
+) -> wasm_bindgen::JsValue {
+  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
+    if eliminations.is_undefined() || eliminations.is_null() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+    };
+
+  let mut finder = FactFinder::new(grid);
+  if let Some(ref c) = constraints {
+    apply_constraints(&mut finder, c);
+  }
+
   let (facts, timed_out) = finder.deduce_all_with_timeout(max_time_ms);
   serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
@@ -388,8 +449,7 @@ fn increment_depth(progress: &mut SearchProgress, max_depth: u32, candidates_len
 fn get_speculative_antecedents(fact: &Fact, antecedents: &mut Vec<Asgmt>) {
   match fact {
     Fact::Implication {
-      antecedents: ants,
-      ..
+      antecedents: ants, ..
     } => {
       for ant in ants {
         get_speculative_antecedents(ant, antecedents);
@@ -406,14 +466,14 @@ fn get_speculative_antecedents(fact: &Fact, antecedents: &mut Vec<Asgmt>) {
 }
 
 pub fn search_disproofs_native(
-  grid: &Grid,
+  base_finder: FactFinder,
   solutions: &[SolvedGrid],
   progress: Option<SearchProgress>,
   max_depth: Option<u32>,
   max_time_ms: Option<f64>,
+  constraints: Option<&[Vec<WasmAsgmt>]>,
 ) -> SearchDisproofsResult {
   let max_depth = max_depth.unwrap_or(2);
-  let base_finder = FactFinder::new(grid);
   let mut solutions_asgmt_set = AsgmtSet::new();
   for solution in solutions {
     solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
@@ -504,6 +564,9 @@ pub fn search_disproofs_native(
     for &asgmt in &spec_asgmts {
       speculative_finder.apply(asgmt);
     }
+    if let Some(c) = constraints {
+      apply_constraints(&mut speculative_finder, c);
+    }
 
     let deduced_facts = speculative_finder.deduce_with_speculative(
       speculative_facts,
@@ -576,18 +639,38 @@ pub fn calculate_productivity(grid: &Grid, loc: Loc, num: Num) -> usize {
 pub fn search_disproofs(
   grid: &Grid,
   solutions: Option<Vec<SolvedGrid>>,
+  eliminations: wasm_bindgen::JsValue,
   progress: wasm_bindgen::JsValue,
   max_depth: Option<u32>,
   max_time_ms: Option<f64>,
 ) -> wasm_bindgen::JsValue {
+  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
+    if eliminations.is_undefined() || eliminations.is_null() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+    };
+
   let progress: Option<SearchProgress> = if progress.is_undefined() || progress.is_null() {
     None
   } else {
     Some(serde_wasm_bindgen::from_value(progress).unwrap())
   };
 
+  let mut base_finder = FactFinder::new(grid);
+  if let Some(ref c) = constraints {
+    apply_constraints(&mut base_finder, c);
+  }
+
   let solutions = solutions.unwrap_or_default();
-  let result = search_disproofs_native(grid, &solutions, progress, max_depth, max_time_ms);
+  let result = search_disproofs_native(
+    base_finder,
+    &solutions,
+    progress,
+    max_depth,
+    max_time_ms,
+    constraints.as_deref(),
+  );
   serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
@@ -656,7 +739,14 @@ mod tests {
     // Speculative L02=2 should lead to L00=3, L01=3 (Conflict)
     // Speculative L02=3 should lead to L00=2, L01=2 (Conflict)
 
-    let res = search_disproofs_native(&grid, &[], None, Some(1), Some(1000.0));
+    let res = search_disproofs_native(
+      FactFinder::new(&grid),
+      &[],
+      None,
+      Some(1),
+      Some(1000.0),
+      None,
+    );
 
     assert!(!res.disproofs.is_empty());
 
@@ -730,7 +820,14 @@ mod tests {
       is_complete: false,
     };
 
-    let res = search_disproofs_native(&grid, &[], Some(progress), Some(2), Some(2000.0));
+    let res = search_disproofs_native(
+      FactFinder::new(&grid),
+      &[],
+      Some(progress),
+      Some(2),
+      Some(2000.0),
+      None,
+    );
 
     assert!(!res.disproofs.is_empty());
 
@@ -791,7 +888,14 @@ mod tests {
     let solved_grid = Grid::from_str(solved_str).unwrap();
     let solved_sg = SolvedGrid::try_from(&solved_grid).unwrap();
 
-    let res = search_disproofs_native(&grid, &[solved_sg], None, Some(1), Some(1000.0));
+    let res = search_disproofs_native(
+      FactFinder::new(&grid),
+      &[solved_sg],
+      None,
+      Some(1),
+      Some(1000.0),
+      None,
+    );
 
     // We should NOT find the disproof for L02=2, but we SHOULD still find the disproof for L02=3.
     let mut found_l02_2 = false;
@@ -844,4 +948,78 @@ mod tests {
     let prod = calculate_productivity(&grid, L11, N2);
     assert!(prod >= 1);
   }
+
+  #[test]
+  fn test_apply_constraints_single() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 1 5 6 | 7 8 9
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            4 . . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            . 4 . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .",
+    )
+    .unwrap();
+    let mut finder = FactFinder::new(&grid);
+    let target_asg = Asgmt::new(N2, L11);
+    assert!(finder.remaining_asgmts.contains(target_asg));
+
+    let constraints = vec![vec![WasmAsgmt {
+      loc: L11.index() as i8,
+      num: N2.get(),
+    }]];
+    apply_constraints(&mut finder, &constraints);
+    assert!(!finder.remaining_asgmts.contains(target_asg));
+  }
+
+  #[test]
+  fn test_apply_constraints_multi() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 1 5 6 | 7 8 9
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            4 . . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .
+            - - - + - - - + - - -
+            . 4 . | . . . | . . .
+            . . . | . . . | . . .
+            . . . | . . . | . . .",
+    )
+    .unwrap();
+    let mut finder = FactFinder::new(&grid);
+    let asg_a = Asgmt::new(N2, L11);
+    let asg_b = Asgmt::new(N3, L12);
+    assert!(finder.remaining_asgmts.contains(asg_a));
+    assert!(finder.remaining_asgmts.contains(asg_b));
+
+    // Put asg_a into actual_asgmts to simulate it being satisfied/solved
+    finder.actual_asgmts.insert(asg_a);
+    finder.remaining_asgmts.remove(asg_a);
+
+    let constraints = vec![vec![
+      WasmAsgmt {
+        loc: L11.index() as i8,
+        num: N2.get(),
+      },
+      WasmAsgmt {
+        loc: L12.index() as i8,
+        num: N3.get(),
+      },
+    ]];
+
+
+    apply_constraints(&mut finder, &constraints);
+    // Since asg_a is active, the constraint should propagate to eliminate asg_b
+    assert!(!finder.remaining_asgmts.contains(asg_b));
+  }
 }
+

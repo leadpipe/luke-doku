@@ -1,3 +1,4 @@
+import {Fact} from '../facts/Fact';
 import {Command, RecordedCommand} from './command';
 import {BaseGame, type GameWrapper} from './game';
 import {Sudoku} from './sudoku';
@@ -85,5 +86,38 @@ export class PlaybackGame {
     }
     if (this.currentIndex === 0) return undefined;
     return this.history[this.currentIndex - 1];
+  }
+
+  private appliedDisproofsMap = new Map<number, Fact[]>();
+
+  getEffectiveIndex(): number {
+    return this.currentIndex + this.currentDeviations.length;
+  }
+
+  applyDisproof(fact: Fact) {
+    const idx = this.getEffectiveIndex();
+    let list = this.appliedDisproofsMap.get(idx);
+    if (!list) {
+      list = [];
+      this.appliedDisproofsMap.set(idx, list);
+    }
+    if (!list.some(f => JSON.stringify(f) === JSON.stringify(fact))) {
+      list.push(fact);
+    }
+  }
+
+  getAppliedDisproofs(): Fact[] {
+    const result: Fact[] = [];
+    const currentEff = this.getEffectiveIndex();
+    for (const [k, list] of this.appliedDisproofsMap.entries()) {
+      if (k <= currentEff) {
+        result.push(...list);
+      }
+    }
+    return result;
+  }
+
+  clearAppliedDisproofs() {
+    this.appliedDisproofsMap.clear();
   }
 }

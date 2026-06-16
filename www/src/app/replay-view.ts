@@ -86,6 +86,25 @@ export class ReplayView extends SudokuView {
       .ghosted .error-border {
         stroke-dasharray: 4 4;
       }
+      .preview-green {
+        fill: light-dark(#a1e8a1, #134613);
+        opacity: 0.5;
+      }
+      .preview-yellow {
+        fill: light-dark(#fff176, #5d5200);
+        opacity: 0.5;
+      }
+      .preview-red {
+        fill: light-dark(#e57373, #6b1515);
+        opacity: 0.5;
+      }
+      .constraint-line {
+        stroke: var(--multi-value-negated, #f55);
+        stroke-width: 2;
+        stroke-dasharray: 4 4;
+        opacity: 0.6;
+        fill: none;
+      }
     `,
   ];
 
@@ -95,9 +114,17 @@ export class ReplayView extends SudokuView {
   @property({attribute: false}) selectedLoc: Loc | null = null;
   @property({attribute: false}) selectedFact: Fact | null = null;
   @property({attribute: false}) actionLoc: Loc | null = null;
+  @property({type: Number}) previewStepIndex = -1;
+  @property({attribute: false}) previewHighlights: Map<
+    number,
+    'green' | 'yellow' | 'red'
+  > | null = null;
+  @property({attribute: false}) appliedDisproofs?: readonly Fact[];
 
   protected override renderForeground() {
     return svg`
+      <g id="preview-highlights">${this.renderPreviewHighlights()}</g>
+      <g id="applied-disproofs">${this.renderAppliedDisproofs()}</g>
       <g id="action-highlight">${this.renderActionHighlight()}</g>
       <g id="selection">${this.renderSelectionHighlight()}</g>
       <g id="facts">${this.renderFacts()}</g>
@@ -105,15 +132,108 @@ export class ReplayView extends SudokuView {
     `;
   }
 
+  private renderPreviewHighlights(): TemplateResult[] {
+    const answer: TemplateResult[] = [];
+    if (!this.previewHighlights) return answer;
+    const {cellCenter, cellSize} = this;
+    for (const [locIndex, color] of this.previewHighlights.entries()) {
+      const loc = Loc.of(locIndex);
+      if (!loc) continue;
+      const [x, y] = cellCenter(loc);
+      const className = `preview-${color}`;
+      answer.push(
+        svg`<rect class="${className}"
+                  x=${x - cellSize / 2} 
+                  y=${y - cellSize / 2} 
+                  width=${cellSize} 
+                  height=${cellSize} 
+                  rx=${cellSize * 0.1}/>`,
+      );
+    }
+    return answer;
+  }
+
+  private renderAppliedDisproofs(): TemplateResult[] {
+    const answer: TemplateResult[] = [];
+    if (!this.appliedDisproofs) return answer;
+
+    const {cellCenter, cellSize} = this;
+    const eliminatedCandidates = new Set<string>();
+    const constraints: {loc: number; num: number}[][] = [];
+
+    for (const fact of this.appliedDisproofs) {
+      const {antecedents} = flattenImplication(fact);
+      const specAsgs = antecedents.filter(
+        a => a.type === 'SpeculativeAssignment',
+      ) as {loc: number; num: number}[];
+
+      if (specAsgs.length === 1) {
+        eliminatedCandidates.add(`${specAsgs[0].loc}-${specAsgs[0].num}`);
+      } else if (specAsgs.length > 1) {
+        constraints.push(specAsgs);
+
+        const solvedAsgs = specAsgs.filter(asg => {
+          const locObj = Loc.of(asg.loc);
+          return locObj && this.getNum(locObj) === asg.num;
+        });
+
+        if (solvedAsgs.length === specAsgs.length - 1) {
+          const remaining = specAsgs.find(asg => {
+            const locObj = Loc.of(asg.loc);
+            return !locObj || this.getNum(locObj) !== asg.num;
+          });
+          if (remaining) {
+            eliminatedCandidates.add(`${remaining.loc}-${remaining.num}`);
+          }
+        }
+      }
+    }
+
+    for (const item of eliminatedCandidates) {
+      const [locIndexStr, numStr] = item.split('-');
+      const locIndex = parseInt(locIndexStr, 10);
+      const num = parseInt(numStr, 10);
+
+      const loc = Loc.of(locIndex);
+      if (!loc) continue;
+      if (this.isBlank(loc) && this.getNum(loc) === null) {
+        const [x, y] = cellCenter(loc);
+        const angle = 2 * num * (Math.PI / 12);
+        const textRadius = cellSize * 0.35;
+        const numX = x + Math.sin(angle) * textRadius;
+        const numY = y - Math.cos(angle) * textRadius;
+        answer.push(
+          svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
+        );
+      }
+    }
+
+    for (const specAsgs of constraints) {
+      for (let i = 0; i < specAsgs.length - 1; i++) {
+        const loc1 = Loc.of(specAsgs[i].loc);
+        const loc2 = Loc.of(specAsgs[i + 1].loc);
+        if (!loc1 || !loc2) continue;
+        const [x1, y1] = cellCenter(loc1);
+        const [x2, y2] = cellCenter(loc2);
+        answer.push(
+          svg`<line class="constraint-line" x1=${x1} y1=${y1} x2=${x2} y2=${y2} />`,
+        );
+      }
+    }
+
+    return answer;
+  }
+
   private renderSelectedFactDetails(): TemplateResult[] {
     const answer: TemplateResult[] = [];
     if (!this.selectedFact) return answer;
 
-    const {antecedents, nub: finalNub} = flattenImplication(
-      this.selectedFact,
-    );
+    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
 
-    const facts = [...antecedents, finalNub];
+    let facts = [...antecedents, finalNub];
+    if (this.previewStepIndex >= 0) {
+      facts = facts.slice(0, this.previewStepIndex + 1);
+    }
     const occupiedLocs = new Set<number>();
     const groups: TemplateResult[] = [];
 
@@ -134,7 +254,10 @@ export class ReplayView extends SudokuView {
     return groups.reverse();
   }
 
-  private renderSingleFactDetails(fact: Fact, occupiedLocs: Set<number>): TemplateResult[] {
+  private renderSingleFactDetails(
+    fact: Fact,
+    occupiedLocs: Set<number>,
+  ): TemplateResult[] {
     const answer: TemplateResult[] = [];
     const {cellCenter} = this;
 
@@ -253,7 +376,7 @@ export class ReplayView extends SudokuView {
           occupiedLocs.add(locIndex);
           const loc = Loc.of(locIndex);
           const [x, y] = cellCenter(loc);
-          
+
           if (fact.unit.type === 'Row') {
             answer.push(
               svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
@@ -334,7 +457,10 @@ export class ReplayView extends SudokuView {
   protected override isFactDetailLoc(loc: Loc): boolean {
     if (!this.selectedFact) return false;
     const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
-    const facts = [...antecedents, finalNub];
+    let facts = [...antecedents, finalNub];
+    if (this.previewStepIndex >= 0) {
+      facts = facts.slice(0, this.previewStepIndex + 1);
+    }
 
     for (const fact of facts) {
       switch (fact.type) {
@@ -381,6 +507,7 @@ export class ReplayView extends SudokuView {
 
   private renderFacts(): TemplateResult[] {
     const answer: TemplateResult[] = [];
+    if (this.previewStepIndex >= 0) return answer;
     if (!this.facts) return answer;
 
     const {cellCenter, cellSize} = this;

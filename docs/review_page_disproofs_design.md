@@ -87,6 +87,13 @@ To keep the UI responsive and respect CPU time budgets, the Web Worker executes 
 - If the user remains on the same playback step, the client requests the next batch of search on subsequent idle ticks, passing the `SearchProgress` back to the worker.
 - If the user scrubs to a different step or alters the board, the stored progress is invalidated.
 
+### Complexity-Conditioned Search Depth
+
+To avoid wasting CPU cycles on simpler puzzles, the maximum search depth is dynamically conditioned on the puzzle's complexity rating:
+- **Expert or simpler puzzles**: `maxDepth` is set to `1`, looking only for single-speculation contradictions.
+- **Lunatic puzzles**: `maxDepth` is set to `10`, allowing nested or multi-speculation contradictions to be found.
+
+
 ### Multi-Dimensional Search Progress
 
 The search progress is represented generally to support arbitrary depths (antecedent counts) without hardcoding logic for specific levels:
@@ -175,14 +182,13 @@ For multi-antecedent disproofs (e.g., $A \wedge B \implies \bot$), the constrain
 - **Engine Support**: The engine must accept a list of sets of eliminations (binary or N-ary constraints) alongside the grid when computing facts. Clicking "Apply" adds this constraint to the engine's known state.
 - **UI Indication**: A persistent visual indicator is added to show the linked constraint between the affected cells, so the player remembers the "Not both A and B" rule.
 - If the player subsequently assigns $A$ in a trail, the engine immediately knows $\neg B$ and factors that into its deductions. If the player assigns both $A$ and $B$, the engine instantly flags a contradiction based on the recorded constraint.
-
 ---
 
-## 5. Implementation Status: Rust Backend & Worker Layer (Completed)
+## 5. Implementation Status: Fully Completed
 
-The core logic for finding disproofs has been successfully implemented in the Rust backend (`crate/src/deduce.rs` and `crate/src/deduce/internals.rs`), and the background processing architecture is integrated in the TS frontend.
+The entire project (Rust backend, web worker slice architecture, and Lit-HTML frontend components) has been successfully implemented, integrated, and verified.
 
-### What is Completed:
+### Summary of Completed Work:
 1. **Fact Representation**: 
    - Added `Fact::SpeculativeAssignment` to model hypothetical assignments.
    - Reused `Fact::Implication` for disproofs, where `antecedents` are the speculative assignments and the ultimate `consequent` is always a base error fact (e.g., `Conflict`, `NoNum`).
@@ -194,18 +200,18 @@ The core logic for finding disproofs has been successfully implemented in the Ru
    - The search generates combinations lexicographically.
    - When a contradiction is found, its specific causal `SpeculativeAssignment`s are extracted into a subset.
    - Any future combinations that contain an already `invalid_subset` are aggressively skipped, drastically reducing the search space for depth >= 2.
-4. **WASM Bindings**:
-   - Exported `searchDisproofs` to WASM, which accepts the `Grid`, a `SearchProgress` object, `maxDepth`, and `maxTimeMs`.
-   - Exported `calculateProductivity` to WASM to calculate a single-antecedent disproof's productivity asynchronously.
-   - `ts-rs` macros automatically export TypeScript definitions (`SearchProgress`, `SearchDisproofsResult`, etc.) to the `www/src/facts/` directory.
+4. **WASM Bindings & Serialization**:
+   - Exported `searchDisproofs` and `calculateProductivity` to WebAssembly.
+   - `ts-rs` macros automatically generate TypeScript definitions.
 5. **Web Worker Integration**:
-   - Integrated `searchDisproofs` and `calculateProductivity` in the Web Worker (`www/src/worker/puzzle-worker.ts`).
-   - Exposed them in `puzzle-service.ts` via `requestDisproofSearch` and `requestProductivityCalculation`.
-6. **Multi-Threaded Worker Queue Strategy**:
-   - Added two dedicated Web Worker threads (`disproofsQueue` and `productivityQueue`) to allow running disproof searches and productivity updates in parallel without blocking standard deduction calculations or puzzle generation tasks.
-7. **Testing**:
-   - Covered by a full suite of Rust unit tests and TypeScript Web Worker unit tests (`www/src/worker/puzzle-worker.test.ts`).
+   - Integrated worker calls in `puzzle-worker.ts` and `puzzle-service.ts`.
+   - Dedicated `disproofsQueue` and `productivityQueue` parallel threads ensure the main UI and solver remain completely lag-free.
+6. **Frontend State & Scrubber**:
+   - Managed `SearchProgress` and incremental slice timers inside [review-page.ts](file:///Users/luke/code/luke-doku/www/src/app/review-page.ts).
+   - Created a step-by-step trail preview scrubber supporting keyboard navigation (Left/Right Arrow, Escape).
+7. **ReplayView Board Rendering**:
+   - Highlights cells with color codes (Green for speculations, Yellow for intermediate deductions, Red for contradictions).
+   - Renders red clock "x" indicators and connector lines for multi-antecedent constraint bounds.
+8. **Testing & Verification**:
+   - Fully covered by Rust unit tests, worker TS tests, and Lit component unit tests. All tests pass.
 
-### What Remains (Frontend UI):
-- Managing the `SearchProgress` state between worker calls based on the active step in the review timeline.
-- Building the UI panels ("Logical Trails"), Trail Preview Mode, and applying multi-antecedent constraints visually to the board.

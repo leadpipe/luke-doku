@@ -51,6 +51,8 @@ export interface FindSymmetriesMessage extends ToWorkerMessageBase {
   readonly clues: string;
 }
 
+export type EliminationConstraint = { loc: number; num: number }[];
+
 export interface DeduceFactsMessage extends ToWorkerMessageBase {
   readonly type: ToWorkerMessageType.DEDUCE_FACTS;
 
@@ -59,6 +61,9 @@ export interface DeduceFactsMessage extends ToWorkerMessageBase {
 
   /** The maximum amount of time to spend deducing facts, in milliseconds. */
   readonly maxTimeMs: number;
+
+  /** Applied disproof constraints. */
+  readonly eliminations?: readonly EliminationConstraint[];
 }
 
 export interface SearchDisproofsMessage extends ToWorkerMessageBase {
@@ -69,6 +74,9 @@ export interface SearchDisproofsMessage extends ToWorkerMessageBase {
 
   /** The puzzle solutions, in GridString form, to avoid disproving assignments that are part of the solution. */
   readonly solutions?: readonly string[];
+
+  /** Applied disproof constraints. */
+  readonly eliminations?: readonly EliminationConstraint[];
 
   /** The current search progress, to resume from. */
   readonly progress?: SearchProgress;

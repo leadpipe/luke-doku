@@ -7,6 +7,7 @@ import {
   FromWorkerMessageType,
   ToWorkerMessageType,
   type DisproofsSearchedMessage,
+  type EliminationConstraint,
   type FactsDeducedMessage,
   type GeneratePuzzleMessage,
   type ProductivityCalculatedMessage,
@@ -295,11 +296,13 @@ export async function requestPuzzleSymmetries(
 export async function requestFactDeduction(
   grid: string,
   maxTimeMs: number,
+  eliminations?: readonly EliminationConstraint[],
 ): Promise<FactsDeducedMessage> {
   const message = {
     type: ToWorkerMessageType.DEDUCE_FACTS,
     grid,
     maxTimeMs,
+    eliminations,
   };
   return evaluateQueue.request(
     message,
@@ -320,6 +323,7 @@ export async function requestFactDeduction(
 export async function requestDisproofSearch(
   grid: string,
   solutions?: readonly string[],
+  eliminations?: readonly EliminationConstraint[],
   progress?: SearchProgress,
   maxDepth?: number,
   maxTimeMs?: number,
@@ -328,6 +332,7 @@ export async function requestDisproofSearch(
     type: ToWorkerMessageType.SEARCH_DISPROOFS,
     grid,
     solutions,
+    eliminations,
     progress,
     maxDepth,
     maxTimeMs,

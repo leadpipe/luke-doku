@@ -6,15 +6,28 @@ import './replay-view';
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import type {Fact} from '../facts/Fact';
-import {describeFact} from '../facts/format';
-import {compareFacts, nub, unitContains} from '../facts/utils';
+import {describeFact, formatUnit, shorthandFact} from '../facts/format';
+import type {SearchProgress} from '../facts/SearchProgress';
+import {
+  compareFacts,
+  flattenImplication,
+  getTotalAntecedents,
+  nub,
+  unitContains,
+} from '../facts/utils';
 import {CommandTag, CompletionState} from '../game/command';
 import {SetNum} from '../game/commands';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
 import {ensureExhaustiveSwitch} from '../game/utils';
-import {requestFactDeduction} from '../system/puzzle-service';
+import * as wasm from '../wasm';
+
+import {
+  requestDisproofSearch,
+  requestFactDeduction,
+  requestProductivityCalculation,
+} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
 
@@ -177,6 +190,92 @@ export class ReviewPage extends LitElement {
     .reset-digression-button:hover {
       background-color: var(--gd, #ddd);
     }
+    .disproof-panel {
+      width: var(--board-size);
+      max-height: 250px;
+      overflow-y: auto;
+      background: var(--gd);
+      border: 1px solid var(--gc);
+      padding: 12px;
+      border-radius: 6px;
+      box-sizing: border-box;
+      margin-bottom: 16px;
+      font-size: 0.9em;
+      flex-shrink: 0;
+    }
+    .disproof-panel h3 {
+      margin-top: 0;
+      margin-bottom: 10px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      font-size: 1.1em;
+    }
+    .search-status {
+      font-size: 0.85em;
+      color: var(--multi-value-default);
+      font-weight: normal;
+    }
+    .disproof-list {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .disproof-item {
+      padding: 8px;
+      border: 1px solid var(--gc);
+      border-radius: 4px;
+      background: var(--gf);
+      transition: background-color 0.2s;
+    }
+    .disproof-item:hover {
+      background: var(--gd);
+    }
+    .disproof-header {
+      font-weight: 500;
+      line-height: 1.3em;
+    }
+    .disproof-meta {
+      margin-top: 4px;
+      font-size: 0.85em;
+      color: var(--text-color, #777);
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .disproof-actions {
+      display: flex;
+      gap: 8px;
+      margin-top: 6px;
+    }
+    .disproof-btn {
+      background: none;
+      border: 1px solid var(--gc);
+      color: var(--text-color);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85em;
+      font-family: inherit;
+      transition: background-color 0.2s;
+    }
+    .disproof-btn:hover {
+      background-color: var(--hover-loc, #bdd4f9);
+      color: #000;
+    }
+    .disproof-btn.apply {
+      background-color: var(--multi-value-default);
+      color: #000;
+      border-color: var(--multi-value-default);
+    }
+    .disproof-btn.apply:hover {
+      background-color: #0d0;
+      border-color: #0d0;
+    }
+    .productivity-badge {
+      font-weight: bold;
+      color: var(--multi-value-default);
+    }
   `;
 
   @property({attribute: false}) game: Game | null = null;
@@ -186,6 +285,15 @@ export class ReviewPage extends LitElement {
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
   @state() private selectedFact: Fact | null = null;
+  @state() private searchProgress: SearchProgress | null = null;
+  @state() private disproofs: Fact[] = [];
+  @state() private searchStatus = '';
+  @state() private isSearching = false;
+  @state() private previewedDisproof: Fact | null = null;
+  @state() private previewStepIndex = -1;
+
+  private productivityScores = new Map<string, number | 'loading'>();
+  private searchToken = 0;
 
   private playIntervalId: number | null = null;
   private interestingIndices: number[] = [];
@@ -291,13 +399,286 @@ export class ReviewPage extends LitElement {
     if (!this.playback) return;
     const grid = this.playback.wrapper.game.asGrid();
     const gridString = grid.toFlatString();
+    const elims = this.playback.getAppliedDisproofs();
+    const constraints = getEliminationConstraints(elims);
+
     try {
-      const response = await requestFactDeduction(gridString, 5000);
+      const response = await requestFactDeduction(
+        gridString,
+        5000,
+        constraints,
+      );
       this.facts = [...response.facts].sort(compareFacts);
     } catch (e) {
       console.error('Failed to deduce facts:', e);
       this.facts = [];
     }
+
+    this.startDisproofSearch();
+  }
+
+  private startDisproofSearch() {
+    this.searchToken++;
+    const token = this.searchToken;
+
+    this.searchProgress = null;
+    this.disproofs = [];
+    this.productivityScores.clear();
+    this.searchStatus = '';
+    this.isSearching = false;
+
+    this.exitPreviewMode();
+
+    if (!this.playback) return;
+    if (this.isPlayingForward || this.isPlayingBackward) return;
+    if (this.playback.wrapper.game.marks.asGrid().isSolved()) return;
+
+    const hasDirectDeductions = this.facts.some(f => {
+      const b = nub(f);
+      return b.type === 'SingleLoc' || b.type === 'SingleNum';
+    });
+    if (hasDirectDeductions) return;
+
+    this.isSearching = true;
+    this.runSearchSlice(token);
+  }
+
+  private async runSearchSlice(token: number) {
+    if (token !== this.searchToken || !this.playback) return;
+
+    const grid = this.playback.wrapper.game.asGrid();
+    const gridString = grid.toFlatString();
+    const solutions = this.playback.wrapper.game.sudoku.solutions.map(g =>
+      g.toFlatString(),
+    );
+    const elims = this.playback.getAppliedDisproofs();
+    const constraints = getEliminationConstraints(elims);
+    const complexity = this.game?.complexity;
+    const maxDepth =
+      complexity !== undefined
+        ? complexity <= wasm.Complexity.Expert
+          ? 1
+          : 10
+        : 2;
+    const progress = this.searchProgress ?? undefined;
+
+    try {
+      const response = await requestDisproofSearch(
+        gridString,
+        solutions,
+        constraints,
+        progress,
+        maxDepth,
+        500,
+      );
+
+
+
+      if (token !== this.searchToken) return;
+
+      for (const newFact of response.disproofs) {
+        if (
+          !this.disproofs.some(f => shorthandFact(f) === shorthandFact(newFact))
+        ) {
+          this.disproofs.push(newFact);
+          this.calculateProductivityForFact(token, newFact);
+        }
+      }
+
+      this.searchProgress = response.progress;
+
+      if (response.progress.isComplete) {
+        this.isSearching = false;
+        this.searchStatus = '';
+        this.requestUpdate();
+        return;
+      }
+
+      const K = getCandidateCount(gridString, solutions);
+      const depth = response.progress.depth;
+      const indices = response.progress.currentIndices;
+      let percent = 0;
+      if (K > 0 && indices && indices.length > 0) {
+        percent = Math.min(
+          100,
+          Math.max(0, Math.round((indices[0] / K) * 100)),
+        );
+      }
+      this.searchStatus = `Searching Depth ${depth}... (${percent}% complete)`;
+      this.requestUpdate();
+
+      window.setTimeout(() => {
+        this.runSearchSlice(token);
+      }, 50);
+    } catch (e) {
+      console.error('Error in disproof search slice:', e);
+      if (token === this.searchToken) {
+        this.isSearching = false;
+        this.searchStatus = 'Search failed';
+      }
+    }
+  }
+
+  private async calculateProductivityForFact(token: number, fact: Fact) {
+    const {antecedents} = flattenImplication(fact);
+    const specAsg = antecedents.filter(a => a.type === 'SpeculativeAssignment');
+    const key = shorthandFact(fact);
+
+    if (specAsg.length !== 1) {
+      this.productivityScores.set(key, 0);
+      this.requestUpdate();
+      return;
+    }
+
+    const target = specAsg[0] as {loc: number; num: number};
+    this.productivityScores.set(key, 'loading');
+    this.requestUpdate();
+
+    if (!this.playback) return;
+    const grid = this.playback.wrapper.game.asGrid();
+    const gridString = grid.toFlatString();
+
+    try {
+      const response = await requestProductivityCalculation(
+        gridString,
+        target.loc,
+        target.num,
+      );
+      if (token !== this.searchToken) return;
+      this.productivityScores.set(key, response.productivity);
+      this.requestUpdate();
+    } catch (e) {
+      console.error('Error calculating productivity:', e);
+      if (token === this.searchToken) {
+        this.productivityScores.set(key, 0);
+        this.requestUpdate();
+      }
+    }
+  }
+
+  private enterPreview(disproof: Fact) {
+    this.clearPlayInterval();
+    this.previewedDisproof = disproof;
+    this.previewStepIndex = 0;
+  }
+
+  private exitPreviewMode() {
+    this.previewedDisproof = null;
+    this.previewStepIndex = -1;
+  }
+
+  private getPreviewTrailSteps(): Fact[] {
+    if (!this.previewedDisproof) return [];
+    const {antecedents, nub: finalNub} = flattenImplication(
+      this.previewedDisproof,
+    );
+    return [...antecedents, finalNub];
+  }
+
+  private getPreviewHighlights(): Map<number, 'green' | 'yellow' | 'red'> {
+    const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
+    if (!this.previewedDisproof) return highlights;
+
+    const steps = this.getPreviewTrailSteps();
+    const currentEff = Math.min(steps.length - 1, this.previewStepIndex);
+
+    const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
+      const existing = highlights.get(loc);
+      if (existing === 'green') return;
+      if (existing === 'red' && color === 'yellow') return;
+      highlights.set(loc, color);
+    };
+
+    for (let i = 0; i <= currentEff; i++) {
+      const fact = steps[i];
+      const isError =
+        fact.type === 'Conflict' ||
+        fact.type === 'NoNum' ||
+        fact.type === 'NoLoc';
+
+      if (fact.type === 'SpeculativeAssignment') {
+        setHighlight(fact.loc, 'green');
+      } else if (isError) {
+        if (fact.type === 'Conflict') {
+          for (const l of fact.locs) {
+            setHighlight(l, 'red');
+          }
+        } else if (fact.type === 'NoNum') {
+          setHighlight(fact.loc, 'red');
+        } else if (fact.type === 'NoLoc') {
+          for (const loc of Loc.ALL) {
+            if (
+              unitContains(fact.unit, loc) &&
+              this.playback?.wrapper?.game?.isBlank(loc)
+            ) {
+              setHighlight(loc.index, 'red');
+            }
+          }
+        }
+      } else {
+        const base = nub(fact);
+        if (
+          base.type === 'SingleLoc' ||
+          base.type === 'SingleNum' ||
+          base.type === 'SpeculativeAssignment'
+        ) {
+          setHighlight(base.loc, 'yellow');
+        } else if (base.type === 'Conflict') {
+          for (const l of base.locs) {
+            setHighlight(l, 'yellow');
+          }
+        } else if (base.type === 'NoNum') {
+          setHighlight(base.loc, 'yellow');
+        } else if (base.type === 'Subset') {
+          for (const l of base.locs) {
+            setHighlight(l, 'yellow');
+          }
+        }
+      }
+    }
+    return highlights;
+  }
+
+  private onPreviewScrub(e: Event) {
+    const input = e.target as HTMLInputElement;
+    this.previewStepIndex = parseInt(input.value, 10);
+  }
+
+  private applyDisproof(disproof: Fact) {
+    if (!this.playback) return;
+    this.clearPlayInterval();
+
+    this.playback.applyDisproof(disproof);
+
+    const {antecedents} = flattenImplication(disproof);
+    const specAsgs = antecedents.filter(
+      a => a.type === 'SpeculativeAssignment',
+    ) as {loc: number; num: number}[];
+    if (specAsgs.length === 1) {
+      const target = specAsgs[0];
+      const locObj = Loc.of(target.loc);
+      if (locObj) {
+        const currentNums = this.playback.wrapper.game.getNums(locObj);
+        if (
+          currentNums &&
+          currentNums.size >= 2 &&
+          currentNums.has(target.num)
+        ) {
+          const updated = new Set(currentNums);
+          updated.delete(target.num);
+          if (updated.size > 0) {
+            this.playback.wrapper.game.setNums(locObj, updated);
+          } else {
+            this.playback.wrapper.game.clearCell(locObj);
+          }
+        }
+      }
+    }
+
+    this.selectedLoc = null;
+    this.selectedFact = null;
+    this.exitPreviewMode();
+    this.updateFacts();
   }
 
   private clearPlayInterval() {
@@ -474,6 +855,24 @@ export class ReviewPage extends LitElement {
     if (!this.playback) return;
     if (event.target instanceof HTMLInputElement) return;
 
+    if (this.previewedDisproof) {
+      const steps = this.getPreviewTrailSteps();
+      if (event.key === 'ArrowLeft') {
+        event.preventDefault();
+        this.previewStepIndex = Math.max(0, this.previewStepIndex - 1);
+      } else if (event.key === 'ArrowRight') {
+        event.preventDefault();
+        this.previewStepIndex = Math.min(
+          steps.length - 1,
+          this.previewStepIndex + 1,
+        );
+      } else if (event.key === 'Escape') {
+        event.preventDefault();
+        this.exitPreviewMode();
+      }
+      return;
+    }
+
     if (event.key === 'ArrowLeft') {
       this.stepBackward();
     } else if (event.key === 'ArrowRight') {
@@ -576,105 +975,115 @@ export class ReviewPage extends LitElement {
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
         .selectedLoc=${this.selectedLoc}
-        .selectedFact=${effectiveSelectedFact}
+        .selectedFact=${this.previewedDisproof || effectiveSelectedFact}
         .actionLoc=${command && 'loc' in command.command ?
           (command.command as any).loc
         : null}
+        .previewStepIndex=${this.previewStepIndex}
+        .previewHighlights=${this.getPreviewHighlights()}
+        .appliedDisproofs=${this.playback.getAppliedDisproofs()}
         @cell-selected=${this.onCellSelected}
       ></replay-view>
 
       <div id="middle-controls">
-        <input
-          class="scrubber"
-          type="range"
-          min="0"
-          max=${this.playback.history.length}
-          .value=${this.playback.index.toString()}
-          @input=${this.onScrub}
-        />
-        <div
-          class="move-counter ${this.playback.deviations.length > 0 ?
-            'digression-active'
-          : ''}"
-        >
-          ${this.playback.deviations.length > 0 ?
-            html`Move ${this.playback.index}
-              <span class="deviation-count"
-                >+${this.playback.deviations.length}</span
-              >
-              / ${this.playback.history.length}`
-          : html`Move ${this.playback.index} / ${this.playback.history.length}`}
-        </div>
-        ${this.playback.deviations.length > 0 ?
-          html`
-            <button
-              class="reset-digression-button"
-              @click=${this.exitDigression}
+        ${this.previewedDisproof ?
+          this.renderPreviewScrubber()
+        : html`
+            <input
+              class="scrubber"
+              type="range"
+              min="0"
+              max=${this.playback.history.length}
+              .value=${this.playback.index.toString()}
+              @input=${this.onScrub}
+            />
+            <div
+              class="move-counter ${this.playback.deviations.length > 0 ?
+                'digression-active'
+              : ''}"
             >
-              Exit Alternate Path
-            </button>
-          `
-        : ''}
-        <div class="playback-controls">
-          <icon-button
-            @click=${() => this.stepBackward()}
-            iconName="navigate_before"
-            iconSize="large"
-            title="Step backward"
-            ?disabled=${this.playback.index === 0 &&
-            this.playback.deviations.length === 0}
-          ></icon-button>
-          <icon-button
-            @click=${this.skipBackward}
-            iconName="skip_previous"
-            iconSize="large"
-            title="Skip backward"
-            ?disabled=${this.playback.index === 0 ||
-            this.playback.deviations.length > 0}
-          ></icon-button>
-          <icon-button
-            @click=${this.playBackward}
-            iconName="play_arrow"
-            ?flip=${true}
-            iconSize="large"
-            title="Play backward"
-            ?disabled=${this.isPlayingBackward ||
-            this.playback.index === 0 ||
-            this.playback.deviations.length > 0}
-          ></icon-button>
-          <icon-button
-            @click=${this.pause}
-            iconName="pause"
-            iconSize="large"
-            title="Pause"
-            ?disabled=${!this.isPlayingForward && !this.isPlayingBackward}
-          ></icon-button>
-          <icon-button
-            @click=${this.playForward}
-            iconName="play_arrow"
-            iconSize="large"
-            title="Play forward"
-            ?disabled=${this.isPlayingForward ||
-            this.playback.index === this.playback.history.length ||
-            this.playback.deviations.length > 0}
-          ></icon-button>
-          <icon-button
-            @click=${this.skipForward}
-            iconName="skip_next"
-            iconSize="large"
-            title="Skip forward"
-            ?disabled=${this.playback.index === this.playback.history.length ||
-            this.playback.deviations.length > 0}
-          ></icon-button>
-          <icon-button
-            @click=${() => this.stepForward()}
-            iconName="navigate_next"
-            iconSize="large"
-            title="Step forward"
-            ?disabled=${this.playback.index === this.playback.history.length ||
-            this.playback.deviations.length > 0}
-          ></icon-button>
-        </div>
+              ${this.playback.deviations.length > 0 ?
+                html`Move ${this.playback.index}
+                  <span class="deviation-count"
+                    >+${this.playback.deviations.length}</span
+                  >
+                  / ${this.playback.history.length}`
+              : html`Move ${this.playback.index} /
+                ${this.playback.history.length}`}
+            </div>
+            ${this.playback.deviations.length > 0 ?
+              html`
+                <button
+                  class="reset-digression-button"
+                  @click=${this.exitDigression}
+                >
+                  Exit Alternate Path
+                </button>
+              `
+            : ''}
+            <div class="playback-controls">
+              <icon-button
+                @click=${() => this.stepBackward()}
+                iconName="navigate_before"
+                iconSize="large"
+                title="Step backward"
+                ?disabled=${this.playback.index === 0 &&
+                this.playback.deviations.length === 0}
+              ></icon-button>
+              <icon-button
+                @click=${this.skipBackward}
+                iconName="skip_previous"
+                iconSize="large"
+                title="Skip backward"
+                ?disabled=${this.playback.index === 0 ||
+                this.playback.deviations.length > 0}
+              ></icon-button>
+              <icon-button
+                @click=${this.playBackward}
+                iconName="play_arrow"
+                ?flip=${true}
+                iconSize="large"
+                title="Play backward"
+                ?disabled=${this.isPlayingBackward ||
+                this.playback.index === 0 ||
+                this.playback.deviations.length > 0}
+              ></icon-button>
+              <icon-button
+                @click=${this.pause}
+                iconName="pause"
+                iconSize="large"
+                title="Pause"
+                ?disabled=${!this.isPlayingForward && !this.isPlayingBackward}
+              ></icon-button>
+              <icon-button
+                @click=${this.playForward}
+                iconName="play_arrow"
+                iconSize="large"
+                title="Play forward"
+                ?disabled=${this.isPlayingForward ||
+                this.playback.index === this.playback.history.length ||
+                this.playback.deviations.length > 0}
+              ></icon-button>
+              <icon-button
+                @click=${this.skipForward}
+                iconName="skip_next"
+                iconSize="large"
+                title="Skip forward"
+                ?disabled=${this.playback.index ===
+                  this.playback.history.length ||
+                this.playback.deviations.length > 0}
+              ></icon-button>
+              <icon-button
+                @click=${() => this.stepForward()}
+                iconName="navigate_next"
+                iconSize="large"
+                title="Step forward"
+                ?disabled=${this.playback.index ===
+                  this.playback.history.length ||
+                this.playback.deviations.length > 0}
+              ></icon-button>
+            </div>
+          `}
       </div>
 
       <div class="action-section">
@@ -706,7 +1115,7 @@ export class ReviewPage extends LitElement {
         : ''}
       </div>
 
-      ${this.renderSelectedFacts()}
+      ${this.renderSelectedFacts()} ${this.renderLogicalTrails()}
       ${assignment ?
         html`
           <div class="apply-fact-container">
@@ -770,6 +1179,264 @@ export class ReviewPage extends LitElement {
       </div>
     `;
   }
+
+  private renderPreviewScrubber() {
+    const steps = this.getPreviewTrailSteps();
+    return html`
+      <input
+        class="scrubber"
+        type="range"
+        min="0"
+        max=${steps.length - 1}
+        .value=${this.previewStepIndex.toString()}
+        @input=${this.onPreviewScrub}
+      />
+      <div class="move-counter">
+        Trail Step ${this.previewStepIndex + 1} / ${steps.length}
+      </div>
+      <button class="reset-digression-button" @click=${this.exitPreviewMode}>
+        Exit Trail Preview
+      </button>
+      <div class="playback-controls">
+        <icon-button
+          @click=${() =>
+            (this.previewStepIndex = Math.max(0, this.previewStepIndex - 1))}
+          iconName="navigate_before"
+          iconSize="large"
+          title="Step backward"
+          ?disabled=${this.previewStepIndex === 0}
+        ></icon-button>
+        <icon-button
+          @click=${() =>
+            (this.previewStepIndex = Math.min(
+              steps.length - 1,
+              this.previewStepIndex + 1,
+            ))}
+          iconName="navigate_next"
+          iconSize="large"
+          title="Step forward"
+          ?disabled=${this.previewStepIndex === steps.length - 1}
+        ></icon-button>
+      </div>
+    `;
+  }
+
+  private renderLogicalTrails() {
+    if (this.previewedDisproof) {
+      const steps = this.getPreviewTrailSteps();
+      const currentFact =
+        steps[Math.min(steps.length - 1, this.previewStepIndex)];
+      return html`
+        <div class="disproof-panel">
+          <h3>Active Trail Preview</h3>
+          <div style="font-weight: 500; margin-bottom: 8px;">
+            ${formatDisproofDescription(this.previewedDisproof)}
+          </div>
+          <div
+            style="padding: 10px; border: 1px dashed var(--gc); border-radius: 4px; background: var(--gd);"
+          >
+            <strong>Step ${this.previewStepIndex + 1}:</strong> ${describeFact(
+              currentFact,
+            )}
+          </div>
+        </div>
+      `;
+    }
+
+    if (this.isPlayingForward || this.isPlayingBackward) {
+      return '';
+    }
+
+    const sortedDisproofs = [...this.disproofs].sort((a, b) => {
+      const getProd = (f: Fact) => {
+        const score = this.productivityScores.get(shorthandFact(f));
+        return typeof score === 'number' ? score : -1;
+      };
+      const getLength = (f: Fact) => getTotalAntecedents(f);
+
+      const prodA = getProd(a);
+      const prodB = getProd(b);
+      if (prodA !== prodB) {
+        return prodB - prodA;
+      }
+      return getLength(a) - getLength(b);
+    });
+
+    return html`
+      <div class="disproof-panel">
+        <h3>
+          Logical Trails / Disproofs
+          ${this.isSearching ?
+            html`<span class="search-status">${this.searchStatus}</span>`
+          : ''}
+        </h3>
+
+        ${sortedDisproofs.length === 0 ?
+          html`<div
+            style="color: var(--text-color, #777); text-align: center; padding: 12px;"
+          >
+            ${this.isSearching ?
+              'Scanning candidates...'
+            : 'No speculative trails found for this step.'}
+          </div>`
+        : html`
+            <div class="disproof-list">
+              ${sortedDisproofs.map(fact => {
+                const key = shorthandFact(fact);
+                const score = this.productivityScores.get(key);
+                const isMulti =
+                  flattenImplication(fact).antecedents.filter(
+                    a => a.type === 'SpeculativeAssignment',
+                  ).length > 1;
+
+                let prodText = '';
+                if (isMulti) {
+                  prodText = 'Constraint';
+                } else if (score === 'loading') {
+                  prodText = 'Productivity: calculating...';
+                } else if (typeof score === 'number') {
+                  prodText = `Productivity: +${score} cells`;
+                }
+
+                return html`
+                  <div class="disproof-item">
+                    <div class="disproof-header">
+                      ${formatDisproofDescription(fact)}
+                    </div>
+                    <div class="disproof-meta">
+                      <span class="productivity-badge">${prodText}</span>
+                      <span>Length: ${getTotalAntecedents(fact)} steps</span>
+                    </div>
+                    <div class="disproof-actions">
+                      <button
+                        class="disproof-btn"
+                        @click=${() => this.enterPreview(fact)}
+                      >
+                        Preview
+                      </button>
+                      <button
+                        class="disproof-btn apply"
+                        @click=${() => this.applyDisproof(fact)}
+                      >
+                        Apply
+                      </button>
+                    </div>
+                  </div>
+                `;
+              })}
+            </div>
+          `}
+      </div>
+    `;
+  }
+}
+
+function getEliminationConstraints(elims: Fact[]) {
+  const result = [];
+  for (const elim of elims) {
+    const specAsgs: {loc: number; num: number}[] = [];
+    function collect(f: Fact) {
+      if (f.type === 'Implication') {
+        for (const ant of f.antecedents) {
+          collect(ant);
+        }
+        collect(f.consequent);
+      } else if (f.type === 'SpeculativeAssignment') {
+        specAsgs.push({loc: f.loc, num: f.num});
+      }
+    }
+    collect(elim);
+    if (specAsgs.length > 0) {
+      result.push(specAsgs);
+    }
+  }
+  return result;
+}
+
+function isValidCandidate(
+  gridString: string,
+  loc: number,
+  num: number,
+): boolean {
+  const row = Math.floor(loc / 9);
+  const col = loc % 9;
+  const blkRow = Math.floor(row / 3) * 3;
+  const blkCol = Math.floor(col / 3) * 3;
+
+  for (let c = 0; c < 9; c++) {
+    if (gridString[row * 9 + c] === String(num)) return false;
+  }
+  for (let r = 0; r < 9; r++) {
+    if (gridString[r * 9 + col] === String(num)) return false;
+  }
+  for (let r = 0; r < 3; r++) {
+    for (let c = 0; c < 3; c++) {
+      if (gridString[(blkRow + r) * 9 + (blkCol + c)] === String(num))
+        return false;
+    }
+  }
+  return true;
+}
+
+function getCandidateCount(
+  gridString: string,
+  solutions?: readonly string[],
+): number {
+  let count = 0;
+  const solutionSet = new Set<string>();
+  if (solutions) {
+    for (const sol of solutions) {
+      for (let i = 0; i < 81; i++) {
+        solutionSet.add(`${i}-${sol[i]}`);
+      }
+    }
+  }
+  for (let loc = 0; loc < 81; loc++) {
+    if (gridString[loc] === '.' || gridString[loc] === '0') {
+      for (let num = 1; num <= 9; num++) {
+        if (solutionSet.has(`${loc}-${num}`)) continue;
+        if (isValidCandidate(gridString, loc, num)) {
+          count++;
+        }
+      }
+    }
+  }
+  return count;
+}
+
+function formatDisproofDescription(fact: Fact): string {
+  const {antecedents, nub: finalNub} = flattenImplication(fact);
+  const specAsgs = antecedents.filter(
+    a => a.type === 'SpeculativeAssignment',
+  ) as {loc: number; num: number}[];
+
+  let antecedentsStr = '';
+  if (specAsgs.length === 1) {
+    const asg = specAsgs[0];
+    antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc).toString()}`;
+  } else if (specAsgs.length > 1) {
+    antecedentsStr = `Speculating [${specAsgs.map(a => `${a.num} at ${Loc.of(a.loc).toString()}`).join(', ')}]`;
+  } else {
+    antecedentsStr = `Speculating unknown`;
+  }
+
+  let consequentStr = '';
+  switch (finalNub.type) {
+    case 'Conflict':
+      consequentStr = `leads to a conflict for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
+      break;
+    case 'NoLoc':
+      consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
+      break;
+    case 'NoNum':
+      consequentStr = `leads to no possible numbers at ${Loc.of(finalNub.loc).toString()}`;
+      break;
+    default:
+      consequentStr = `leads to a contradiction`;
+      break;
+  }
+
+  return `${antecedentsStr} ${consequentStr}`;
 }
 
 declare global {

@@ -193,7 +193,7 @@ function deduceFacts(m: DeduceFactsMessage): FromWorkerMessage {
   let facts: any[] = [];
   let timedOut = false;
   try {
-    const result = wasm.deduceFacts(grid, m.maxTimeMs);
+    const result = wasm.deduceFacts(grid, m.eliminations, m.maxTimeMs);
     facts = result?.facts || [];
     timedOut = result?.timedOut || false;
   } catch (e: unknown) {
@@ -247,6 +247,7 @@ function searchDisproofs(m: SearchDisproofsMessage): FromWorkerMessage {
     const result = wasm.searchDisproofs(
       grid,
       solutions,
+      m.eliminations,
       m.progress,
       m.maxDepth,
       m.maxTimeMs,
