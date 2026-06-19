@@ -465,7 +465,32 @@ fn get_speculative_antecedents(fact: &Fact, antecedents: &mut Vec<Asgmt>) {
   }
 }
 
+fn strip_speculative_assignments(fact: &Fact) -> Fact {
+  match fact {
+    Fact::Implication { antecedents, consequent } => {
+      let mut new_ants = Vec::new();
+      for ant in antecedents {
+        let new_ant = strip_speculative_assignments(ant);
+        if !matches!(new_ant, Fact::SpeculativeAssignment { .. }) {
+          new_ants.push(new_ant);
+        }
+      }
+      let new_cons = strip_speculative_assignments(consequent);
+      if new_ants.is_empty() {
+        new_cons
+      } else {
+        Fact::Implication {
+          antecedents: new_ants,
+          consequent: Box::new(new_cons),
+        }
+      }
+    }
+    _ => fact.clone(),
+  }
+}
+
 pub fn search_disproofs_native(
+
   base_finder: FactFinder,
   solutions: &[SolvedGrid],
   progress: Option<SearchProgress>,
@@ -576,8 +601,6 @@ pub fn search_disproofs_native(
 
     for fact in &deduced_facts {
       if fact.is_error() {
-        disproofs.push(fact.clone());
-
         let mut error_ants = Vec::new();
         get_speculative_antecedents(fact, &mut error_ants);
         let mut subset_indices: Vec<usize> = error_ants
@@ -589,6 +612,22 @@ pub fn search_disproofs_native(
         if !progress.invalid_subsets.contains(&subset_indices) {
           progress.invalid_subsets.push(subset_indices);
         }
+
+        let mut spec_facts_for_this_error = Vec::new();
+        let mut sorted_error_ants = error_ants.clone();
+        sorted_error_ants.sort();
+        for &asgmt in &sorted_error_ants {
+          spec_facts_for_this_error.push(Fact::SpeculativeAssignment {
+            loc: asgmt.loc,
+            num: asgmt.num,
+          });
+        }
+
+        let stripped_fact = strip_speculative_assignments(fact);
+        disproofs.push(Fact::Implication {
+          antecedents: spec_facts_for_this_error,
+          consequent: Box::new(stripped_fact),
+        });
       }
     }
 
@@ -1016,10 +1055,94 @@ mod tests {
       },
     ]];
 
-
     apply_constraints(&mut finder, &constraints);
     // Since asg_a is active, the constraint should propagate to eliminate asg_b
     assert!(!finder.remaining_asgmts.contains(asg_b));
   }
-}
 
+  #[test]
+  fn test_search_disproofs_accumulate_antecedents() {
+    let grid = Grid::from_str(
+      r"
+            . 7 4 | . 9 . | 6 . 3
+            3 . 9 | 7 . 6 | . 4 .
+            6 . 5 | . 4 3 | 9 7 .
+            - - - + - - - + - - -
+            4 3 8 | 2 6 9 | 7 1 5
+            . . 6 | 4 8 7 | 2 3 9
+            7 9 2 | . . . | 4 6 8
+            - - - + - - - + - - -
+            . . 1 | . 7 4 | . . 6
+            . 4 3 | 6 . . | . . 7
+            8 6 7 | 9 . . | . 2 4",
+    )
+    .unwrap();
+    let finder = FactFinder::new(&grid);
+    let res = search_disproofs_native(finder, &[], None, Some(10), Some(5000.0), None);
+
+    let mut found_target = false;
+    for fact in &res.disproofs {
+      if let Fact::NoLoc { num, unit } = fact.nub() {
+        if *num == N5 && *unit == R2.to_unit() {
+          let mut sub_units = Vec::new();
+          collect_subset_units(fact, &mut sub_units);
+          if sub_units.contains(&B2.to_unit()) && sub_units.contains(&B9.to_unit()) {
+            found_target = true;
+            let spec_count = count_speculative_assignments(fact, L86, N2);
+            assert_eq!(
+              spec_count, 1,
+              "The speculative assignment L86=N2 must appear exactly once in the tree, but found {}",
+              spec_count
+            );
+          }
+        }
+      }
+    }
+    assert!(
+      found_target,
+      "Disproof showing no location for 5 in Row 2 must include both subset B2 and B9 dependencies"
+    );
+  }
+
+  fn collect_subset_units(fact: &Fact, units: &mut Vec<Unit>) {
+    match fact {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
+        for ant in antecedents {
+          collect_subset_units(ant, units);
+        }
+        collect_subset_units(consequent, units);
+      }
+      Fact::Subset { unit, .. } => {
+        units.push(*unit);
+      }
+      _ => {}
+    }
+  }
+
+  fn count_speculative_assignments(fact: &Fact, target_loc: Loc, target_num: Num) -> usize {
+    match fact {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
+        let mut count = 0;
+        for ant in antecedents {
+          count += count_speculative_assignments(ant, target_loc, target_num);
+        }
+        count += count_speculative_assignments(consequent, target_loc, target_num);
+        count
+      }
+      Fact::SpeculativeAssignment { loc, num } => {
+        if *loc == target_loc && *num == target_num {
+          1
+        } else {
+          0
+        }
+      }
+      _ => 0,
+    }
+  }
+}

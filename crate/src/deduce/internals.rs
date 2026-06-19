@@ -73,10 +73,10 @@ impl Collector {
   /// Collects all facts from the current state of the collector, using the
   /// given error mode to determine how to handle errors.
   pub fn collect(&mut self, error_mode: ErrorMode) -> Result<(), Invalid> {
+    let base_remaining_asgmts = self.remaining_asgmts;
+    let base_sukaku_map = self.sukaku_map;
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
-    let mut remaining_asgmts = self.remaining_asgmts;
-    let mut sukaku_map = self.sukaku_map;
     let mut set_state = SetState::new();
     loop {
       if self.check_timeout() {
@@ -99,19 +99,14 @@ impl Collector {
       find_hidden_singles(self);
       find_naked_singles(self);
 
-      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
-
       if !antecedents.is_empty() {
         for fact in self.facts[start..].iter_mut() {
           let required = narrow_antecedents(
             &fact,
             antecedents.as_slice(),
             &antecedent_eliminations,
-            remaining_asgmts,
-            sukaku_map,
+            base_remaining_asgmts,
+            base_sukaku_map,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {
@@ -124,11 +119,15 @@ impl Collector {
       if eliminations_start == eliminations_end {
         break;
       }
-      antecedents = self.facts[eliminations_start..eliminations_end].to_vec();
-      antecedent_eliminations = eliminations.clone();
-      remaining_asgmts = self.remaining_asgmts;
-      sukaku_map = self.sukaku_map;
-      let all_eliminated_asgmts = eliminations.iter().fold(AsgmtSet::new(), |acc, x| acc | *x);
+      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+      antecedents.extend(self.facts[eliminations_start..eliminations_end].to_vec());
+      antecedent_eliminations.extend(eliminations);
+      let all_eliminated_asgmts = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .fold(AsgmtSet::new(), |acc, x| acc | x.as_eliminations());
       self.remaining_asgmts -= all_eliminated_asgmts;
       self.sukaku_map.eliminate(&all_eliminated_asgmts);
     }
@@ -146,8 +145,6 @@ impl Collector {
       .iter()
       .map(|fact| fact.as_eliminations())
       .collect();
-    let mut remaining_asgmts = base_remaining_asgmts;
-    let mut sukaku_map = base_sukaku_map;
     let mut set_state = SetState::new();
     loop {
       if self.check_timeout() {
@@ -168,19 +165,14 @@ impl Collector {
       find_hidden_singles(self);
       find_naked_singles(self);
 
-      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
-
       if !antecedents.is_empty() {
         for fact in self.facts[start..].iter_mut() {
           let required = narrow_antecedents(
             &fact,
             antecedents.as_slice(),
             &antecedent_eliminations,
-            remaining_asgmts,
-            sukaku_map,
+            base_remaining_asgmts,
+            base_sukaku_map,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {
@@ -193,11 +185,15 @@ impl Collector {
       if eliminations_start == eliminations_end {
         break;
       }
-      antecedents = self.facts[eliminations_start..eliminations_end].to_vec();
-      antecedent_eliminations = eliminations.clone();
-      remaining_asgmts = self.remaining_asgmts;
-      sukaku_map = self.sukaku_map;
-      let all_eliminated_asgmts = eliminations.iter().fold(AsgmtSet::new(), |acc, x| acc | *x);
+      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+      antecedents.extend(self.facts[eliminations_start..eliminations_end].to_vec());
+      antecedent_eliminations.extend(eliminations);
+      let all_eliminated_asgmts = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .fold(AsgmtSet::new(), |acc, x| acc | x.as_eliminations());
       self.remaining_asgmts -= all_eliminated_asgmts;
       self.sukaku_map.eliminate(&all_eliminated_asgmts);
     }
