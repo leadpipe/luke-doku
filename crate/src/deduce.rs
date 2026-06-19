@@ -4,6 +4,7 @@ use crate::core::*;
 
 mod internals;
 
+use crate::solve::ledger::Ledger;
 use serde::{Deserialize, Serialize};
 use wasm_bindgen::prelude::wasm_bindgen;
 
@@ -467,7 +468,10 @@ fn get_speculative_antecedents(fact: &Fact, antecedents: &mut Vec<Asgmt>) {
 
 fn strip_speculative_assignments(fact: &Fact) -> Fact {
   match fact {
-    Fact::Implication { antecedents, consequent } => {
+    Fact::Implication {
+      antecedents,
+      consequent,
+    } => {
       let mut new_ants = Vec::new();
       for ant in antecedents {
         let new_ant = strip_speculative_assignments(ant);
@@ -490,7 +494,6 @@ fn strip_speculative_assignments(fact: &Fact) -> Fact {
 }
 
 pub fn search_disproofs_native(
-
   base_finder: FactFinder,
   solutions: &[SolvedGrid],
   progress: Option<SearchProgress>,
@@ -650,7 +653,7 @@ pub fn search_disproofs_native(
 
 #[wasm_bindgen(js_name = "calculateProductivity")]
 pub fn calculate_productivity(grid: &Grid, loc: Loc, num: Num) -> usize {
-  let mut base_ledger = match crate::solve::ledger::Ledger::new(grid) {
+  let mut base_ledger = match Ledger::new(grid) {
     Ok(l) => l,
     Err(_) => return 0,
   };
@@ -672,6 +675,81 @@ pub fn calculate_productivity(grid: &Grid, loc: Loc, num: Num) -> usize {
   } else {
     0
   }
+}
+
+#[derive(Serialize, ts_rs::TS)]
+#[ts(export, export_to = "../../www/src/facts/")]
+#[serde(rename_all = "camelCase")]
+pub struct ErroneousAssignmentProductivity {
+  pub loc: Loc,
+  pub num: Num,
+  pub productivity: usize,
+}
+
+pub fn calculate_erroneous_productivity_native(
+  grid: &Grid,
+  solutions: &[SolvedGrid],
+) -> Vec<ErroneousAssignmentProductivity> {
+  let mut base_ledger = match Ledger::new(grid) {
+    Ok(l) => l,
+    Err(_) => return Vec::new(),
+  };
+
+  if base_ledger.apply_implications().is_err() {
+    return Vec::new();
+  }
+
+  let base_solved = 81 - base_ledger.unset().len();
+
+  let mut solutions_asgmt_set = AsgmtSet::new();
+  for solution in solutions {
+    solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
+  }
+
+  let erroneous_candidates: Vec<Asgmt> = (base_ledger.asgmts() - solutions_asgmt_set)
+    .iter()
+    .collect();
+
+  let mut results = Vec::new();
+  for asgmt in erroneous_candidates {
+    let mut test_ledger = base_ledger;
+    test_ledger.eliminate(asgmt.num, asgmt.loc);
+    let productivity = if test_ledger.apply_implications().is_err() {
+      0
+    } else {
+      let new_solved = 81 - test_ledger.unset().len();
+      if new_solved > base_solved {
+        (new_solved - base_solved) as usize
+      } else {
+        0
+      }
+    };
+    results.push(ErroneousAssignmentProductivity {
+      loc: asgmt.loc,
+      num: asgmt.num,
+      productivity,
+    });
+  }
+
+  // Sort descending by productivity, then ascending by loc, then num
+  results.sort_by(|a, b| {
+    b.productivity
+      .cmp(&a.productivity)
+      .then_with(|| a.loc.cmp(&b.loc))
+      .then_with(|| a.num.cmp(&b.num))
+  });
+
+  results
+}
+
+#[wasm_bindgen(js_name = "calculateErroneousProductivity")]
+pub fn calculate_erroneous_productivity(
+  grid: &Grid,
+  solutions: Option<Vec<SolvedGrid>>,
+) -> wasm_bindgen::JsValue {
+  let solutions = solutions.unwrap_or_default();
+  let results = calculate_erroneous_productivity_native(grid, &solutions);
+  serde_wasm_bindgen::to_value(&results).unwrap()
 }
 
 #[wasm_bindgen(js_name = "searchDisproofs")]
@@ -1143,6 +1221,61 @@ mod tests {
         }
       }
       _ => 0,
+    }
+  }
+
+  #[test]
+  fn test_calculate_erroneous_productivity() {
+    let grid = Grid::from_str(
+      r"
+            . 7 4 | . 9 . | 6 . 3
+            3 . 9 | 7 . 6 | . 4 .
+            6 . 5 | . 4 3 | 9 7 .
+            - - - + - - - + - - -
+            4 3 8 | 2 6 9 | 7 1 5
+            . . 6 | 4 8 7 | 2 3 9
+            7 9 2 | . . . | 4 6 8
+            - - - + - - - + - - -
+            . . 1 | . 7 4 | . . 6
+            . 4 3 | 6 . . | . . 7
+            8 6 7 | 9 . . | . 2 4",
+    )
+    .unwrap();
+
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&grid, 10, &mut helper);
+    assert!(!summary.solutions.is_empty());
+
+    let results = calculate_erroneous_productivity_native(&grid, &summary.solutions);
+
+    let mut solutions_asgmt_set = AsgmtSet::new();
+    for solution in &summary.solutions {
+      solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
+    }
+
+    // Verify all candidates returned are indeed erroneous
+    for res in &results {
+      let asgmt = Asgmt {
+        num: res.num,
+        loc: res.loc,
+      };
+      assert!(
+        !solutions_asgmt_set.contains(asgmt),
+        "Candidate assignment {:?} is in the solution set, so it should not be reported as erroneous",
+        asgmt
+      );
+    }
+
+    // Verify results are sorted descending by productivity
+    for i in 1..results.len() {
+      assert!(
+        results[i - 1].productivity >= results[i].productivity,
+        "Results not sorted by productivity: results[{}] has {} but results[{}] has {}",
+        i - 1,
+        results[i - 1].productivity,
+        i,
+        results[i].productivity
+      );
     }
   }
 }

@@ -47,6 +47,11 @@ impl Ledger {
     self.asgmts.contains(Asgmt { num, loc })
   }
 
+  /// The remaining possible assignments.
+  pub fn asgmts(&self) -> AsgmtSet {
+    self.asgmts
+  }
+
   /// The still-unset locations.
   pub fn unset(&self) -> &LocSet {
     &self.unset
