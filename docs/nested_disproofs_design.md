@@ -63,3 +63,9 @@ Instead of searching for multi-antecedent combinations ($A \wedge B \implies \bo
 
 ### End State & UI Impact:
 This approach guarantees that every disproof presented on the main board is ultimately a **single-antecedent disproof** ($\neg A$). The complexity of Lunatic puzzles is entirely encapsulated within the implication tree (which will contain sub-implications representing the nested disproofs). The user will experience a unified UI where they apply a single elimination to the board, even if the proof behind it required recursive hypothetical reasoning.
+
+---
+
+## 6. Implementation Status & Progress
+
+- [x] **Productivity-First Candidate Selection**: Implemented `calculateErroneousProductivity` in the Rust library, which compares possible grid assignments against solutions, computes downstream productivity of eliminating erroneous candidates using optimized `Ledger` propagation, and returns them sorted descending. Exposes TypeScript definitions and WASM bindings.
