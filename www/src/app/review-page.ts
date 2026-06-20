@@ -7,7 +7,6 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import type {Fact} from '../facts/Fact';
 import {describeFact, formatUnit, shorthandFact} from '../facts/format';
-import type {SearchProgress} from '../facts/SearchProgress';
 import {
   compareFacts,
   flattenImplication,
@@ -24,9 +23,9 @@ import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 
 import {
-  requestDisproofSearch,
+  requestErroneousProductivityCalculation,
+  requestErroneousAssignmentDisproof,
   requestFactDeduction,
-  requestProductivityCalculation,
 } from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
@@ -285,7 +284,6 @@ export class ReviewPage extends LitElement {
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
   @state() private selectedFact: Fact | null = null;
-  @state() private searchProgress: SearchProgress | null = null;
   @state() private disproofs: Fact[] = [];
   @state() private searchStatus = '';
   @state() private isSearching = false;
@@ -421,7 +419,6 @@ export class ReviewPage extends LitElement {
     this.searchToken++;
     const token = this.searchToken;
 
-    this.searchProgress = null;
     this.disproofs = [];
     this.productivityScores.clear();
     this.searchStatus = '';
@@ -440,10 +437,10 @@ export class ReviewPage extends LitElement {
     if (hasDirectDeductions) return;
 
     this.isSearching = true;
-    this.runSearchSlice(token);
+    this.runSequentialSearch(token);
   }
 
-  private async runSearchSlice(token: number) {
+  private async runSequentialSearch(token: number) {
     if (token !== this.searchToken || !this.playback) return;
 
     const grid = this.playback.wrapper.game.asGrid();
@@ -451,106 +448,83 @@ export class ReviewPage extends LitElement {
     const solutions = this.playback.wrapper.game.sudoku.solutions.map(g =>
       g.toFlatString(),
     );
-    const elims = this.playback.getAppliedDisproofs();
-    const constraints = getEliminationConstraints(elims);
-    const complexity = this.game?.complexity;
-    const maxDepth =
-      complexity !== undefined
-        ? complexity <= wasm.Complexity.Expert
-          ? 1
-          : 10
-        : 2;
-    const progress = this.searchProgress ?? undefined;
+
+    this.searchStatus = 'Calculating productivity...';
+    this.requestUpdate();
 
     try {
-      const response = await requestDisproofSearch(
+      const prodResult = await requestErroneousProductivityCalculation(
         gridString,
         solutions,
-        constraints,
-        progress,
-        maxDepth,
-        500,
       );
-
-
 
       if (token !== this.searchToken) return;
 
-      for (const newFact of response.disproofs) {
-        if (
-          !this.disproofs.some(f => shorthandFact(f) === shorthandFact(newFact))
-        ) {
-          this.disproofs.push(newFact);
-          this.calculateProductivityForFact(token, newFact);
-        }
-      }
-
-      this.searchProgress = response.progress;
-
-      if (response.progress.isComplete) {
+      const candidates = prodResult.results;
+      if (!candidates || candidates.length === 0) {
         this.isSearching = false;
         this.searchStatus = '';
         this.requestUpdate();
         return;
       }
 
-      const K = getCandidateCount(gridString, solutions);
-      const depth = response.progress.depth;
-      const indices = response.progress.currentIndices;
-      let percent = 0;
-      if (K > 0 && indices && indices.length > 0) {
-        percent = Math.min(
-          100,
-          Math.max(0, Math.round((indices[0] / K) * 100)),
-        );
-      }
-      this.searchStatus = `Searching Depth ${depth}... (${percent}% complete)`;
-      this.requestUpdate();
+      // We will check each candidate sequentially
+      for (let i = 0; i < candidates.length; i++) {
+        if (token !== this.searchToken) return;
 
-      window.setTimeout(() => {
-        this.runSearchSlice(token);
-      }, 50);
+        const cand = candidates[i];
+        const percent = Math.round((i / candidates.length) * 100);
+        this.searchStatus = `Searching disproofs... (${percent}% complete)`;
+        this.requestUpdate();
+
+        const elims = this.playback.getAppliedDisproofs();
+        const constraints = getEliminationConstraints(elims);
+
+        const complexity = this.game?.complexity;
+        const isLunatic = complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
+        const useLongQueue = isLunatic;
+        const maxTimeMs = isLunatic ? 2000 : 500;
+
+        try {
+          const response = await requestErroneousAssignmentDisproof(
+            gridString,
+            {loc: cand.loc, num: cand.num},
+            solutions,
+            constraints,
+            maxTimeMs,
+            useLongQueue,
+          );
+
+          if (token !== this.searchToken) return;
+
+          if (response.disproof) {
+            const newFact = response.disproof;
+            if (
+              !this.disproofs.some(f => shorthandFact(f) === shorthandFact(newFact))
+            ) {
+              this.disproofs.push(newFact);
+              const key = shorthandFact(newFact);
+              this.productivityScores.set(key, cand.productivity);
+              this.requestUpdate();
+            }
+          }
+        } catch (e) {
+          console.error(`Failed to disprove candidate at loc ${cand.loc} num ${cand.num}:`, e);
+        }
+
+        // Yield control to browser
+        await new Promise(resolve => window.setTimeout(resolve, 30));
+      }
+
+      if (token !== this.searchToken) return;
+      this.isSearching = false;
+      this.searchStatus = '';
+      this.requestUpdate();
     } catch (e) {
-      console.error('Error in disproof search slice:', e);
+      console.error('Error in sequential disproof search:', e);
       if (token === this.searchToken) {
         this.isSearching = false;
         this.searchStatus = 'Search failed';
-      }
-    }
-  }
-
-  private async calculateProductivityForFact(token: number, fact: Fact) {
-    const {antecedents} = flattenImplication(fact);
-    const specAsg = antecedents.filter(a => a.type === 'SpeculativeAssignment');
-    const key = shorthandFact(fact);
-
-    if (specAsg.length !== 1) {
-      this.productivityScores.set(key, 0);
-      this.requestUpdate();
-      return;
-    }
-
-    const target = specAsg[0] as {loc: number; num: number};
-    this.productivityScores.set(key, 'loading');
-    this.requestUpdate();
-
-    if (!this.playback) return;
-    const grid = this.playback.wrapper.game.asGrid();
-    const gridString = grid.toFlatString();
-
-    try {
-      const response = await requestProductivityCalculation(
-        gridString,
-        target.loc,
-        target.num,
-      );
-      if (token !== this.searchToken) return;
-      this.productivityScores.set(key, response.productivity);
-      this.requestUpdate();
-    } catch (e) {
-      console.error('Error calculating productivity:', e);
-      if (token === this.searchToken) {
-        this.productivityScores.set(key, 0);
         this.requestUpdate();
       }
     }
@@ -650,26 +624,24 @@ export class ReviewPage extends LitElement {
 
     this.playback.applyDisproof(disproof);
 
-    const {antecedents} = flattenImplication(disproof);
-    const specAsgs = antecedents.filter(
-      a => a.type === 'SpeculativeAssignment',
-    ) as {loc: number; num: number}[];
-    if (specAsgs.length === 1) {
-      const target = specAsgs[0];
-      const locObj = Loc.of(target.loc);
-      if (locObj) {
-        const currentNums = this.playback.wrapper.game.getNums(locObj);
-        if (
-          currentNums &&
-          currentNums.size >= 2 &&
-          currentNums.has(target.num)
-        ) {
-          const updated = new Set(currentNums);
-          updated.delete(target.num);
-          if (updated.size > 0) {
-            this.playback.wrapper.game.setNums(locObj, updated);
-          } else {
-            this.playback.wrapper.game.clearCell(locObj);
+    if (disproof.type === 'Implication' && disproof.antecedents.length > 0) {
+      const target = disproof.antecedents[0];
+      if (target.type === 'SpeculativeAssignment') {
+        const locObj = Loc.of(target.loc);
+        if (locObj) {
+          const currentNums = this.playback.wrapper.game.getNums(locObj);
+          if (
+            currentNums &&
+            currentNums.size >= 2 &&
+            currentNums.has(target.num)
+          ) {
+            const updated = new Set(currentNums);
+            updated.delete(target.num);
+            if (updated.size > 0) {
+              this.playback.wrapper.game.setNums(locObj, updated);
+            } else {
+              this.playback.wrapper.game.clearCell(locObj);
+            }
           }
         }
       }
@@ -1285,9 +1257,7 @@ export class ReviewPage extends LitElement {
                 const key = shorthandFact(fact);
                 const score = this.productivityScores.get(key);
                 const isMulti =
-                  flattenImplication(fact).antecedents.filter(
-                    a => a.type === 'SpeculativeAssignment',
-                  ).length > 1;
+                  fact.type === 'Implication' && fact.antecedents.length > 1;
 
                 let prodText = '';
                 if (isMulti) {
@@ -1378,31 +1348,6 @@ function isValidCandidate(
   return true;
 }
 
-function getCandidateCount(
-  gridString: string,
-  solutions?: readonly string[],
-): number {
-  let count = 0;
-  const solutionSet = new Set<string>();
-  if (solutions) {
-    for (const sol of solutions) {
-      for (let i = 0; i < 81; i++) {
-        solutionSet.add(`${i}-${sol[i]}`);
-      }
-    }
-  }
-  for (let loc = 0; loc < 81; loc++) {
-    if (gridString[loc] === '.' || gridString[loc] === '0') {
-      for (let num = 1; num <= 9; num++) {
-        if (solutionSet.has(`${loc}-${num}`)) continue;
-        if (isValidCandidate(gridString, loc, num)) {
-          count++;
-        }
-      }
-    }
-  }
-  return count;
-}
 
 function formatDisproofDescription(fact: Fact): string {
   const {antecedents, nub: finalNub} = flattenImplication(fact);

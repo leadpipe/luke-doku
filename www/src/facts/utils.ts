@@ -27,6 +27,7 @@ export function flattenImplication(fact: Fact): {
   }
 
   const antecedents: Fact[] = [];
+  const seen = new Set<string>();
 
   function collect(f: Fact) {
     if (f.type === 'Implication') {
@@ -35,7 +36,11 @@ export function flattenImplication(fact: Fact): {
       }
       collect(f.consequent);
     } else {
-      antecedents.push(f);
+      const key = JSON.stringify(f);
+      if (!seen.has(key)) {
+        seen.add(key);
+        antecedents.push(f);
+      }
     }
   }
 
@@ -93,11 +98,7 @@ export function getTotalAntecedents(fact: Fact): number {
   if (fact.type !== 'Implication') {
     return 0;
   }
-  let total = fact.antecedents.length;
-  for (const ant of fact.antecedents) {
-    total += getTotalAntecedents(ant);
-  }
-  return total;
+  return flattenImplication(fact).antecedents.length + 1;
 }
 
 function getFactRank(fact: Fact): number {

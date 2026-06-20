@@ -107,6 +107,13 @@ impl Fact {
         antecedents,
         consequent,
       } => {
+        if consequent.is_error() && antecedents.len() == 1 {
+          if let Some(asgmt) = antecedents[0].as_asgmt() {
+            let mut answer = AsgmtSet::new();
+            answer.insert(asgmt);
+            return answer;
+          }
+        }
         let mut answer = consequent.as_eliminations();
         for antecedent in antecedents {
           answer |= antecedent.as_eliminations();
@@ -868,7 +875,7 @@ pub fn disprove_erroneous_assignment(
   if !err_ants.contains(&target_fact) {
     return Some(Fact::Implication {
       antecedents: vec![target_fact],
-      consequent: Box::new(err_cons),
+      consequent: Box::new(err_fact),
     });
   }
 
@@ -882,14 +889,14 @@ pub fn disprove_erroneous_assignment(
   let final_fact = if nested_deps.is_empty() {
     Fact::Implication {
       antecedents: vec![target_fact],
-      consequent: Box::new(err_cons),
+      consequent: Box::new(err_fact),
     }
   } else {
     Fact::Implication {
       antecedents: vec![target_fact],
       consequent: Box::new(Fact::Implication {
         antecedents: nested_deps,
-        consequent: Box::new(err_cons),
+        consequent: Box::new(err_fact),
       }),
     }
   };
@@ -999,14 +1006,14 @@ fn disprove_recursive(
       let f_cand = if nested_deps.is_empty() {
         Fact::Implication {
           antecedents: vec![cand_fact],
-          consequent: Box::new(err_cons),
+          consequent: Box::new(err_fact.clone()),
         }
       } else {
         Fact::Implication {
           antecedents: vec![cand_fact],
           consequent: Box::new(Fact::Implication {
             antecedents: nested_deps,
-            consequent: Box::new(err_cons),
+            consequent: Box::new(err_fact.clone()),
           }),
         }
       };
