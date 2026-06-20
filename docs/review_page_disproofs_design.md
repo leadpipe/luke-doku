@@ -1,5 +1,9 @@
 # Design Doc: Review Page Disproofs & Logical Trails
 
+> **IMPORTANT**
+>
+> **Superseded Parts**: Major parts of this document (specifically the combination-based search in Section 3, multi-antecedent progress tracking, and the handling of multi-antecedent constraints/application in Section 4.E) have been superseded by the productivity-driven, nested disproof search architecture. For the current v2 design and implementation status, please refer to [nested_disproofs_design.md](./nested_disproofs_design.md).
+
 This document outlines the architecture, data models, and user experience for introducing **disproofs** (speculative logical trails) to the review page. This will allow players to analyze Expert and Lunatic puzzles when direct deductions run out of information.
 
 ---
@@ -90,9 +94,9 @@ To keep the UI responsive and respect CPU time budgets, the Web Worker executes 
 ### Complexity-Conditioned Search Depth
 
 To avoid wasting CPU cycles on simpler puzzles, the maximum search depth is dynamically conditioned on the puzzle's complexity rating:
+
 - **Expert or simpler puzzles**: `maxDepth` is set to `1`, looking only for single-speculation contradictions.
 - **Lunatic puzzles**: `maxDepth` is set to `10`, allowing nested or multi-speculation contradictions to be found.
-
 
 ### Multi-Dimensional Search Progress
 
@@ -132,7 +136,6 @@ The `currentIndices` vector is incremented lexicographically. To avoid combinato
   - **Productivity**: An indicator showing how many cells can be solved using standard direct deductions once this disproof's elimination is applied (e.g., _"Productivity: +12 cells"_).
     - _Note on Productivity Calculation_: Because calculating downstream productivity for every found trail is computationally expensive, this is done **asynchronously in the background**. Disproofs initially appear with a loading state for their productivity score, and are re-sorted as the worker finishes calculating them.
     - _WASM Optimization_: This is computed by calling the WASM function `calculateProductivity(grid, loc, num)`. This function is highly optimized via `Ledger` bitwise propagation and does not construct logical implication trees.
-
 
 ```
 +--------------------------------------------------+
@@ -182,6 +185,7 @@ For multi-antecedent disproofs (e.g., $A \wedge B \implies \bot$), the constrain
 - **Engine Support**: The engine must accept a list of sets of eliminations (binary or N-ary constraints) alongside the grid when computing facts. Clicking "Apply" adds this constraint to the engine's known state.
 - **UI Indication**: A persistent visual indicator is added to show the linked constraint between the affected cells, so the player remembers the "Not both A and B" rule.
 - If the player subsequently assigns $A$ in a trail, the engine immediately knows $\neg B$ and factors that into its deductions. If the player assigns both $A$ and $B$, the engine instantly flags a contradiction based on the recorded constraint.
+
 ---
 
 ## 5. Implementation Status: Fully Completed
@@ -189,7 +193,8 @@ For multi-antecedent disproofs (e.g., $A \wedge B \implies \bot$), the constrain
 The entire project (Rust backend, web worker slice architecture, and Lit-HTML frontend components) has been successfully implemented, integrated, and verified.
 
 ### Summary of Completed Work:
-1. **Fact Representation**: 
+
+1. **Fact Representation**:
    - Added `Fact::SpeculativeAssignment` to model hypothetical assignments.
    - Reused `Fact::Implication` for disproofs, where `antecedents` are the speculative assignments and the ultimate `consequent` is always a base error fact (e.g., `Conflict`, `NoNum`).
 2. **Stateful Search Engine (`search_disproofs_native`)**:
@@ -214,4 +219,3 @@ The entire project (Rust backend, web worker slice architecture, and Lit-HTML fr
    - Renders red clock "x" indicators and connector lines for multi-antecedent constraint bounds.
 8. **Testing & Verification**:
    - Fully covered by Rust unit tests, worker TS tests, and Lit component unit tests. All tests pass.
-

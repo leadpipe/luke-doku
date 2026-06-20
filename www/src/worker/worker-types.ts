@@ -1,3 +1,4 @@
+import type {ErroneousAssignmentProductivity} from '../facts/ErroneousAssignmentProductivity';
 import type {Fact} from '../facts/Fact';
 import type {SearchProgress} from '../facts/SearchProgress';
 import * as wasm from '../wasm';
@@ -10,6 +11,8 @@ export enum ToWorkerMessageType {
   DEDUCE_FACTS = 'DEDUCE_FACTS',
   SEARCH_DISPROOFS = 'SEARCH_DISPROOFS',
   CALCULATE_PRODUCTIVITY = 'CALCULATE_PRODUCTIVITY',
+  CALCULATE_ERRONEOUS_PRODUCTIVITY = 'CALCULATE_ERRONEOUS_PRODUCTIVITY',
+  DISPROVE_ERRONEOUS_ASSIGNMENT = 'DISPROVE_ERRONEOUS_ASSIGNMENT',
 }
 
 interface ToWorkerMessageBase {
@@ -51,7 +54,7 @@ export interface FindSymmetriesMessage extends ToWorkerMessageBase {
   readonly clues: string;
 }
 
-export type EliminationConstraint = { loc: number; num: number }[];
+export type EliminationConstraint = {loc: number; num: number}[];
 
 export interface DeduceFactsMessage extends ToWorkerMessageBase {
   readonly type: ToWorkerMessageType.DEDUCE_FACTS;
@@ -101,6 +104,21 @@ export interface CalculateProductivityMessage extends ToWorkerMessageBase {
   readonly num: number;
 }
 
+export interface CalculateErroneousProductivityMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY;
+  readonly grid: string;
+  readonly solutions?: readonly string[];
+}
+
+export interface DisproveErroneousAssignmentMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT;
+  readonly grid: string;
+  readonly target: {loc: number; num: number};
+  readonly solutions?: readonly string[];
+  readonly eliminations?: readonly EliminationConstraint[];
+  readonly maxTimeMs?: number;
+}
+
 export type ToWorkerMessage =
   | GeneratePuzzleMessage
   | EvaluatePuzzleMessage
@@ -108,7 +126,9 @@ export type ToWorkerMessage =
   | FindSymmetriesMessage
   | DeduceFactsMessage
   | SearchDisproofsMessage
-  | CalculateProductivityMessage;
+  | CalculateProductivityMessage
+  | CalculateErroneousProductivityMessage
+  | DisproveErroneousAssignmentMessage;
 
 export enum FromWorkerMessageType {
   ERROR_CAUGHT = 'ERROR_CAUGHT',
@@ -119,6 +139,8 @@ export enum FromWorkerMessageType {
   FACTS_DEDUCED = 'FACTS_DEDUCED',
   DISPROOFS_SEARCHED = 'DISPROOFS_SEARCHED',
   PRODUCTIVITY_CALCULATED = 'PRODUCTIVITY_CALCULATED',
+  ERRONEOUS_PRODUCTIVITY_CALCULATED = 'ERRONEOUS_PRODUCTIVITY_CALCULATED',
+  ERRONEOUS_ASSIGNMENT_DISPROVED = 'ERRONEOUS_ASSIGNMENT_DISPROVED',
 }
 
 interface FromWorkerMessageBase {
@@ -271,6 +293,20 @@ export interface ProductivityCalculatedMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+export interface ErroneousProductivityCalculatedMessage extends FromWorkerMessageBase {
+  readonly type: FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED;
+  readonly toWorkerMessage: CalculateErroneousProductivityMessage;
+  readonly results: readonly ErroneousAssignmentProductivity[];
+  readonly elapsedMs: number;
+}
+
+export interface ErroneousAssignmentDisprovedMessage extends FromWorkerMessageBase {
+  readonly type: FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED;
+  readonly toWorkerMessage: DisproveErroneousAssignmentMessage;
+  readonly disproof?: Fact;
+  readonly elapsedMs: number;
+}
+
 export type FromWorkerMessage =
   | ErrorCaughtMessage
   | PuzzleGeneratedMessage
@@ -279,4 +315,6 @@ export type FromWorkerMessage =
   | SymmetriesFoundMessage
   | FactsDeducedMessage
   | DisproofsSearchedMessage
-  | ProductivityCalculatedMessage;
+  | ProductivityCalculatedMessage
+  | ErroneousProductivityCalculatedMessage
+  | ErroneousAssignmentDisprovedMessage;

@@ -806,6 +806,34 @@ pub fn search_disproofs(
   serde_wasm_bindgen::to_value(&result).unwrap()
 }
 
+#[wasm_bindgen(js_name = "disproveErroneousAssignment")]
+pub fn disprove_erroneous_assignment_wasm(
+  grid: &Grid,
+  target: wasm_bindgen::JsValue,
+  solutions: Option<Vec<SolvedGrid>>,
+  eliminations: wasm_bindgen::JsValue,
+  max_time_ms: Option<f64>,
+) -> wasm_bindgen::JsValue {
+  let target: WasmAsgmt = serde_wasm_bindgen::from_value(target).unwrap();
+  let target_asgmt = Asgmt::new(Num::new(target.num).unwrap(), Loc::new(target.loc).unwrap());
+
+  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
+    if eliminations.is_undefined() || eliminations.is_null() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+    };
+
+  let mut base_finder = FactFinder::new(grid);
+  if let Some(ref c) = constraints {
+    apply_constraints(&mut base_finder, c);
+  }
+
+  let solutions = solutions.unwrap_or_default();
+  let fact_opt = disprove_erroneous_assignment(&base_finder, target_asgmt, &solutions, max_time_ms);
+  serde_wasm_bindgen::to_value(&fact_opt).unwrap()
+}
+
 pub fn disprove_erroneous_assignment(
   base_finder: &FactFinder,
   target: Asgmt,
@@ -1538,23 +1566,33 @@ mod tests {
 
     let target = Asgmt::new(N8, L54);
     let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0));
-    assert!(fact_opt.is_some(), "Should have successfully disproved target L54=N8");
+    assert!(
+      fact_opt.is_some(),
+      "Should have successfully disproved target L54=N8"
+    );
     let fact = fact_opt.unwrap();
     fn has_speculative_assignment_deep(fact: &Fact, target_loc: Loc, target_num: Num) -> bool {
       match fact {
-        Fact::Implication { antecedents, consequent } => {
-          antecedents.iter().any(|ant| has_speculative_assignment_deep(ant, target_loc, target_num))
+        Fact::Implication {
+          antecedents,
+          consequent,
+        } => {
+          antecedents
+            .iter()
+            .any(|ant| has_speculative_assignment_deep(ant, target_loc, target_num))
             || has_speculative_assignment_deep(consequent, target_loc, target_num)
         }
-        Fact::SpeculativeAssignment { loc, num } => {
-          *loc == target_loc && *num == target_num
-        }
+        Fact::SpeculativeAssignment { loc, num } => *loc == target_loc && *num == target_num,
         _ => false,
       }
     }
 
     // 1. Root implication asserts that target speculation (L54=N8) leads to contradiction
-    if let Fact::Implication { antecedents, consequent } = &fact {
+    if let Fact::Implication {
+      antecedents,
+      consequent,
+    } = &fact
+    {
       assert_eq!(antecedents.len(), 1);
       assert_eq!(
         antecedents[0],
@@ -1562,9 +1600,16 @@ mod tests {
       );
 
       // 2. Consequent is another implication containing the nested disproof dependencies
-      if let Fact::Implication { antecedents: nested_deps, consequent: final_error } = &**consequent {
+      if let Fact::Implication {
+        antecedents: nested_deps,
+        consequent: final_error,
+      } = &**consequent
+      {
         // Assert we have nested dependencies
-        assert!(!nested_deps.is_empty(), "Should have nested disproof dependencies");
+        assert!(
+          !nested_deps.is_empty(),
+          "Should have nested disproof dependencies"
+        );
 
         // Let's assert that one of the nested dependencies is a disproof of L82=N2
         let mut found_l82_n2_disproof = false;
@@ -1574,10 +1619,16 @@ mod tests {
             break;
           }
         }
-        assert!(found_l82_n2_disproof, "Should have a nested dependency disproving L82=N2");
+        assert!(
+          found_l82_n2_disproof,
+          "Should have a nested dependency disproving L82=N2"
+        );
 
         // The ultimate consequent is indeed a base error fact
-        assert!(final_error.is_error(), "Ultimate consequent should be a contradiction");
+        assert!(
+          final_error.is_error(),
+          "Ultimate consequent should be a contradiction"
+        );
       } else {
         panic!("Consequent of root implication should be a nested Implication");
       }

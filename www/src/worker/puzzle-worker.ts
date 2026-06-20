@@ -15,6 +15,8 @@ import {
   type TestPuzzleMessage,
   ToWorkerMessage,
   ToWorkerMessageType,
+  type CalculateErroneousProductivityMessage,
+  type DisproveErroneousAssignmentMessage,
 } from './worker-types';
 
 export async function handleToWorkerMessage(
@@ -45,6 +47,12 @@ export async function handleToWorkerMessage(
       break;
     case ToWorkerMessageType.CALCULATE_PRODUCTIVITY:
       scope.postMessage(calculateProductivity(message));
+      break;
+    case ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY:
+      scope.postMessage(calculateErroneousProductivity(message));
+      break;
+    case ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT:
+      scope.postMessage(disproveErroneousAssignment(message));
       break;
     default:
       ensureExhaustiveSwitch(messageType);
@@ -301,6 +309,94 @@ function calculateProductivity(
   }
 }
 
+function calculateErroneousProductivity(
+  m: CalculateErroneousProductivityMessage,
+): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'calculateErroneousProductivity', new Error('Invalid grid'));
+  }
+  let solutions: wasm.SolvedGrid[] | undefined;
+  const startTimeMs = performance.now();
+  try {
+    if (m.solutions) {
+      solutions = [];
+      for (const s of m.solutions) {
+        const sg = wasm.Grid.newFromString(s)?.solvedGrid();
+        if (sg) {
+          solutions.push(sg);
+        }
+      }
+    }
+    const results = wasm.calculateErroneousProductivity(grid, solutions);
+    solutions = undefined;
+
+    const elapsedMs = performance.now() - startTimeMs;
+    return {
+      type: FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED,
+      toWorkerMessage: m,
+      results,
+      elapsedMs,
+    };
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'calculateErroneousProductivity', e);
+  } finally {
+    grid.free();
+    if (solutions) {
+      for (const sg of solutions) {
+        sg.free();
+      }
+    }
+  }
+}
+
+function disproveErroneousAssignment(
+  m: DisproveErroneousAssignmentMessage,
+): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'disproveErroneousAssignment', new Error('Invalid grid'));
+  }
+  let solutions: wasm.SolvedGrid[] | undefined;
+  const startTimeMs = performance.now();
+  try {
+    if (m.solutions) {
+      solutions = [];
+      for (const s of m.solutions) {
+        const sg = wasm.Grid.newFromString(s)?.solvedGrid();
+        if (sg) {
+          solutions.push(sg);
+        }
+      }
+    }
+    const disproof = wasm.disproveErroneousAssignment(
+      grid,
+      m.target,
+      solutions,
+      m.eliminations,
+      m.maxTimeMs,
+    );
+    solutions = undefined;
+
+    const elapsedMs = performance.now() - startTimeMs;
+    return {
+      type: FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED,
+      toWorkerMessage: m,
+      disproof,
+      elapsedMs,
+    };
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'disproveErroneousAssignment', e);
+  } finally {
+    grid.free();
+    if (solutions) {
+      for (const sg of solutions) {
+        sg.free();
+      }
+    }
+  }
+}
+
 /**
  * The largest number of puzzle locations that don't conform to a symmetry
  * we'll still count as matching it.
@@ -316,4 +412,6 @@ export const TEST_ONLY = {
   testPuzzle,
   searchDisproofs,
   calculateProductivity,
+  calculateErroneousProductivity,
+  disproveErroneousAssignment,
 };

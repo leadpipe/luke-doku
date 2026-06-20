@@ -8,6 +8,8 @@ import {
   ToWorkerMessageType,
   type DisproofsSearchedMessage,
   type EliminationConstraint,
+  type ErroneousAssignmentDisprovedMessage,
+  type ErroneousProductivityCalculatedMessage,
   type FactsDeducedMessage,
   type GeneratePuzzleMessage,
   type ProductivityCalculatedMessage,
@@ -170,6 +172,22 @@ class WorkerQueue {
           });
           pending.resolve(e.data);
           break;
+        case FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED:
+          logEvent(EventType.SYSTEM, {
+            category: 'worker erroneous productivity calculated time',
+            detail: e.data.toWorkerMessage.grid,
+            elapsedMs: e.data.elapsedMs,
+          });
+          pending.resolve(e.data);
+          break;
+        case FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED:
+          logEvent(EventType.SYSTEM, {
+            category: 'worker erroneous assignment disproved time',
+            detail: e.data.toWorkerMessage.grid,
+            elapsedMs: e.data.elapsedMs,
+          });
+          pending.resolve(e.data);
+          break;
         default:
           ensureExhaustiveSwitch(responseType);
       }
@@ -205,6 +223,8 @@ const puzzlesQueue = new WorkerQueue();
 const evaluateQueue = new WorkerQueue();
 const disproofsQueue = new WorkerQueue();
 const productivityQueue = new WorkerQueue();
+const disproveQueue = new WorkerQueue();
+const disproveLongQueue = new WorkerQueue();
 
 /**
  * Sends a message to the worker to generate a puzzle for the given date and
@@ -366,4 +386,58 @@ export async function requestProductivityCalculation(
     message,
     FromWorkerMessageType.PRODUCTIVITY_CALCULATED,
   ) as Promise<ProductivityCalculatedMessage>;
+}
+
+/**
+ * Sends a message to the worker to calculate productivity for all erroneous assignments.
+ * @param grid The grid state, as a flat string.
+ * @param solutions The solutions of the puzzle, as flat strings.
+ * @returns A promise that resolves to the productivity calculation results.
+ */
+export async function requestErroneousProductivityCalculation(
+  grid: string,
+  solutions?: readonly string[],
+): Promise<ErroneousProductivityCalculatedMessage> {
+  const message = {
+    type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY,
+    grid,
+    solutions,
+  };
+  return productivityQueue.request(
+    message,
+    FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED,
+  ) as Promise<ErroneousProductivityCalculatedMessage>;
+}
+
+/**
+ * Sends a message to the worker to disprove a specific erroneous assignment using nested disproof logic.
+ * @param grid The grid state, as a flat string.
+ * @param target The target assignment to disprove.
+ * @param solutions The solutions of the puzzle, as flat strings.
+ * @param eliminations Already applied disproof constraints.
+ * @param maxTimeMs The maximum execution time.
+ * @param useLongQueue Whether to route to the long-running worker queue.
+ * @returns A promise that resolves to the disproof fact (or lack thereof).
+ */
+export async function requestErroneousAssignmentDisproof(
+  grid: string,
+  target: {loc: number; num: number},
+  solutions?: readonly string[],
+  eliminations?: readonly EliminationConstraint[],
+  maxTimeMs?: number,
+  useLongQueue?: boolean,
+): Promise<ErroneousAssignmentDisprovedMessage> {
+  const message = {
+    type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT,
+    grid,
+    target,
+    solutions,
+    eliminations,
+    maxTimeMs,
+  };
+  const queue = useLongQueue ? disproveLongQueue : disproveQueue;
+  return queue.request(
+    message,
+    FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED,
+  ) as Promise<ErroneousAssignmentDisprovedMessage>;
 }

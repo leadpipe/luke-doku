@@ -1,6 +1,6 @@
 # Design Doc: Disproof Search v2 (Productivity-First & Nested)
 
-This document outlines the revised architecture for discovering and presenting disproofs (speculative logical trails) in the review page. It replaces the previous combination-based search approach with a productivity-driven, nested search architecture.
+This document outlines the revised architecture for discovering and presenting disproofs (speculative logical trails) in the review page. It replaces the previous [combination-based search approach](review_page_disproofs_design.md) with a productivity-driven, nested search architecture.
 
 ## 1. Overview & Objectives
 
@@ -70,3 +70,5 @@ This approach guarantees that every disproof presented on the main board is ulti
 
 - [x] **Productivity-First Candidate Selection**: Implemented `calculateErroneousProductivity` in the Rust library, which compares possible grid assignments against solutions, computes downstream productivity of eliminating erroneous candidates using optimized `Ledger` propagation, and returns them sorted descending. Exposes TypeScript definitions and WASM bindings.
 - [x] **Nested Disproof Search (Rust Library)**: Implemented `disprove_erroneous_assignment` and recursive helper `disprove_recursive` to disprove erroneous assignments using time-bounded nested disproofs. Speculative deductions are propagated through implied assignments (hidden/naked singles) as well, forming a rich implication tree. Covered by unit tests on Lunatic puzzles.
+- [x] **TypeScript & Web Worker Integration**: Exposed both `calculateErroneousProductivity` and `disproveErroneousAssignment` to TypeScript. Set up parallel web worker queues (`disproveQueue` and `disproveLongQueue`) to support simultaneous short and long-running disproof calls without blocking responsive paths. Covered by worker unit tests.
+

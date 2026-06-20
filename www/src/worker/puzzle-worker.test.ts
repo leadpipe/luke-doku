@@ -13,6 +13,8 @@ const {
   testPuzzle,
   searchDisproofs,
   calculateProductivity,
+  calculateErroneousProductivity,
+  disproveErroneousAssignment,
 } = TEST_ONLY;
 
 describe('Puzzle Worker', () => {
@@ -247,6 +249,69 @@ describe('Puzzle Worker', () => {
       expect(result.type).to.equal('PRODUCTIVITY_CALCULATED');
       expect(result.productivity).to.be.a('number');
       expect(result.productivity).to.be.at.least(0);
+    });
+  });
+
+  describe('calculateErroneousProductivity', () => {
+    it('calculates erroneous productivity for a grid', () => {
+      const generateMessage = {
+        type: ToWorkerMessageType.GENERATE_PUZZLE,
+        date: '2024-12-14',
+        counter: 1,
+        interactionId: 1,
+      } as const;
+      const generateResult = generatePuzzle(
+        generateMessage,
+      ) as PuzzleGeneratedMessage;
+
+      const message = {
+        type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY,
+        grid: generateResult.clues,
+        solutions: generateResult.solutions,
+        interactionId: 8,
+      } as const;
+
+      const result = calculateErroneousProductivity(message) as any;
+      expect(result.type).to.equal('ERRONEOUS_PRODUCTIVITY_CALCULATED');
+      expect(result.results).to.be.an('array');
+    });
+  });
+
+  describe('disproveErroneousAssignment', () => {
+    it('attempts to disprove an erroneous assignment', () => {
+      const generateMessage = {
+        type: ToWorkerMessageType.GENERATE_PUZZLE,
+        date: '2024-12-15',
+        counter: 1,
+        interactionId: 1,
+      } as const;
+      const generateResult = generatePuzzle(
+        generateMessage,
+      ) as PuzzleGeneratedMessage;
+
+      const prodMessage = {
+        type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY,
+        grid: generateResult.clues,
+        solutions: generateResult.solutions,
+        interactionId: 9,
+      } as const;
+      const prodResult = calculateErroneousProductivity(prodMessage) as any;
+
+      if (prodResult.results && prodResult.results.length > 0) {
+        const target = prodResult.results[0];
+        const message = {
+          type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT,
+          grid: generateResult.clues,
+          target: {loc: target.loc, num: target.num},
+          solutions: generateResult.solutions,
+          maxTimeMs: 1000,
+          interactionId: 10,
+        } as const;
+
+        const result = disproveErroneousAssignment(message) as any;
+        expect(result.type).to.equal('ERRONEOUS_ASSIGNMENT_DISPROVED');
+        expect(result).to.have.property('disproof');
+      }
     });
   });
 });
