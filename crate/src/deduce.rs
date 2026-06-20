@@ -1,6 +1,7 @@
 //! Code that emulates human Sudoku deduction patterns.
 
 use crate::core::*;
+use crate::time;
 
 mod internals;
 
@@ -261,6 +262,20 @@ impl FactFinder {
       internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
     collector
       .collect_with_speculative(speculative_facts, base_remaining_asgmts, base_sukaku_map)
+      .unwrap();
+    collector.facts
+  }
+
+  pub fn deduce_with_speculative_rich(
+    &self,
+    speculative_facts: Vec<Fact>,
+    base_remaining_asgmts: AsgmtSet,
+    base_sukaku_map: internals::SukakuMap,
+  ) -> Vec<Fact> {
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector
+      .collect_with_speculative_rich(speculative_facts, base_remaining_asgmts, base_sukaku_map)
       .unwrap();
     collector.facts
   }
@@ -540,12 +555,12 @@ pub fn search_disproofs_native(
     progress.invalid_subsets.clear();
   }
 
-  let start_time = crate::time::now();
+  let start_time = time::now();
   let time_limit = max_time_ms.unwrap_or(500.0);
   let mut disproofs = Vec::new();
 
   loop {
-    if crate::time::now() - start_time > time_limit {
+    if time::now() - start_time > time_limit {
       break;
     }
 
@@ -789,6 +804,222 @@ pub fn search_disproofs(
     constraints.as_deref(),
   );
   serde_wasm_bindgen::to_value(&result).unwrap()
+}
+
+pub fn disprove_erroneous_assignment(
+  base_finder: &FactFinder,
+  target: Asgmt,
+  solutions: &[SolvedGrid],
+  max_time_ms: Option<f64>,
+) -> Option<Fact> {
+  let start_time = time::now();
+  let target_fact = Fact::SpeculativeAssignment {
+    loc: target.loc,
+    num: target.num,
+  };
+
+  let mut current_finder = base_finder.clone();
+  current_finder.apply(target);
+
+  let max_depth = 4;
+
+  let err_fact = disprove_recursive(
+    base_finder,
+    current_finder,
+    &[target_fact.clone()],
+    Vec::new(),
+    solutions,
+    1,
+    max_depth,
+    start_time,
+    max_time_ms,
+  )?;
+
+  let (err_ants, err_cons) = get_implication_parts(&err_fact);
+
+  if !err_ants.contains(&target_fact) {
+    return Some(Fact::Implication {
+      antecedents: vec![target_fact],
+      consequent: Box::new(err_cons),
+    });
+  }
+
+  let mut nested_deps = Vec::new();
+  for ant in err_ants {
+    if ant != target_fact {
+      nested_deps.push(ant);
+    }
+  }
+
+  let final_fact = if nested_deps.is_empty() {
+    Fact::Implication {
+      antecedents: vec![target_fact],
+      consequent: Box::new(err_cons),
+    }
+  } else {
+    Fact::Implication {
+      antecedents: vec![target_fact],
+      consequent: Box::new(Fact::Implication {
+        antecedents: nested_deps,
+        consequent: Box::new(err_cons),
+      }),
+    }
+  };
+
+  Some(final_fact)
+}
+
+fn disprove_recursive(
+  base_finder: &FactFinder,
+  mut current_finder: FactFinder,
+  active_speculations: &[Fact],
+  mut accumulated_nested_disproofs: Vec<Fact>,
+  solutions: &[SolvedGrid],
+  depth: usize,
+  max_depth: usize,
+  start_time: f64,
+  max_time_ms: Option<f64>,
+) -> Option<Fact> {
+  if let Some(limit) = max_time_ms {
+    if time::now() - start_time > limit {
+      return None;
+    }
+  }
+  if depth > max_depth {
+    return None;
+  }
+
+  // 1. Run rich deductions in current_finder
+  let mut spec_facts = active_speculations.to_vec();
+  spec_facts.extend(accumulated_nested_disproofs.clone());
+
+  let deduced_facts = current_finder.deduce_with_speculative_rich(
+    spec_facts,
+    base_finder.remaining_asgmts,
+    base_finder.sukaku_map,
+  );
+
+  // 2. Check for contradictions
+  for fact in &deduced_facts {
+    if fact.is_error() {
+      return Some(fact.clone());
+    }
+  }
+
+  if depth >= max_depth {
+    return None;
+  }
+
+  // 3. Apply deductions
+  for fact in &deduced_facts {
+    current_finder.apply_fact(fact);
+  }
+
+  // 4. Find erroneous candidates in the current hypothetical state
+  let err_candidates =
+    calculate_erroneous_productivity_native(&current_finder.to_grid(), solutions);
+
+  for cand in err_candidates {
+    if let Some(limit) = max_time_ms {
+      if time::now() - start_time > limit {
+        return None;
+      }
+    }
+
+    let cand_asgmt = Asgmt::new(cand.num, cand.loc);
+    let cand_fact = Fact::SpeculativeAssignment {
+      loc: cand.loc,
+      num: cand.num,
+    };
+
+    // Assume cand under current state
+    let mut nested_finder = current_finder.clone();
+    nested_finder.apply(cand_asgmt);
+
+    let mut next_active = active_speculations.to_vec();
+    next_active.push(cand_fact.clone());
+
+    if let Some(err_fact) = disprove_recursive(
+      base_finder,
+      nested_finder,
+      &next_active,
+      accumulated_nested_disproofs.clone(),
+      solutions,
+      depth + 1,
+      max_depth,
+      start_time,
+      max_time_ms,
+    ) {
+      // We found a contradiction!
+      let (err_ants, err_cons) = get_implication_parts(&err_fact);
+
+      // Check if the contradiction actually depends on cand_fact
+      if !err_ants.contains(&cand_fact) {
+        // Contradiction does not depend on cand_fact! Bubble it up.
+        return Some(err_fact);
+      }
+
+      // Construct nested disproof for cand
+      // Filter out parent active speculations from err_ants
+      let mut nested_deps = Vec::new();
+      for ant in err_ants {
+        if ant != cand_fact && !active_speculations.contains(&ant) {
+          nested_deps.push(ant);
+        }
+      }
+
+      let f_cand = if nested_deps.is_empty() {
+        Fact::Implication {
+          antecedents: vec![cand_fact],
+          consequent: Box::new(err_cons),
+        }
+      } else {
+        Fact::Implication {
+          antecedents: vec![cand_fact],
+          consequent: Box::new(Fact::Implication {
+            antecedents: nested_deps,
+            consequent: Box::new(err_cons),
+          }),
+        }
+      };
+
+      // Apply f_cand to current_finder
+      current_finder.apply_fact(&f_cand);
+      accumulated_nested_disproofs.push(f_cand);
+
+      // Deduce again and check if we found a contradiction at the current level
+      let mut spec_facts = active_speculations.to_vec();
+      spec_facts.extend(accumulated_nested_disproofs.clone());
+
+      let deduced_facts = current_finder.deduce_with_speculative_rich(
+        spec_facts,
+        base_finder.remaining_asgmts,
+        base_finder.sukaku_map,
+      );
+
+      for fact in &deduced_facts {
+        if fact.is_error() {
+          return Some(fact.clone());
+        }
+      }
+
+      for fact in &deduced_facts {
+        current_finder.apply_fact(fact);
+      }
+    }
+  }
+
+  None
+}
+
+fn get_implication_parts(fact: &Fact) -> (Vec<Fact>, Fact) {
+  match fact {
+    Fact::Implication {
+      antecedents,
+      consequent,
+    } => (antecedents.clone(), *consequent.clone()),
+    _ => (Vec::new(), fact.clone()),
+  }
 }
 
 #[cfg(test)]
@@ -1276,6 +1507,82 @@ mod tests {
         i,
         results[i].productivity
       );
+    }
+  }
+
+  #[test]
+  fn test_lunatic_nested_disproof() {
+    // Lunatic puzzle from evaluate/internals.rs
+    let grid = Grid::from_str(
+      r"
+      . . 5 | 3 . . | . . .
+      8 . . | . . . | . 2 .
+      . 7 . | . 1 . | 5 . .
+      ------+------+------
+      4 . . | . . 5 | 3 . .
+      . 1 . | . 7 . | . . 6
+      . . 3 | 2 . . | . 8 .
+      ------+------+------
+      . 6 . | 5 . . | . . 9
+      . . 4 | . . . | . 3 .
+      . . . | . . 9 | 7 . .
+      ",
+    )
+    .unwrap();
+
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&grid, 1, &mut helper);
+    assert_eq!(summary.solutions.len(), 1);
+    let solutions = summary.solutions;
+    let base_finder = FactFinder::new(&grid);
+
+    let target = Asgmt::new(N8, L54);
+    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0));
+    assert!(fact_opt.is_some(), "Should have successfully disproved target L54=N8");
+    let fact = fact_opt.unwrap();
+    fn has_speculative_assignment_deep(fact: &Fact, target_loc: Loc, target_num: Num) -> bool {
+      match fact {
+        Fact::Implication { antecedents, consequent } => {
+          antecedents.iter().any(|ant| has_speculative_assignment_deep(ant, target_loc, target_num))
+            || has_speculative_assignment_deep(consequent, target_loc, target_num)
+        }
+        Fact::SpeculativeAssignment { loc, num } => {
+          *loc == target_loc && *num == target_num
+        }
+        _ => false,
+      }
+    }
+
+    // 1. Root implication asserts that target speculation (L54=N8) leads to contradiction
+    if let Fact::Implication { antecedents, consequent } = &fact {
+      assert_eq!(antecedents.len(), 1);
+      assert_eq!(
+        antecedents[0],
+        Fact::SpeculativeAssignment { loc: L54, num: N8 }
+      );
+
+      // 2. Consequent is another implication containing the nested disproof dependencies
+      if let Fact::Implication { antecedents: nested_deps, consequent: final_error } = &**consequent {
+        // Assert we have nested dependencies
+        assert!(!nested_deps.is_empty(), "Should have nested disproof dependencies");
+
+        // Let's assert that one of the nested dependencies is a disproof of L82=N2
+        let mut found_l82_n2_disproof = false;
+        for dep in nested_deps {
+          if has_speculative_assignment_deep(dep, L82, N2) {
+            found_l82_n2_disproof = true;
+            break;
+          }
+        }
+        assert!(found_l82_n2_disproof, "Should have a nested dependency disproving L82=N2");
+
+        // The ultimate consequent is indeed a base error fact
+        assert!(final_error.is_error(), "Ultimate consequent should be a contradiction");
+      } else {
+        panic!("Consequent of root implication should be a nested Implication");
+      }
+    } else {
+      panic!("Root fact should be an Implication");
     }
   }
 }

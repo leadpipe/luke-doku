@@ -200,6 +200,119 @@ impl Collector {
     Ok(())
   }
 
+  pub fn collect_with_speculative_rich(
+    &mut self,
+    speculative_facts: Vec<Fact>,
+    base_remaining_asgmts: AsgmtSet,
+    base_sukaku_map: SukakuMap,
+  ) -> Result<(), Invalid> {
+    let mut antecedents = speculative_facts;
+    let mut antecedent_eliminations: Vec<AsgmtSet> = antecedents
+      .iter()
+      .map(|fact| fact.as_eliminations())
+      .collect();
+    let mut set_state = SetState::new();
+
+    loop {
+      if self.check_timeout() {
+        break;
+      }
+      let start = self.facts.len();
+
+      // 1. Find errors
+      find_errors(self, false)?;
+
+      // 2. Find hidden/naked singles, then overlaps and subsets
+      let singles_start = self.facts.len();
+      find_hidden_singles(self);
+      find_naked_singles(self);
+      let singles_end = self.facts.len();
+
+      let elims_start = self.facts.len();
+      find_overlaps(self);
+      find_subsets(self, &mut set_state);
+      let elims_end = self.facts.len();
+
+      if self.check_timeout() {
+        break;
+      }
+
+      // If nothing new was found, we are done
+      if singles_start == elims_end {
+        break;
+      }
+
+      // Keep copies of the raw facts in the batches before wrapping them in Implications
+      let singles_batch: Vec<Fact> = self.facts[singles_start..singles_end].to_vec();
+      let elims_batch: Vec<Fact> = self.facts[elims_start..elims_end].to_vec();
+
+      // 3. Narrow antecedents for all new facts (overlaps, subsets, and singles)
+      if !antecedents.is_empty() {
+        for fact in self.facts[start..].iter_mut() {
+          let required = narrow_antecedents(
+            fact,
+            antecedents.as_slice(),
+            &antecedent_eliminations,
+            base_remaining_asgmts,
+            base_sukaku_map,
+          );
+          if !required.is_empty() {
+            *fact = Fact::Implication {
+              antecedents: required,
+              consequent: Box::new(fact.clone()),
+            };
+          }
+        }
+      }
+
+      // 4. Collect new eliminations and assignments to propagate
+      let mut new_eliminations = AsgmtSet::new();
+      let mut new_antecedents_batch = Vec::new();
+      let mut new_antecedent_eliminations_batch = Vec::new();
+
+      // For overlaps and subsets:
+      for (i, fact) in self.facts[elims_start..elims_end].iter().enumerate() {
+        let raw_elims = elims_batch[i].as_eliminations();
+        if !raw_elims.is_empty() {
+          new_eliminations |= raw_elims;
+          new_antecedents_batch.push(fact.clone());
+          new_antecedent_eliminations_batch.push(raw_elims);
+        }
+      }
+
+      // For singles:
+      for (i, fact) in self.facts[singles_start..singles_end].iter().enumerate() {
+        let raw_elims = singles_batch[i].as_eliminations();
+        if !raw_elims.is_empty() {
+          new_eliminations |= raw_elims;
+          new_antecedents_batch.push(fact.clone());
+          new_antecedent_eliminations_batch.push(raw_elims);
+        }
+        if let Some(asgmt) = singles_batch[i].as_asgmt() {
+          self.remaining_asgmts.apply(asgmt);
+          self.remaining_asgmts.remove(asgmt);
+          self.actual_asgmts.insert(asgmt);
+          self.sukaku_map.apply(asgmt);
+        }
+      }
+
+      // If no new eliminations were made, we stop to avoid infinite loop
+      if new_eliminations.is_empty() {
+        break;
+      }
+
+      // 5. Update antecedents list for the next loop iteration
+      antecedents.extend(new_antecedents_batch);
+      antecedent_eliminations.extend(new_antecedent_eliminations_batch);
+
+      // 6. Update the collector's remaining_asgmts and sukaku_map with new eliminations
+      self.remaining_asgmts -= new_eliminations;
+      self.sukaku_map.eliminate(&new_eliminations);
+    }
+
+    Ok(())
+  }
+
   pub fn collect_singles(&mut self) {
     find_hidden_singles(self);
     find_naked_singles(self);

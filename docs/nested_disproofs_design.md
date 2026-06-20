@@ -69,3 +69,4 @@ This approach guarantees that every disproof presented on the main board is ulti
 ## 6. Implementation Status & Progress
 
 - [x] **Productivity-First Candidate Selection**: Implemented `calculateErroneousProductivity` in the Rust library, which compares possible grid assignments against solutions, computes downstream productivity of eliminating erroneous candidates using optimized `Ledger` propagation, and returns them sorted descending. Exposes TypeScript definitions and WASM bindings.
+- [x] **Nested Disproof Search (Rust Library)**: Implemented `disprove_erroneous_assignment` and recursive helper `disprove_recursive` to disprove erroneous assignments using time-bounded nested disproofs. Speculative deductions are propagated through implied assignments (hidden/naked singles) as well, forming a rich implication tree. Covered by unit tests on Lunatic puzzles.
