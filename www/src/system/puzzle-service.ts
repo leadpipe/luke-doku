@@ -1,4 +1,3 @@
-import type {SearchProgress} from '../facts/SearchProgress';
 import {PuzzleId, type Sudoku} from '../game/sudoku';
 import type {DateString} from '../game/types';
 import {ensureExhaustiveSwitch} from '../game/utils';
@@ -6,13 +5,11 @@ import {
   FromWorkerMessage,
   FromWorkerMessageType,
   ToWorkerMessageType,
-  type DisproofsSearchedMessage,
   type EliminationConstraint,
   type ErroneousAssignmentDisprovedMessage,
   type ErroneousProductivityCalculatedMessage,
   type FactsDeducedMessage,
   type GeneratePuzzleMessage,
-  type ProductivityCalculatedMessage,
   type PuzzleEvaluatedMessage,
   type PuzzleGeneratedMessage,
   type PuzzleTestedMessage,
@@ -151,22 +148,6 @@ class WorkerQueue {
         case FromWorkerMessageType.FACTS_DEDUCED:
           logEvent(EventType.SYSTEM, {
             category: 'worker facts deduced time',
-            detail: e.data.toWorkerMessage.grid,
-            elapsedMs: e.data.elapsedMs,
-          });
-          pending.resolve(e.data);
-          break;
-        case FromWorkerMessageType.DISPROOFS_SEARCHED:
-          logEvent(EventType.SYSTEM, {
-            category: 'worker disproofs searched time',
-            detail: e.data.toWorkerMessage.grid,
-            elapsedMs: e.data.elapsedMs,
-          });
-          pending.resolve(e.data);
-          break;
-        case FromWorkerMessageType.PRODUCTIVITY_CALCULATED:
-          logEvent(EventType.SYSTEM, {
-            category: 'worker productivity calculated time',
             detail: e.data.toWorkerMessage.grid,
             elapsedMs: e.data.elapsedMs,
           });
@@ -330,63 +311,6 @@ export async function requestFactDeduction(
   ) as Promise<FactsDeducedMessage>;
 }
 
-/**
- * Sends a message to the worker to search for disproofs, and returns a promise
- * that resolves to the search result.
- * @param grid The grid to search for disproofs, as a flat string.
- * @param solutions The solutions of the puzzle, as flat strings.
- * @param progress The search progress object.
- * @param maxDepth The maximum depth of combinations to search.
- * @param maxTimeMs The maximum amount of time to spend searching, in milliseconds.
- * @returns A promise that resolves to the search result.
- */
-export async function requestDisproofSearch(
-  grid: string,
-  solutions?: readonly string[],
-  eliminations?: readonly EliminationConstraint[],
-  progress?: SearchProgress,
-  maxDepth?: number,
-  maxTimeMs?: number,
-): Promise<DisproofsSearchedMessage> {
-  const message = {
-    type: ToWorkerMessageType.SEARCH_DISPROOFS,
-    grid,
-    solutions,
-    eliminations,
-    progress,
-    maxDepth,
-    maxTimeMs,
-  };
-  return disproofsQueue.request(
-    message,
-    FromWorkerMessageType.DISPROOFS_SEARCHED,
-  ) as Promise<DisproofsSearchedMessage>;
-}
-
-/**
- * Sends a message to the worker to calculate productivity for an elimination,
- * and returns a promise that resolves to the productivity.
- * @param grid The grid to calculate productivity on, as a flat string.
- * @param loc The grid location.
- * @param num The candidate number.
- * @returns A promise that resolves to the productivity.
- */
-export async function requestProductivityCalculation(
-  grid: string,
-  loc: number,
-  num: number,
-): Promise<ProductivityCalculatedMessage> {
-  const message = {
-    type: ToWorkerMessageType.CALCULATE_PRODUCTIVITY,
-    grid,
-    loc,
-    num,
-  };
-  return productivityQueue.request(
-    message,
-    FromWorkerMessageType.PRODUCTIVITY_CALCULATED,
-  ) as Promise<ProductivityCalculatedMessage>;
-}
 
 /**
  * Sends a message to the worker to calculate productivity for all erroneous assignments.

@@ -11,8 +11,6 @@ const {
   generatePuzzle,
   evaluatePuzzle,
   testPuzzle,
-  searchDisproofs,
-  calculateProductivity,
   calculateErroneousProductivity,
   disproveErroneousAssignment,
 } = TEST_ONLY;
@@ -193,62 +191,6 @@ describe('Puzzle Worker', () => {
 
       const result = testPuzzle(message);
       expect(result.type).to.equal('ERROR_CAUGHT');
-    });
-  });
-
-  describe('searchDisproofs', () => {
-    it('searches disproofs on a valid grid', () => {
-      const generateMessage = {
-        type: ToWorkerMessageType.GENERATE_PUZZLE,
-        date: '2024-12-12',
-        counter: 1,
-        interactionId: 1,
-      } as const;
-      const generateResult = generatePuzzle(
-        generateMessage,
-      ) as PuzzleGeneratedMessage;
-
-      const message = {
-        type: ToWorkerMessageType.SEARCH_DISPROOFS,
-        grid: generateResult.clues,
-        solutions: generateResult.solutions,
-        maxDepth: 1,
-        maxTimeMs: 100,
-        interactionId: 6,
-      } as const;
-
-      const result = searchDisproofs(message) as any;
-      expect(result.type).to.equal('DISPROOFS_SEARCHED');
-      expect(result.disproofs).to.be.an('array');
-      expect(result.progress).to.be.ok;
-      expect(result.progress.isComplete).to.be.a('boolean');
-    });
-  });
-
-  describe('calculateProductivity', () => {
-    it('calculates productivity for a grid cell elimination', () => {
-      const generateMessage = {
-        type: ToWorkerMessageType.GENERATE_PUZZLE,
-        date: '2024-12-13',
-        counter: 1,
-        interactionId: 1,
-      } as const;
-      const generateResult = generatePuzzle(
-        generateMessage,
-      ) as PuzzleGeneratedMessage;
-
-      const message = {
-        type: ToWorkerMessageType.CALCULATE_PRODUCTIVITY,
-        grid: generateResult.clues,
-        loc: 0,
-        num: 5,
-        interactionId: 7,
-      } as const;
-
-      const result = calculateProductivity(message) as any;
-      expect(result.type).to.equal('PRODUCTIVITY_CALCULATED');
-      expect(result.productivity).to.be.a('number');
-      expect(result.productivity).to.be.at.least(0);
     });
   });
 

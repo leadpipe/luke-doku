@@ -1,6 +1,5 @@
 import type {ErroneousAssignmentProductivity} from '../facts/ErroneousAssignmentProductivity';
 import type {Fact} from '../facts/Fact';
-import type {SearchProgress} from '../facts/SearchProgress';
 import * as wasm from '../wasm';
 
 export enum ToWorkerMessageType {
@@ -9,8 +8,6 @@ export enum ToWorkerMessageType {
   TEST_PUZZLE = 'TEST_PUZZLE',
   FIND_SYMMETRIES = 'FIND_SYMMETRIES',
   DEDUCE_FACTS = 'DEDUCE_FACTS',
-  SEARCH_DISPROOFS = 'SEARCH_DISPROOFS',
-  CALCULATE_PRODUCTIVITY = 'CALCULATE_PRODUCTIVITY',
   CALCULATE_ERRONEOUS_PRODUCTIVITY = 'CALCULATE_ERRONEOUS_PRODUCTIVITY',
   DISPROVE_ERRONEOUS_ASSIGNMENT = 'DISPROVE_ERRONEOUS_ASSIGNMENT',
 }
@@ -69,40 +66,6 @@ export interface DeduceFactsMessage extends ToWorkerMessageBase {
   readonly eliminations?: readonly EliminationConstraint[];
 }
 
-export interface SearchDisproofsMessage extends ToWorkerMessageBase {
-  readonly type: ToWorkerMessageType.SEARCH_DISPROOFS;
-
-  /** The current grid state, in GridString form. */
-  readonly grid: string;
-
-  /** The puzzle solutions, in GridString form, to avoid disproving assignments that are part of the solution. */
-  readonly solutions?: readonly string[];
-
-  /** Applied disproof constraints. */
-  readonly eliminations?: readonly EliminationConstraint[];
-
-  /** The current search progress, to resume from. */
-  readonly progress?: SearchProgress;
-
-  /** The maximum depth of combinations to search. */
-  readonly maxDepth?: number;
-
-  /** The maximum execution time for this slice, in milliseconds. */
-  readonly maxTimeMs?: number;
-}
-
-export interface CalculateProductivityMessage extends ToWorkerMessageBase {
-  readonly type: ToWorkerMessageType.CALCULATE_PRODUCTIVITY;
-
-  /** The current grid state, in GridString form. */
-  readonly grid: string;
-
-  /** The location (cell index 0-80) of the elimination. */
-  readonly loc: number;
-
-  /** The candidate number (1-9) to eliminate. */
-  readonly num: number;
-}
 
 export interface CalculateErroneousProductivityMessage extends ToWorkerMessageBase {
   readonly type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY;
@@ -125,8 +88,6 @@ export type ToWorkerMessage =
   | TestPuzzleMessage
   | FindSymmetriesMessage
   | DeduceFactsMessage
-  | SearchDisproofsMessage
-  | CalculateProductivityMessage
   | CalculateErroneousProductivityMessage
   | DisproveErroneousAssignmentMessage;
 
@@ -137,8 +98,6 @@ export enum FromWorkerMessageType {
   PUZZLE_TESTED = 'PUZZLE_TESTED',
   SYMMETRIES_FOUND = 'SYMMETRIES_FOUND',
   FACTS_DEDUCED = 'FACTS_DEDUCED',
-  DISPROOFS_SEARCHED = 'DISPROOFS_SEARCHED',
-  PRODUCTIVITY_CALCULATED = 'PRODUCTIVITY_CALCULATED',
   ERRONEOUS_PRODUCTIVITY_CALCULATED = 'ERRONEOUS_PRODUCTIVITY_CALCULATED',
   ERRONEOUS_ASSIGNMENT_DISPROVED = 'ERRONEOUS_ASSIGNMENT_DISPROVED',
 }
@@ -268,30 +227,6 @@ export interface FactsDeducedMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
-export interface DisproofsSearchedMessage extends FromWorkerMessageBase {
-  readonly type: FromWorkerMessageType.DISPROOFS_SEARCHED;
-  readonly toWorkerMessage: SearchDisproofsMessage;
-
-  /** The facts deduced from the disproof search. */
-  readonly disproofs: readonly Fact[];
-
-  /** The progress of the disproof search. */
-  readonly progress: SearchProgress;
-
-  /** How long the search slice took, in milliseconds. */
-  readonly elapsedMs: number;
-}
-
-export interface ProductivityCalculatedMessage extends FromWorkerMessageBase {
-  readonly type: FromWorkerMessageType.PRODUCTIVITY_CALCULATED;
-  readonly toWorkerMessage: CalculateProductivityMessage;
-
-  /** The productivity of the candidate disproof (number of downstream solved cells). */
-  readonly productivity: number;
-
-  /** How long the calculation took, in milliseconds. */
-  readonly elapsedMs: number;
-}
 
 export interface ErroneousProductivityCalculatedMessage extends FromWorkerMessageBase {
   readonly type: FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED;
@@ -314,7 +249,5 @@ export type FromWorkerMessage =
   | PuzzleTestedMessage
   | SymmetriesFoundMessage
   | FactsDeducedMessage
-  | DisproofsSearchedMessage
-  | ProductivityCalculatedMessage
   | ErroneousProductivityCalculatedMessage
   | ErroneousAssignmentDisprovedMessage;
