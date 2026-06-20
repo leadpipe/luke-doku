@@ -107,6 +107,7 @@ impl Collector {
             &antecedent_eliminations,
             base_remaining_asgmts,
             base_sukaku_map,
+            0,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {
@@ -140,6 +141,7 @@ impl Collector {
     base_remaining_asgmts: AsgmtSet,
     base_sukaku_map: SukakuMap,
   ) -> Result<(), Invalid> {
+    let num_speculative_facts = speculative_facts.len();
     let mut antecedents = speculative_facts;
     let mut antecedent_eliminations: Vec<AsgmtSet> = antecedents
       .iter()
@@ -173,6 +175,7 @@ impl Collector {
             &antecedent_eliminations,
             base_remaining_asgmts,
             base_sukaku_map,
+            num_speculative_facts,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {
@@ -206,6 +209,7 @@ impl Collector {
     base_remaining_asgmts: AsgmtSet,
     base_sukaku_map: SukakuMap,
   ) -> Result<(), Invalid> {
+    let num_speculative_facts = speculative_facts.len();
     let mut antecedents = speculative_facts;
     let mut antecedent_eliminations: Vec<AsgmtSet> = antecedents
       .iter()
@@ -237,11 +241,6 @@ impl Collector {
         break;
       }
 
-      // If nothing new was found, we are done
-      if singles_start == elims_end {
-        break;
-      }
-
       // Keep copies of the raw facts in the batches before wrapping them in Implications
       let singles_batch: Vec<Fact> = self.facts[singles_start..singles_end].to_vec();
       let elims_batch: Vec<Fact> = self.facts[elims_start..elims_end].to_vec();
@@ -255,6 +254,7 @@ impl Collector {
             &antecedent_eliminations,
             base_remaining_asgmts,
             base_sukaku_map,
+            num_speculative_facts,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {
@@ -263,6 +263,11 @@ impl Collector {
             };
           }
         }
+      }
+
+      // If nothing new was found, we are done
+      if singles_start == elims_end {
+        break;
       }
 
       // 4. Collect new eliminations and assignments to propagate
@@ -325,13 +330,15 @@ fn narrow_antecedents(
   antecedent_eliminations: &[AsgmtSet],
   remaining_asgmts: AsgmtSet,
   sukaku_map: SukakuMap,
+  num_speculative_facts: usize,
 ) -> Vec<Fact> {
   let mut result = Vec::new();
   let mut result_eliminations = AsgmtSet::new();
   let uses_sukaku_map = consequent.uses_sukaku_map();
   for index in (0..antecedents.len()).rev() {
     let antecedent = &antecedents[index];
-    if consequent.might_be_revealed_by_eliminations(&antecedent_eliminations[index]) {
+    let is_speculative = index < num_speculative_facts;
+    if is_speculative || consequent.might_be_revealed_by_eliminations(&antecedent_eliminations[index]) {
       let prior_antecedents_eliminations = antecedent_eliminations[0..index]
         .iter()
         .fold(result_eliminations, |acc, x| acc | *x);
@@ -530,6 +537,7 @@ fn find_overlaps(collector: &mut Collector) {
             &antecedent_eliminations,
             prev_remaining_asgmts,
             collector.sukaku_map,
+            0,
           );
           if !required.is_empty() {
             *fact = Fact::Implication {

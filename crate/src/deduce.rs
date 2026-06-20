@@ -364,7 +364,6 @@ pub fn deduce_facts(
   serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
 
-
 #[derive(Serialize, ts_rs::TS)]
 #[ts(export, export_to = "../../www/src/facts/")]
 #[serde(rename_all = "camelCase")]
@@ -440,7 +439,6 @@ pub fn calculate_erroneous_productivity(
   serde_wasm_bindgen::to_value(&results).unwrap()
 }
 
-
 #[wasm_bindgen(js_name = "disproveErroneousAssignment")]
 pub fn disprove_erroneous_assignment_wasm(
   grid: &Grid,
@@ -498,7 +496,7 @@ pub fn disprove_erroneous_assignment(
     max_time_ms,
   )?;
 
-  let (err_ants, err_cons) = get_implication_parts(&err_fact);
+  let (err_ants, _err_cons) = get_implication_parts(&err_fact);
 
   if !err_ants.contains(&target_fact) {
     return Some(Fact::Implication {
@@ -614,7 +612,7 @@ fn disprove_recursive(
       max_time_ms,
     ) {
       // We found a contradiction!
-      let (err_ants, err_cons) = get_implication_parts(&err_fact);
+      let (err_ants, _err_cons) = get_implication_parts(&err_fact);
 
       // Check if the contradiction actually depends on cand_fact
       if !err_ants.contains(&cand_fact) {
@@ -690,7 +688,6 @@ mod tests {
   use super::*;
   use std::str::FromStr;
 
-
   #[test]
   fn test_apply_constraints_single() {
     let grid = Grid::from_str(
@@ -762,7 +759,6 @@ mod tests {
     // Since asg_a is active, the constraint should propagate to eliminate asg_b
     assert!(!finder.remaining_asgmts.contains(asg_b));
   }
-
 
   #[test]
   fn test_calculate_erroneous_productivity() {
@@ -912,6 +908,83 @@ mod tests {
         );
       } else {
         panic!("Consequent of root implication should be a nested Implication");
+      }
+    } else {
+      panic!("Root fact should be an Implication");
+    }
+  }
+
+  #[test]
+  fn test_nested_disproof_bug() {
+    let grid = Grid::from_str(
+      r"
+      5 . . | . 7 9 | . 1 .
+      . 1 6 | 3 . 8 | 9 . 5
+      . 9 4 | 1 6 5 | 3 2 .
+      ------+------+------
+      . . . | . . 1 | . . .
+      4 . 1 | . . 7 | . . .
+      6 . 9 | . 3 4 | 1 . 2
+      ------+------+------
+      3 8 5 | 7 1 6 | 2 9 4
+      1 4 7 | . . 2 | . . 3
+      9 6 2 | . . 3 | 7 5 1
+      ",
+    )
+    .unwrap();
+
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&grid, 1, &mut helper);
+    assert_eq!(summary.solutions.len(), 1);
+    let solutions = summary.solutions;
+    let base_finder = FactFinder::new(&grid);
+
+    // L14 is row 0 col 3 (which is empty in grid, 2 in solution).
+    // Target speculative assignment: L14 = 4.
+    let target = Asgmt::new(N4, L14);
+
+    let mut finder = base_finder.clone();
+    finder.apply(target);
+    let deduced = finder.deduce_all_with_timeout(None);
+    println!("Deductions under target: {:#?}", deduced.0);
+
+    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0));
+    assert!(
+      fact_opt.is_some(),
+      "Should have successfully disproved target L14=N4"
+    );
+    let fact = fact_opt.unwrap();
+
+    // Verify it is not a direct implication to NoLoc for num: 3 in Blk 5.
+    if let Fact::Implication {
+      antecedents,
+      consequent,
+    } = &fact
+    {
+      assert_eq!(antecedents.len(), 1);
+      assert_eq!(
+        antecedents[0],
+        Fact::SpeculativeAssignment { loc: L14, num: N4 }
+      );
+
+      // The consequent should be a nested Implication, not directly NoLoc!
+      match &**consequent {
+        Fact::Implication {
+          antecedents: nested_deps,
+          consequent: final_error,
+        } => {
+          assert!(
+            !nested_deps.is_empty(),
+            "Should have nested disproof dependencies"
+          );
+          assert!(final_error.is_error());
+        }
+        Fact::NoLoc { num, unit } => {
+          panic!("Bug reproduced: target speculation directly implies NoLoc without nesting! NoLoc was: num={}, unit={:?}", num.get(), unit);
+        }
+        other => {
+          panic!("Unexpected consequent: {:?}", other);
+        }
       }
     } else {
       panic!("Root fact should be an Implication");
