@@ -159,33 +159,15 @@ export class ReplayView extends SudokuView {
 
     const {cellCenter, cellSize} = this;
     const eliminatedCandidates = new Set<string>();
-    const constraints: {loc: number; num: number}[][] = [];
 
     for (const fact of this.appliedDisproofs) {
-      const {antecedents} = flattenImplication(fact);
-      const specAsgs = antecedents.filter(
-        a => a.type === 'SpeculativeAssignment',
-      ) as {loc: number; num: number}[];
-
-      if (specAsgs.length === 1) {
-        eliminatedCandidates.add(`${specAsgs[0].loc}-${specAsgs[0].num}`);
-      } else if (specAsgs.length > 1) {
-        constraints.push(specAsgs);
-
-        const solvedAsgs = specAsgs.filter(asg => {
-          const locObj = Loc.of(asg.loc);
-          return locObj && this.getNum(locObj) === asg.num;
-        });
-
-        if (solvedAsgs.length === specAsgs.length - 1) {
-          const remaining = specAsgs.find(asg => {
-            const locObj = Loc.of(asg.loc);
-            return !locObj || this.getNum(locObj) !== asg.num;
-          });
-          if (remaining) {
-            eliminatedCandidates.add(`${remaining.loc}-${remaining.num}`);
-          }
-        }
+      if (
+        fact.type === 'Implication' &&
+        fact.antecedents.length > 0 &&
+        fact.antecedents[0].type === 'SpeculativeAssignment'
+      ) {
+        const rootAsg = fact.antecedents[0] as {loc: number; num: number};
+        eliminatedCandidates.add(`${rootAsg.loc}-${rootAsg.num}`);
       }
     }
 
@@ -196,7 +178,7 @@ export class ReplayView extends SudokuView {
 
       const loc = Loc.of(locIndex);
       if (!loc) continue;
-      if (this.isBlank(loc) && this.getNum(loc) === null) {
+      if (this.isBlank(loc) && this.getNum(loc) == null) {
         const [x, y] = cellCenter(loc);
         const angle = 2 * num * (Math.PI / 12);
         const textRadius = cellSize * 0.35;
@@ -204,19 +186,6 @@ export class ReplayView extends SudokuView {
         const numY = y - Math.cos(angle) * textRadius;
         answer.push(
           svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
-        );
-      }
-    }
-
-    for (const specAsgs of constraints) {
-      for (let i = 0; i < specAsgs.length - 1; i++) {
-        const loc1 = Loc.of(specAsgs[i].loc);
-        const loc2 = Loc.of(specAsgs[i + 1].loc);
-        if (!loc1 || !loc2) continue;
-        const [x1, y1] = cellCenter(loc1);
-        const [x2, y2] = cellCenter(loc2);
-        answer.push(
-          svg`<line class="constraint-line" x1=${x1} y1=${y1} x2=${x2} y2=${y2} />`,
         );
       }
     }

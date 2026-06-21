@@ -33,6 +33,7 @@ export class PlaybackGame {
       this.currentDeviations = [];
       this.currentIndex = i;
       this.rebuildGame();
+      this.pruneAppliedDisproofs();
     }
   }
 
@@ -60,6 +61,7 @@ export class PlaybackGame {
     if (this.currentDeviations.length > 0) {
       this.currentDeviations.pop();
       this.rebuildGame();
+      this.pruneAppliedDisproofs();
       return true;
     }
     return false;
@@ -69,6 +71,16 @@ export class PlaybackGame {
     if (this.currentDeviations.length > 0) {
       this.currentDeviations = [];
       this.rebuildGame();
+      this.pruneAppliedDisproofs();
+    }
+  }
+
+  private pruneAppliedDisproofs() {
+    const currentEff = this.getEffectiveIndex();
+    for (const k of Array.from(this.appliedDisproofsMap.keys())) {
+      if (k > currentEff) {
+        this.appliedDisproofsMap.delete(k);
+      }
     }
   }
 

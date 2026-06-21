@@ -15,7 +15,7 @@ import {
   unitContains,
 } from '../facts/utils';
 import {CommandTag, CompletionState} from '../game/command';
-import {SetNum} from '../game/commands';
+import {ClearCell, SetNum, SetNums} from '../game/commands';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
@@ -616,30 +616,24 @@ export class ReviewPage extends LitElement {
     if (!this.playback) return;
     this.clearPlayInterval();
 
-    this.playback.applyDisproof(disproof);
-
     if (disproof.type === 'Implication' && disproof.antecedents.length > 0) {
       const target = disproof.antecedents[0];
       if (target.type === 'SpeculativeAssignment') {
         const locObj = Loc.of(target.loc);
         if (locObj) {
-          const currentNums = this.playback.wrapper.game.getNums(locObj);
-          if (
-            currentNums &&
-            currentNums.size >= 2 &&
-            currentNums.has(target.num)
-          ) {
-            const updated = new Set(currentNums);
-            updated.delete(target.num);
-            if (updated.size > 0) {
-              this.playback.wrapper.game.setNums(locObj, updated);
-            } else {
-              this.playback.wrapper.game.clearCell(locObj);
-            }
+          const currentNums = this.playback.wrapper.game.getNums(locObj) || new Set<number>();
+          const updated = new Set(currentNums);
+          updated.delete(target.num);
+          if (updated.size > 0) {
+            this.playback.addDeviation(new SetNums(locObj, updated));
+          } else {
+            this.playback.addDeviation(new ClearCell(locObj));
           }
         }
       }
     }
+
+    this.playback.applyDisproof(disproof);
 
     this.selectedLoc = null;
     this.selectedFact = null;
@@ -1298,20 +1292,13 @@ export class ReviewPage extends LitElement {
 function getEliminationConstraints(elims: Fact[]) {
   const result = [];
   for (const elim of elims) {
-    const specAsgs: {loc: number; num: number}[] = [];
-    function collect(f: Fact) {
-      if (f.type === 'Implication') {
-        for (const ant of f.antecedents) {
-          collect(ant);
-        }
-        collect(f.consequent);
-      } else if (f.type === 'SpeculativeAssignment') {
-        specAsgs.push({loc: f.loc, num: f.num});
-      }
-    }
-    collect(elim);
-    if (specAsgs.length > 0) {
-      result.push(specAsgs);
+    if (
+      elim.type === 'Implication' &&
+      elim.antecedents.length > 0 &&
+      elim.antecedents[0].type === 'SpeculativeAssignment'
+    ) {
+      const rootAsg = elim.antecedents[0];
+      result.push([{loc: rootAsg.loc, num: rootAsg.num}]);
     }
   }
   return result;
