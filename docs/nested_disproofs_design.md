@@ -30,6 +30,7 @@ Since the engine has access to the solved grid(s), we can easily identify all **
 Using the sorted list of erroneous assignments, the engine will search for a disproof for each assignment in turn. Since the list is ordered by productivity, the highest-value disproofs are naturally discovered first.
 
 ### Search Rules & Filtering:
+- **Search Timing**: Disproof search is run at every stage of the replay, except when actually playing back (i.e., not during active automated playback intervals). This allows players to discover and apply speculative trails even when direct deductions are still available on the board.
 - **Single Disproof per Assignment**: The engine only needs to retain one valid disproof per speculative assignment.
 - **Optimizing for Trail Length**: If multiple logical paths lead to a contradiction for the same assignment, we will discard the longer ones in favor of the shortest logical trail.
 - **Tie-Breaking**: If multiple disproofs for the same assignment have the exact same length, ties will be broken using the deterministic order we currently use for sorting errors in the UI.

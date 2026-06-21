@@ -430,12 +430,6 @@ export class ReviewPage extends LitElement {
     if (this.isPlayingForward || this.isPlayingBackward) return;
     if (this.playback.wrapper.game.marks.asGrid().isSolved()) return;
 
-    const hasDirectDeductions = this.facts.some(f => {
-      const b = nub(f);
-      return b.type === 'SingleLoc' || b.type === 'SingleNum';
-    });
-    if (hasDirectDeductions) return;
-
     this.isSearching = true;
     this.runSequentialSearch(token);
   }
