@@ -23,8 +23,8 @@ import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 
 import {
-  requestErroneousProductivityCalculation,
   requestErroneousAssignmentDisproof,
+  requestErroneousProductivityCalculation,
   requestFactDeduction,
 } from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
@@ -54,6 +54,10 @@ export class ReviewPage extends LitElement {
       --page-grid-gap: 8px;
       --board-size: 380px;
       --board-padding: 10px;
+      --gf: light-dark(#fff, #000);
+      --gd: light-dark(#ddd, #222);
+      --gc: light-dark(#ccc, #333);
+      --bg-color: var(--gf);
       background-color: var(--bg-color);
       overflow-y: auto;
     }
@@ -122,7 +126,18 @@ export class ReviewPage extends LitElement {
       white-space: pre-wrap;
     }
     .fact-panel h3 {
-      margin-top: 0;
+      position: sticky;
+      top: -8px;
+      margin-top: -8px;
+      margin-left: -8px;
+      margin-right: -8px;
+      padding: 8px;
+      background: var(--gd);
+      z-index: 10;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      border-bottom: 1px solid var(--gc, #ccc);
       margin-bottom: 8px;
     }
     #bottom-info {
@@ -142,19 +157,15 @@ export class ReviewPage extends LitElement {
       width: 100%;
       margin-top: 8px;
     }
-    .apply-fact-container {
-      margin-top: 12px;
-      display: flex;
-      justify-content: center;
-    }
     .apply-fact-button {
       background-color: var(--hover-loc, #bdd4f9);
       color: var(--text-color, #000);
       border: 1px solid var(--gc, #ccc);
-      padding: 6px 16px;
+      padding: 4px 10px;
       border-radius: 4px;
       cursor: pointer;
       font-weight: 500;
+      font-size: 0.85em;
       font-family: inherit;
       transition:
         background-color 0.2s,
@@ -475,7 +486,8 @@ export class ReviewPage extends LitElement {
         const constraints = getEliminationConstraints(elims);
 
         const complexity = this.game?.complexity;
-        const isLunatic = complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
+        const isLunatic =
+          complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
         const useLongQueue = isLunatic;
         const maxTimeMs = isLunatic ? 2000 : 500;
 
@@ -494,7 +506,9 @@ export class ReviewPage extends LitElement {
           if (response.disproof) {
             const newFact = response.disproof;
             if (
-              !this.disproofs.some(f => shorthandFact(f) === shorthandFact(newFact))
+              !this.disproofs.some(
+                f => shorthandFact(f) === shorthandFact(newFact),
+              )
             ) {
               this.disproofs.push(newFact);
               const key = shorthandFact(newFact);
@@ -503,7 +517,10 @@ export class ReviewPage extends LitElement {
             }
           }
         } catch (e) {
-          console.error(`Failed to disprove candidate at loc ${cand.loc} num ${cand.num}:`, e);
+          console.error(
+            `Failed to disprove candidate at loc ${cand.loc} num ${cand.num}:`,
+            e,
+          );
         }
 
         // Yield control to browser
@@ -621,7 +638,8 @@ export class ReviewPage extends LitElement {
       if (target.type === 'SpeculativeAssignment') {
         const locObj = Loc.of(target.loc);
         if (locObj) {
-          const currentNums = this.playback.wrapper.game.getNums(locObj) || new Set<number>();
+          const currentNums =
+            this.playback.wrapper.game.getNums(locObj) || new Set<number>();
           const updated = new Set(currentNums);
           updated.delete(target.num);
           if (updated.size > 0) {
@@ -918,9 +936,6 @@ export class ReviewPage extends LitElement {
       }
     }
 
-    const assignment =
-      this.selectedFact ? getFactAssignment(this.selectedFact) : null;
-
     return html`
       <div id="top-panel">
         <icon-button
@@ -1046,49 +1061,41 @@ export class ReviewPage extends LitElement {
           `}
       </div>
 
-      <div class="action-section">
-        ${command ?
-          html`
-            <div>Action: ${command.command.toString()}</div>
-            ${command.command.tag() === CommandTag.RESUME ?
-              html`<div>
-                Time:
-                ${new Date((command.command as any).timestamp).toLocaleString()}
-              </div>`
-            : html`<div>
-                Time spent:
-                ${elapsedTimeString(
-                  command.elapsedTimestamp -
-                    (prevCommand ? prevCommand.elapsedTimestamp : 0),
-                )}
-              </div>`}
-          `
-        : ''}
-        ${nextCommand ?
-          html`<div>
-            Next: ${nextCommand.command.toString()}
-            (${elapsedTimeString(
-              nextCommand.elapsedTimestamp -
-                (command ? command.elapsedTimestamp : 0),
-            )})
-          </div>`
-        : ''}
-      </div>
-
-      ${this.renderSelectedFacts()} ${this.renderLogicalTrails()}
-      ${assignment ?
+      ${this.playback.deviations.length === 0 ?
         html`
-          <div class="apply-fact-container">
-            <button
-              class="apply-fact-button"
-              @click=${() => this.applySelectedFact(assignment)}
-            >
-              Apply Fact to Grid
-            </button>
+          <div class="action-section">
+            ${command ?
+              html`
+                <div>Action: ${command.command.toString()}</div>
+                ${command.command.tag() === CommandTag.RESUME ?
+                  html`<div>
+                    Time:
+                    ${new Date(
+                      (command.command as any).timestamp,
+                    ).toLocaleString()}
+                  </div>`
+                : html`<div>
+                    Time spent:
+                    ${elapsedTimeString(
+                      command.elapsedTimestamp -
+                        (prevCommand ? prevCommand.elapsedTimestamp : 0),
+                    )}
+                  </div>`}
+              `
+            : ''}
+            ${nextCommand ?
+              html`<div>
+                Next: ${nextCommand.command.toString()}
+                (${elapsedTimeString(
+                  nextCommand.elapsedTimestamp -
+                    (command ? command.elapsedTimestamp : 0),
+                )})
+              </div>`
+            : ''}
           </div>
         `
       : ''}
-
+      ${this.renderSelectedFacts()} ${this.renderLogicalTrails()}
       <div id="bottom-info">
         <h2>
           Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
@@ -1113,9 +1120,24 @@ export class ReviewPage extends LitElement {
       return html`<div class="fact-panel">No deduced facts for this cell</div>`;
     }
 
+    const assignment =
+      this.selectedFact ? getFactAssignment(this.selectedFact) : null;
+
     return html`
       <div class="fact-panel">
-        <h3>Facts for Cell</h3>
+        <h3>
+          <span>Facts for Cell ${this.selectedLoc}</span>
+          ${assignment ?
+            html`
+              <button
+                class="apply-fact-button"
+                @click=${() => this.applySelectedFact(assignment)}
+              >
+                Apply Fact to Grid
+              </button>
+            `
+          : ''}
+        </h3>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           ${relevantFacts.map(
             fact => html`
@@ -1328,7 +1350,6 @@ function isValidCandidate(
   }
   return true;
 }
-
 
 function formatDisproofDescription(fact: Fact): string {
   const {antecedents, nub: finalNub} = flattenImplication(fact);
