@@ -496,38 +496,10 @@ pub fn disprove_erroneous_assignment(
     max_time_ms,
   )?;
 
-  let (err_ants, _err_cons) = get_implication_parts(&err_fact);
-
-  if !err_ants.contains(&target_fact) {
-    return Some(Fact::Implication {
-      antecedents: vec![target_fact],
-      consequent: Box::new(err_fact),
-    });
-  }
-
-  let mut nested_deps = Vec::new();
-  for ant in err_ants {
-    if ant != target_fact {
-      nested_deps.push(ant);
-    }
-  }
-
-  let final_fact = if nested_deps.is_empty() {
-    Fact::Implication {
-      antecedents: vec![target_fact],
-      consequent: Box::new(err_fact),
-    }
-  } else {
-    Fact::Implication {
-      antecedents: vec![target_fact],
-      consequent: Box::new(Fact::Implication {
-        antecedents: nested_deps,
-        consequent: Box::new(err_fact),
-      }),
-    }
-  };
-
-  Some(final_fact)
+  Some(Fact::Implication {
+    antecedents: vec![target_fact],
+    consequent: Box::new(err_fact),
+  })
 }
 
 fn disprove_recursive(
@@ -551,8 +523,10 @@ fn disprove_recursive(
   }
 
   // 1. Run rich deductions in current_finder
-  let mut spec_facts = active_speculations.to_vec();
-  spec_facts.extend(accumulated_nested_disproofs.clone());
+  let mut spec_facts = accumulated_nested_disproofs.clone();
+  if let Some(last_spec) = active_speculations.last() {
+    spec_facts.push(last_spec.clone());
+  }
 
   let deduced_facts = current_finder.deduce_with_speculative_rich(
     spec_facts,
@@ -621,27 +595,9 @@ fn disprove_recursive(
       }
 
       // Construct nested disproof for cand
-      // Filter out parent active speculations from err_ants
-      let mut nested_deps = Vec::new();
-      for ant in err_ants {
-        if ant != cand_fact && !active_speculations.contains(&ant) {
-          nested_deps.push(ant);
-        }
-      }
-
-      let f_cand = if nested_deps.is_empty() {
-        Fact::Implication {
-          antecedents: vec![cand_fact],
-          consequent: Box::new(err_fact.clone()),
-        }
-      } else {
-        Fact::Implication {
-          antecedents: vec![cand_fact],
-          consequent: Box::new(Fact::Implication {
-            antecedents: nested_deps,
-            consequent: Box::new(err_fact.clone()),
-          }),
-        }
+      let f_cand = Fact::Implication {
+        antecedents: vec![cand_fact.clone()],
+        consequent: Box::new(err_fact),
       };
 
       // Apply f_cand to current_finder
@@ -649,8 +605,10 @@ fn disprove_recursive(
       accumulated_nested_disproofs.push(f_cand);
 
       // Deduce again and check if we found a contradiction at the current level
-      let mut spec_facts = active_speculations.to_vec();
-      spec_facts.extend(accumulated_nested_disproofs.clone());
+      let mut spec_facts = accumulated_nested_disproofs.clone();
+      if let Some(last_spec) = active_speculations.last() {
+        spec_facts.push(last_spec.clone());
+      }
 
       let deduced_facts = current_finder.deduce_with_speculative_rich(
         spec_facts,
