@@ -70,7 +70,10 @@ impl Fact {
 
   pub fn depends_on_speculative_assignment(&self, target_loc: Loc, target_num: Num) -> bool {
     match self {
-      Fact::Implication { antecedents, consequent } => {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
         antecedents
           .iter()
           .any(|ant| ant.depends_on_speculative_assignment(target_loc, target_num))
@@ -161,6 +164,33 @@ impl Fact {
     match self {
       Fact::Implication { consequent, .. } => consequent.nub(),
       _ => self,
+    }
+  }
+
+  /// Removes all occurrences of the given antecedent from the implication tree.
+  /// This prevents exponential duplication of root assumptions in nested disproofs.
+  pub fn strip_antecedent(&self, target: &Fact) -> Fact {
+    match self {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
+        let mut new_antecedents = Vec::new();
+        for ant in antecedents {
+          if ant != target {
+            new_antecedents.push(ant.strip_antecedent(target));
+          }
+        }
+        if new_antecedents.is_empty() {
+          consequent.strip_antecedent(target)
+        } else {
+          Fact::Implication {
+            antecedents: new_antecedents,
+            consequent: Box::new(consequent.strip_antecedent(target)),
+          }
+        }
+      }
+      _ => self.clone(),
     }
   }
 }
@@ -504,14 +534,16 @@ pub fn disprove_erroneous_assignment(
     Vec::new(),
     solutions,
     1,
-    4,
+    max_depth,
     start_time,
     max_time_ms,
   )?;
 
+  let stripped_err_fact = err_fact.strip_antecedent(&target_fact);
+
   Some(Fact::Implication {
     antecedents: vec![target_fact],
-    consequent: Box::new(err_fact),
+    consequent: Box::new(stripped_err_fact),
   })
 }
 
@@ -536,7 +568,7 @@ fn disprove_recursive(
   }
 
   // 1. Run rich deductions in current_finder
-  let mut spec_facts = accumulated_nested_disproofs.clone();
+  let mut spec_facts = Vec::new();
   if let Some(last_spec) = active_speculations.last() {
     spec_facts.push(last_spec.clone());
   }
@@ -550,7 +582,14 @@ fn disprove_recursive(
   // 2. Check for contradictions
   for fact in &deduced_facts {
     if fact.is_error() {
-      return Some(fact.clone());
+      if accumulated_nested_disproofs.is_empty() {
+        return Some(fact.clone());
+      } else {
+        return Some(Fact::Implication {
+          antecedents: accumulated_nested_disproofs.clone(),
+          consequent: Box::new(fact.clone()),
+        });
+      }
     }
   }
 
@@ -606,17 +645,17 @@ fn disprove_recursive(
       }
 
       // Construct nested disproof for cand
+      let stripped_err_fact = err_fact.strip_antecedent(&cand_fact);
       let f_cand = Fact::Implication {
         antecedents: vec![cand_fact.clone()],
-        consequent: Box::new(err_fact),
+        consequent: Box::new(stripped_err_fact),
       };
 
       // Apply f_cand to current_finder
       current_finder.apply_fact(&f_cand);
       accumulated_nested_disproofs.push(f_cand);
 
-      // Deduce again and check if we found a contradiction at the current level
-      let mut spec_facts = accumulated_nested_disproofs.clone();
+      let mut spec_facts = Vec::new();
       if let Some(last_spec) = active_speculations.last() {
         spec_facts.push(last_spec.clone());
       }
@@ -629,7 +668,14 @@ fn disprove_recursive(
 
       for fact in &deduced_facts {
         if fact.is_error() {
-          return Some(fact.clone());
+          if accumulated_nested_disproofs.is_empty() {
+            return Some(fact.clone());
+          } else {
+            return Some(Fact::Implication {
+              antecedents: accumulated_nested_disproofs.clone(),
+              consequent: Box::new(fact.clone()),
+            });
+          }
         }
       }
 
@@ -640,16 +686,6 @@ fn disprove_recursive(
   }
 
   None
-}
-
-fn get_implication_parts(fact: &Fact) -> (Vec<Fact>, Fact) {
-  match fact {
-    Fact::Implication {
-      antecedents,
-      consequent,
-    } => (antecedents.clone(), *consequent.clone()),
-    _ => (Vec::new(), fact.clone()),
-  }
 }
 
 #[cfg(test)]
@@ -785,7 +821,7 @@ mod tests {
   }
 
   #[test]
-  #[ignore]
+  #[ignore] // The 10 seconds we supply below is not long enough for this puzzle :-(
   fn test_lunatic_nested_disproof() {
     // Lunatic puzzle from evaluate/internals.rs
     let grid = Grid::from_str(
@@ -812,7 +848,7 @@ mod tests {
     let base_finder = FactFinder::new(&grid);
 
     let target = Asgmt::new(N8, L54);
-    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0));
+    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(10000.0));
     assert!(
       fact_opt.is_some(),
       "Should have successfully disproved target L54=N8"
