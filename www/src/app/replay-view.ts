@@ -616,6 +616,19 @@ export class ReplayView extends SudokuView {
     }
     return answer;
   }
+
+  protected override shouldSuppressNormalCellText(loc: Loc): boolean {
+    if (!this.selectedFact) return false;
+    const base = nub(this.selectedFact);
+    if (
+      base.type === 'SingleLoc' ||
+      base.type === 'SingleNum' ||
+      base.type === 'SpeculativeAssignment'
+    ) {
+      return base.loc === loc.index;
+    }
+    return false;
+  }
 }
 
 declare global {

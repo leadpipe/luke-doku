@@ -753,6 +753,7 @@ export class SudokuView extends LitElement implements GridContainer {
     const common = new Grid(commonWasm);
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
+      if (this.shouldSuppressNormalCellText(loc)) continue;
       const [x, y] = cellCenter(loc);
       const num = common.get(loc);
       if (num) {
@@ -777,6 +778,7 @@ export class SudokuView extends LitElement implements GridContainer {
   ): void {
     const {cellCenter} = this;
     for (const loc of Loc.ALL) {
+      if (this.shouldSuppressNormalCellText(loc)) continue;
       const nums = marks.getNums(loc);
       if (!nums) continue;
       const [x, y] = cellCenter(loc);
@@ -807,6 +809,10 @@ export class SudokuView extends LitElement implements GridContainer {
   }
 
   protected isFactDetailLoc(_loc: Loc): boolean {
+    return false;
+  }
+
+  protected shouldSuppressNormalCellText(_loc: Loc): boolean {
     return false;
   }
 
@@ -856,6 +862,7 @@ export class SudokuView extends LitElement implements GridContainer {
       const trail = trails.order[i];
       const classes = `trail trail-${trail.id} trail-index-${i}`;
       for (const loc of Loc.ALL) {
+        if (this.shouldSuppressNormalCellText(loc)) continue;
         const num = trail.get(loc);
         if (num) {
           const [x, y] = cellCenter(loc);

@@ -295,6 +295,7 @@ export class ReviewPage extends LitElement {
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
   @state() private selectedFact: Fact | null = null;
+  @state() private selectedLocFacts: Fact[] = [];
   @state() private disproofs: Fact[] = [];
   @state() private searchStatus = '';
   @state() private isSearching = false;
@@ -402,9 +403,12 @@ export class ReviewPage extends LitElement {
     this.interestingIndices = Array.from(indices).sort((a, b) => a - b);
   }
 
-  private async updateFacts() {
-    this.selectedLoc = null;
-    this.selectedFact = null;
+  private async updateFacts(keepSelection = false) {
+    if (!keepSelection) {
+      this.selectedLoc = null;
+      this.selectedFact = null;
+      this.selectedLocFacts = [];
+    }
     if (!this.playback) return;
     const grid = this.playback.wrapper.game.asGrid();
     const gridString = grid.toFlatString();
@@ -655,6 +659,7 @@ export class ReviewPage extends LitElement {
 
     this.selectedLoc = null;
     this.selectedFact = null;
+    this.selectedLocFacts = [];
     this.exitPreviewMode();
     this.updateFacts();
   }
@@ -709,7 +714,10 @@ export class ReviewPage extends LitElement {
     }
   }
 
-  private applySelectedFact(assignment: {loc: number; num: number}) {
+  private applySelectedFact(
+    assignment: {loc: number; num: number},
+    keepSelection = false,
+  ) {
     if (!this.playback) return;
     this.clearPlayInterval();
 
@@ -719,10 +727,13 @@ export class ReviewPage extends LitElement {
     const cmd = new SetNum(gameLoc, assignment.num);
     this.playback.addDeviation(cmd);
 
-    this.selectedLoc = null;
-    this.selectedFact = null;
+    if (!keepSelection) {
+      this.selectedLoc = null;
+      this.selectedFact = null;
+      this.selectedLocFacts = [];
+    }
 
-    this.updateFacts();
+    this.updateFacts(keepSelection);
   }
 
   private exitDigression() {
@@ -778,6 +789,7 @@ export class ReviewPage extends LitElement {
     this.selectedLoc = e.detail;
     if (this.selectedLoc) {
       const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
+      this.selectedLocFacts = relevantFacts;
 
       const isOnAlternatePath =
         this.playback && this.playback.deviations.length > 0;
@@ -787,10 +799,18 @@ export class ReviewPage extends LitElement {
           .filter((a): a is {loc: number; num: number} => a !== null);
         const uniqueNums = Array.from(new Set(assignments.map(a => a.num)));
         if (uniqueNums.length === 1) {
-          this.applySelectedFact({
-            loc: this.selectedLoc.index,
-            num: uniqueNums[0],
-          });
+          const firstAssignmentFact =
+            relevantFacts.find(f => getFactAssignment(f) !== null) ??
+            relevantFacts[0] ??
+            null;
+          this.selectedFact = firstAssignmentFact;
+          this.applySelectedFact(
+            {
+              loc: this.selectedLoc.index,
+              num: uniqueNums[0],
+            },
+            true,
+          );
           return;
         }
       }
@@ -798,6 +818,7 @@ export class ReviewPage extends LitElement {
       this.selectedFact = relevantFacts.length > 0 ? relevantFacts[0] : null;
     } else {
       this.selectedFact = null;
+      this.selectedLocFacts = [];
     }
   }
 
@@ -881,6 +902,20 @@ export class ReviewPage extends LitElement {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
     this.clearPlayInterval();
+  }
+
+  protected override updated(changedProperties: Map<string, any>) {
+    super.updated(changedProperties);
+    if (changedProperties.has('selectedFact') && this.selectedFact) {
+      const checkedRadio = this.shadowRoot?.querySelector(
+        'input[name="selectedFact"]:checked',
+      );
+      if (checkedRadio) {
+        checkedRadio.parentElement?.scrollIntoView({
+          block: 'nearest',
+        });
+      }
+    }
   }
 
   override render() {
@@ -1114,7 +1149,7 @@ export class ReviewPage extends LitElement {
       return html`<div class="fact-panel">Select a cell to see facts</div>`;
     }
 
-    const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
+    const relevantFacts = this.selectedLocFacts;
 
     if (relevantFacts.length === 0) {
       return html`<div class="fact-panel">No deduced facts for this cell</div>`;
