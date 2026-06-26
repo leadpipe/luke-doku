@@ -27,6 +27,11 @@ import {
   requestErroneousProductivityCalculation,
   requestFactDeduction,
 } from '../system/puzzle-service';
+import {
+  computeInterestingIndices,
+  formatDisproofDescription,
+  getEliminationConstraints,
+} from './review-utils';
 import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
 
@@ -326,81 +331,7 @@ export class ReviewPage extends LitElement {
       this.interestingIndices = [];
       return;
     }
-    const history = this.game.history;
-    if (history.length === 0) {
-      this.interestingIndices = [0];
-      return;
-    }
-
-    const indices = new Set<number>();
-    indices.add(0);
-    indices.add(history.length);
-
-    const totalTime = history[history.length - 1].elapsedTimestamp;
-    const avgTime = totalTime / history.length;
-
-    const isTrailCommand = (tag: CommandTag | undefined) => {
-      return (
-        tag === CommandTag.CREATE_TRAIL ||
-        tag === CommandTag.ACTIVATE_TRAIL ||
-        tag === CommandTag.TOGGLE_TRAIL_VISIBILITY ||
-        tag === CommandTag.TOGGLE_TRAILS_ACTIVE
-        // Note we leave out ARCHIVE_TRAIL and COPY_FROM_TRAIL
-      );
-    };
-
-    const isUndoRedo = (tag: CommandTag | undefined) => {
-      return (
-        tag === CommandTag.UNDO ||
-        tag === CommandTag.REDO ||
-        tag === CommandTag.UNDO_TO_START ||
-        tag === CommandTag.REDO_TO_END
-      );
-    };
-
-    for (let i = 0; i < history.length; i++) {
-      const current = history[i];
-      const prev = i > 0 ? history[i - 1] : undefined;
-      const prevPrev = i > 1 ? history[i - 2] : undefined;
-
-      // 1. Time gap > 5x average
-      const delta =
-        current.elapsedTimestamp - (prev ? prev.elapsedTimestamp : 0);
-      if (delta >= 5 * avgTime) {
-        indices.add(i);
-      }
-
-      const cmdTag = current.command.tag();
-      const prevCmdTag = prev?.command.tag();
-      const prevPrevCmdTag = prevPrev?.command.tag();
-
-      // 2. Trail commands (first in a series, and COPY_FROM_TRAIL)
-      if (isTrailCommand(cmdTag) && !isTrailCommand(prevCmdTag)) {
-        indices.add(i);
-      }
-      if (prevCmdTag === CommandTag.COPY_FROM_TRAIL) {
-        indices.add(i);
-      }
-
-      // 3. Undo/Redo commands (first in series, and after last in series if > 1)
-      if (isUndoRedo(cmdTag) && !isUndoRedo(prevCmdTag)) {
-        indices.add(i);
-      }
-      if (
-        !isUndoRedo(cmdTag) &&
-        isUndoRedo(prevCmdTag) &&
-        isUndoRedo(prevPrevCmdTag)
-      ) {
-        indices.add(i);
-      }
-
-      // 4. Before Resume
-      if (cmdTag === CommandTag.RESUME) {
-        indices.add(i);
-      }
-    }
-
-    this.interestingIndices = Array.from(indices).sort((a, b) => a - b);
+    this.interestingIndices = computeInterestingIndices(this.game.history);
   }
 
   private async updateFacts(keepSelection = false) {
@@ -1342,74 +1273,7 @@ export class ReviewPage extends LitElement {
   }
 }
 
-function getEliminationConstraints(elims: Fact[]) {
-  const result = [];
-  for (const elim of elims) {
-    if (
-      elim.type === 'Implication' &&
-      elim.antecedents.length > 0 &&
-      elim.antecedents[0].type === 'SpeculativeAssignment'
-    ) {
-      const rootAsg = elim.antecedents[0];
-      result.push([{loc: rootAsg.loc, num: rootAsg.num}]);
-    }
-  }
-  return result;
-}
 
-function isValidCandidate(
-  gridString: string,
-  loc: number,
-  num: number,
-): boolean {
-  const row = Math.floor(loc / 9);
-  const col = loc % 9;
-  const blkRow = Math.floor(row / 3) * 3;
-  const blkCol = Math.floor(col / 3) * 3;
-
-  for (let c = 0; c < 9; c++) {
-    if (gridString[row * 9 + c] === String(num)) return false;
-  }
-  for (let r = 0; r < 9; r++) {
-    if (gridString[r * 9 + col] === String(num)) return false;
-  }
-  for (let r = 0; r < 3; r++) {
-    for (let c = 0; c < 3; c++) {
-      if (gridString[(blkRow + r) * 9 + (blkCol + c)] === String(num))
-        return false;
-    }
-  }
-  return true;
-}
-
-function formatDisproofDescription(fact: Fact): string {
-  let antecedentsStr = 'Speculating unknown';
-  if (fact.type === 'Implication' && fact.antecedents.length > 0) {
-    const asg = fact.antecedents[0];
-    if (asg.type === 'SpeculativeAssignment') {
-      antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc).toString()}`;
-    }
-  }
-
-  const finalNub = nub(fact);
-  let consequentStr = '';
-  switch (finalNub.type) {
-    case 'Conflict':
-      consequentStr = `leads to a conflict for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
-      break;
-    case 'NoLoc':
-      consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
-      break;
-    case 'NoNum':
-      consequentStr = `leads to no possible numbers at ${Loc.of(finalNub.loc).toString()}`;
-      break;
-    default:
-      consequentStr = `leads to a contradiction`;
-      break;
-  }
-
-  return `${antecedentsStr} ${consequentStr}`;
-}
 
 declare global {
   interface HTMLElementTagNameMap {
