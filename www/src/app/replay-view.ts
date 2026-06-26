@@ -98,13 +98,6 @@ export class ReplayView extends SudokuView {
         fill: light-dark(#e57373, #6b1515);
         opacity: 0.5;
       }
-      .constraint-line {
-        stroke: var(--multi-value-negated, #f55);
-        stroke-width: 2;
-        stroke-dasharray: 4 4;
-        opacity: 0.6;
-        fill: none;
-      }
     `,
   ];
 

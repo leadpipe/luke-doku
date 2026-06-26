@@ -1301,13 +1301,9 @@ export class ReviewPage extends LitElement {
               ${sortedDisproofs.map(fact => {
                 const key = shorthandFact(fact);
                 const score = this.productivityScores.get(key);
-                const isMulti =
-                  fact.type === 'Implication' && fact.antecedents.length > 1;
 
                 let prodText = '';
-                if (isMulti) {
-                  prodText = 'Constraint';
-                } else if (score === 'loading') {
+                if (score === 'loading') {
                   prodText = 'Productivity: calculating...';
                 } else if (typeof score === 'number') {
                   prodText = `Productivity: +${score} cells`;
@@ -1387,21 +1383,15 @@ function isValidCandidate(
 }
 
 function formatDisproofDescription(fact: Fact): string {
-  const {antecedents, nub: finalNub} = flattenImplication(fact);
-  const specAsgs = antecedents.filter(
-    a => a.type === 'SpeculativeAssignment',
-  ) as {loc: number; num: number}[];
-
-  let antecedentsStr = '';
-  if (specAsgs.length === 1) {
-    const asg = specAsgs[0];
-    antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc).toString()}`;
-  } else if (specAsgs.length > 1) {
-    antecedentsStr = `Speculating [${specAsgs.map(a => `${a.num} at ${Loc.of(a.loc).toString()}`).join(', ')}]`;
-  } else {
-    antecedentsStr = `Speculating unknown`;
+  let antecedentsStr = 'Speculating unknown';
+  if (fact.type === 'Implication' && fact.antecedents.length > 0) {
+    const asg = fact.antecedents[0];
+    if (asg.type === 'SpeculativeAssignment') {
+      antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc).toString()}`;
+    }
   }
 
+  const finalNub = nub(fact);
   let consequentStr = '';
   switch (finalNub.type) {
     case 'Conflict':
