@@ -523,10 +523,11 @@ export class SudokuView extends LitElement implements GridContainer {
       .multi .solution {
         opacity: 40%;
       }
-      .multi .solution.with-trail {
+      .multi .solution.with-trail,
+      .multi .solution.with-indication {
         opacity: 10%;
       }
-      svg:not(.trail-active) .multi .solution {
+      svg:not(.trail-active) .multi .solution:not(.with-trail):not(.with-indication) {
         opacity: 70%;
 
         .default-result {
@@ -803,12 +804,17 @@ export class SudokuView extends LitElement implements GridContainer {
             'default-result': isHoverLoc && !!input?.isDefaultResult(num),
           }),
           answer,
+          this.hasAssignmentIndication(loc),
         );
       }
     }
   }
 
   protected isFactDetailLoc(_loc: Loc): boolean {
+    return false;
+  }
+
+  protected hasAssignmentIndication(_loc: Loc): boolean {
     return false;
   }
 
@@ -825,6 +831,7 @@ export class SudokuView extends LitElement implements GridContainer {
     isInputLoc: boolean,
     classesForNum: (num: number) => ClassInfo,
     answer: TemplateResult[],
+    withIndication = false,
   ): void {
     const {cellSize} = this;
     const size = nums.size;
@@ -837,6 +844,7 @@ export class SudokuView extends LitElement implements GridContainer {
       solution: true,
       [sizeClass]: true,
       'with-trail': withTrail,
+      'with-indication': withIndication,
       'hover-loc': isHoverLoc,
       'input-loc': isInputLoc,
     };

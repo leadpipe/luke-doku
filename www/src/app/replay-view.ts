@@ -423,6 +423,22 @@ export class ReplayView extends SudokuView {
     return answer;
   }
 
+  protected override hasAssignmentIndication(loc: Loc): boolean {
+    if (this.previewStepIndex >= 0) return false;
+    if (!this.facts) return false;
+    if (this.selectedFact) return false;
+
+    return this.facts.some(fact => {
+      const base = nub(fact);
+      return (
+        (base.type === 'SingleLoc' ||
+          base.type === 'SingleNum' ||
+          base.type === 'SpeculativeAssignment') &&
+        base.loc === loc.index
+      );
+    });
+  }
+
   protected override isFactDetailLoc(loc: Loc): boolean {
     if (!this.selectedFact) return false;
     const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
@@ -545,75 +561,130 @@ export class ReplayView extends SudokuView {
     const hasAssignmentsOrErrors =
       assignmentLocs.size > 0 || errorLocs.size > 0 || errorUnits.size > 0;
 
-    for (const fact of this.facts) {
-      if (this.selectedFact && fact !== this.selectedFact) continue;
+    if (!hasAssignmentsOrErrors) {
+      for (const fact of this.facts) {
+        if (this.selectedFact && fact !== this.selectedFact) continue;
+        const base = nub(fact);
+        if (base.type === 'Subset') {
+          const {locs, unit} = base;
+          for (const loc of locs) {
+            const [x, y] = cellCenter(Loc.of(loc)!);
+            if (unit.type === 'Row') {
+              answer.push(
+                svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+              );
+            } else if (unit.type === 'Col') {
+              answer.push(
+                svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+              );
+            } else if (unit.type === 'Blk') {
+              const size = this.cellSize / 2;
+              answer.push(
+                svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+              );
+            }
+          }
+        }
+      }
+      if (!hasSubsets) {
+        for (const fact of this.facts) {
+          if (this.selectedFact && fact !== this.selectedFact) continue;
+          const base = nub(fact);
+          if (base.type === 'Overlap') {
+            for (const loc of Loc.ALL) {
+              if (
+                !unitContains(base.unit, loc) ||
+                !unitContains(base.cross_unit, loc)
+              )
+                continue;
+              const [x, y] = cellCenter(loc);
+              if (base.unit.type === 'Row') {
+                answer.push(
+                  svg`<line class="overlap-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+                );
+              } else if (base.unit.type === 'Col') {
+                answer.push(
+                  svg`<line class="overlap-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+                );
+              } else if (base.unit.type === 'Blk') {
+                const size = this.cellSize / 2;
+                answer.push(
+                  svg`<rect class="overlap-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+                );
+              }
+            }
+          }
+        }
+      }
+    }
+
+    // Filter and sort assignment facts from least to most relevant (reverse of compareFacts)
+    const assignmentFacts = this.facts.filter(fact => {
+      if (this.selectedFact && fact !== this.selectedFact) return false;
+      const base = nub(fact);
+      return (
+        base.type === 'SingleLoc' ||
+        base.type === 'SingleNum' ||
+        base.type === 'SpeculativeAssignment'
+      );
+    });
+
+    assignmentFacts.sort((a, b) => {
+      const typeRank = (fact: Fact) => {
+        const base = nub(fact);
+        switch (base.type) {
+          case 'SpeculativeAssignment':
+            return 1;
+          case 'SingleNum':
+            return 2;
+          case 'SingleLoc':
+            return 3;
+          default:
+            return 0;
+        }
+      };
+      const rankA = typeRank(a);
+      const rankB = typeRank(b);
+      if (rankA !== rankB) {
+        return rankA - rankB;
+      }
+      return getTotalAntecedents(b) - getTotalAntecedents(a);
+    });
+
+    const mostRelevantByLoc = new Map<number, Fact>();
+    for (const fact of assignmentFacts) {
       const base = nub(fact);
       if (
         base.type === 'SingleLoc' ||
         base.type === 'SingleNum' ||
         base.type === 'SpeculativeAssignment'
       ) {
-        if (fact !== this.selectedFact) {
-          const {loc} = base;
-          const [x, y] = cellCenter(Loc.of(loc)!);
-          const color = base.type === 'SingleNum' ? 'blue' : 'green';
-          const totalAntecedents = getTotalAntecedents(fact);
-          const radius = Math.max(
-            cellSize * 0.15,
-            (cellSize * 0.4) / (1 + 0.2 * totalAntecedents),
-          );
-          answer.push(
-            svg`<circle cx=${x} cy=${y} r=${radius} fill="none" stroke="${color}" stroke-width="3" opacity="0.5"/>`,
-          );
-        }
-      } else if (base.type === 'Subset' && !hasAssignmentsOrErrors) {
-        const {locs, unit} = base;
-        for (const loc of locs) {
-          const [x, y] = cellCenter(Loc.of(loc)!);
-          if (unit.type === 'Row') {
-            answer.push(
-              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-            );
-          } else if (unit.type === 'Col') {
-            answer.push(
-              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-            );
-          } else if (unit.type === 'Blk') {
-            const size = this.cellSize / 2;
-            answer.push(
-              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-            );
-          }
-        }
-      } else if (
-        base.type === 'Overlap' &&
-        !hasAssignmentsOrErrors &&
-        !hasSubsets
-      ) {
-        for (const loc of Loc.ALL) {
-          if (
-            !unitContains(base.unit, loc) ||
-            !unitContains(base.cross_unit, loc)
-          )
-            continue;
-          const [x, y] = cellCenter(loc);
-          if (base.unit.type === 'Row') {
-            answer.push(
-              svg`<line class="overlap-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-            );
-          } else if (base.unit.type === 'Col') {
-            answer.push(
-              svg`<line class="overlap-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-            );
-          } else if (base.unit.type === 'Blk') {
-            const size = this.cellSize / 2;
-            answer.push(
-              svg`<rect class="overlap-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-            );
-          }
-        }
+        mostRelevantByLoc.set(base.loc, fact);
       }
     }
+
+    for (const fact of mostRelevantByLoc.values()) {
+      const base = nub(fact);
+      if (
+        (base.type === 'SingleLoc' ||
+          base.type === 'SingleNum' ||
+          base.type === 'SpeculativeAssignment') &&
+        fact !== this.selectedFact
+      ) {
+        const {loc} = base;
+        const [x, y] = cellCenter(Loc.of(loc)!);
+        const color = base.type === 'SingleNum' ? 'blue' : 'green';
+        const totalAntecedents = getTotalAntecedents(fact);
+        const radius = Math.max(
+          cellSize * 0.15,
+          (cellSize * 0.4) / (1 + 0.2 * totalAntecedents),
+        );
+        answer.push(
+          svg`<circle cx=${x} cy=${y} r=${radius} fill="none" stroke="${color}" stroke-width="3" opacity="0.5"/>`,
+        );
+      }
+    }
+
     return answer;
   }
 
