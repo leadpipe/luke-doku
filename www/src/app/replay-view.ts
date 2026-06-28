@@ -1,12 +1,12 @@
 import {css, svg, TemplateResult} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
+import {isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
 import {shorthandFact} from '../facts/format';
 import type {Unit} from '../facts/Unit';
 import {
   flattenImplication,
   getTotalAntecedents,
-  isDisproof,
   nub,
   unitContains,
 } from '../facts/utils';

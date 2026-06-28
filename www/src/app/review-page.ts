@@ -5,13 +5,13 @@ import './replay-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
+import {isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
-import {describeFact, formatUnit, shorthandFact} from '../facts/format';
+import {describeFact, shorthandFact} from '../facts/format';
 import {
   compareFacts,
   flattenImplication,
   getTotalAntecedents,
-  isDisproof,
   nub,
   unitContains,
 } from '../facts/utils';
@@ -28,12 +28,12 @@ import {
   requestErroneousProductivityCalculation,
   requestFactDeduction,
 } from '../system/puzzle-service';
+import {navigateToPuzzle} from './nav';
 import {
   computeInterestingIndices,
   formatDisproofDescription,
   getEliminationConstraints,
 } from './review-utils';
-import {navigateToPuzzle} from './nav';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
 
 function getFactAssignment(fact: Fact): {loc: number; num: number} | null {
@@ -1123,7 +1123,11 @@ export class ReviewPage extends LitElement {
       return html`
         <div class="fact-panel">
           Select a cell to see facts
-          ${this.isSearching ? html`<div class="search-status" style="margin-top: 4px;">${this.searchStatus}</div>` : ''}
+          ${this.isSearching ?
+            html`<div class="search-status" style="margin-top: 4px;">
+              ${this.searchStatus}
+            </div>`
+          : ''}
         </div>
       `;
     }
@@ -1134,20 +1138,29 @@ export class ReviewPage extends LitElement {
       return html`
         <div class="fact-panel">
           No deduced facts for this cell
-          ${this.isSearching ? html`<div class="search-status" style="margin-top: 4px;">${this.searchStatus}</div>` : ''}
+          ${this.isSearching ?
+            html`<div class="search-status" style="margin-top: 4px;">
+              ${this.searchStatus}
+            </div>`
+          : ''}
         </div>
       `;
     }
 
     const assignment =
       this.selectedFact ? getFactAssignment(this.selectedFact) : null;
-    const showDisproofActions = this.selectedFact && isDisproof(this.selectedFact);
+    const showDisproofActions =
+      this.selectedFact && isDisproof(this.selectedFact);
 
     return html`
       <div class="fact-panel">
         <h3>
           <span>Facts for Cell ${this.selectedLoc}</span>
-          ${this.isSearching ? html`<span class="search-status" style="margin-left: 8px;">${this.searchStatus}</span>` : ''}
+          ${this.isSearching ?
+            html`<span class="search-status" style="margin-left: 8px;"
+              >${this.searchStatus}</span
+            >`
+          : ''}
           ${assignment ?
             html`
               <button
@@ -1179,35 +1192,33 @@ export class ReviewPage extends LitElement {
           : ''}
         </h3>
         <div style="display: flex; flex-direction: column; gap: 6px;">
-          ${relevantFacts.map(
-            fact => {
-              let label = getFactLabel(fact);
-              if (isDisproof(fact)) {
-                const score = this.productivityScores.get(shorthandFact(fact));
-                if (typeof score === 'number') {
-                  label = `[Productivity: +${score}] ${label}`;
-                } else if (score === 'loading') {
-                  label = `[Productivity: calculating...] ${label}`;
-                }
+          ${relevantFacts.map(fact => {
+            let label = getFactLabel(fact);
+            if (isDisproof(fact)) {
+              const score = this.productivityScores.get(shorthandFact(fact));
+              if (typeof score === 'number') {
+                label = `[Productivity: +${score}] ${label}`;
+              } else if (score === 'loading') {
+                label = `[Productivity: calculating...] ${label}`;
               }
-              return html`
-                <label
-                  style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
-                >
-                  <input
-                    type="radio"
-                    name="selectedFact"
-                    .checked=${this.selectedFact === fact}
-                    @change=${() => {
-                      this.selectedFact = fact;
-                    }}
-                    style="margin-top: 2px;"
-                  />
-                  <span>${label}</span>
-                </label>
-              `;
-            },
-          )}
+            }
+            return html`
+              <label
+                style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
+              >
+                <input
+                  type="radio"
+                  name="selectedFact"
+                  .checked=${this.selectedFact === fact}
+                  @change=${() => {
+                    this.selectedFact = fact;
+                  }}
+                  style="margin-top: 2px;"
+                />
+                <span>${label}</span>
+              </label>
+            `;
+          })}
         </div>
       </div>
     `;
@@ -1278,8 +1289,6 @@ export class ReviewPage extends LitElement {
     return '';
   }
 }
-
-
 
 declare global {
   interface HTMLElementTagNameMap {
