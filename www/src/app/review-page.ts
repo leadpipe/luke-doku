@@ -9,9 +9,11 @@ import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
 import {describeFact, shorthandFact} from '../facts/format';
 import {
+  collectStepsWithContext,
   compareFacts,
   flattenImplication,
   getTotalAntecedents,
+  getVisibleFactsAtStep,
   nub,
   unitContains,
 } from '../facts/utils';
@@ -497,18 +499,17 @@ export class ReviewPage extends LitElement {
 
   private getPreviewTrailSteps(): Fact[] {
     if (!this.previewedDisproof) return [];
-    const {antecedents, nub: finalNub} = flattenImplication(
-      this.previewedDisproof,
-    );
-    return [...antecedents, finalNub];
+    return collectStepsWithContext(this.previewedDisproof).map(s => s.fact);
   }
 
   private getPreviewHighlights(): Map<number, 'green' | 'yellow' | 'red'> {
     const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
     if (!this.previewedDisproof) return highlights;
 
-    const steps = this.getPreviewTrailSteps();
-    const currentEff = Math.min(steps.length - 1, this.previewStepIndex);
+    const visibleFacts = getVisibleFactsAtStep(
+      this.previewedDisproof,
+      this.previewStepIndex,
+    );
 
     const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
       const existing = highlights.get(loc);
@@ -517,8 +518,12 @@ export class ReviewPage extends LitElement {
       highlights.set(loc, color);
     };
 
-    for (let i = 0; i <= currentEff; i++) {
-      const fact = steps[i];
+    for (const fact of visibleFacts) {
+      if (isDisproof(fact)) {
+        setHighlight(fact.antecedents[0].loc, 'yellow');
+        continue;
+      }
+
       const isError =
         fact.type === 'Conflict' ||
         fact.type === 'NoNum' ||

@@ -2,6 +2,7 @@ import {Loc as GameLoc} from '../game/loc';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import type {Fact} from './Fact';
 import type {Unit} from './Unit';
+import {isDisproof, type Disproof} from './disproof';
 
 /**
  * Returns the ultimate consequent of the given fact.
@@ -129,4 +130,114 @@ function getFactRank(fact: Fact): number {
     default:
       ensureExhaustiveSwitch(base);
   }
+}
+
+export interface StepWithContext {
+  fact: Fact;
+  path: Disproof[];
+}
+
+export function collectStepsWithContext(
+  fact: Fact,
+  path: Disproof[] = [],
+  seen = new Set<string>()
+): StepWithContext[] {
+  if (isDisproof(fact)) {
+    const newPath = [...path, fact];
+    const steps: StepWithContext[] = [];
+
+    const key = JSON.stringify(fact.antecedents[0]);
+    if (!seen.has(key)) {
+      seen.add(key);
+      steps.push({fact: fact.antecedents[0], path: newPath});
+    }
+
+    for (let i = 1; i < fact.antecedents.length; i++) {
+      steps.push(...collectStepsWithContext(fact.antecedents[i], newPath, seen));
+    }
+    steps.push(...collectStepsWithContext(fact.consequent, newPath, seen));
+    return steps;
+  } else if (fact.type === 'Implication') {
+    const steps: StepWithContext[] = [];
+    for (const ant of fact.antecedents) {
+      steps.push(...collectStepsWithContext(ant, path, seen));
+    }
+    steps.push(...collectStepsWithContext(fact.consequent, path, seen));
+    return steps;
+  } else {
+    const key = JSON.stringify(fact);
+    if (!seen.has(key)) {
+      seen.add(key);
+      return [{fact, path}];
+    }
+    return [];
+  }
+}
+
+export function getVisibleFactsAtStep(
+  rootDisproof: Disproof,
+  previewStepIndex: number
+): Fact[] {
+  const stepsWithContext = collectStepsWithContext(rootDisproof);
+
+  const nestedDisproofsInfo = new Map<
+    Disproof,
+    {startIndex: number; endIndex: number}
+  >();
+
+  for (let i = 0; i < stepsWithContext.length; i++) {
+    const {path} = stepsWithContext[i];
+    for (let j = 1; j < path.length; j++) {
+      const d = path[j];
+      if (!nestedDisproofsInfo.has(d)) {
+        nestedDisproofsInfo.set(d, {startIndex: i, endIndex: i});
+      } else {
+        nestedDisproofsInfo.get(d)!.endIndex = i;
+      }
+    }
+  }
+
+  const completedDisproofs = new Set<Disproof>();
+  for (const [d, info] of nestedDisproofsInfo.entries()) {
+    if (previewStepIndex > info.endIndex) {
+      completedDisproofs.add(d);
+    }
+  }
+
+  const visibleFacts: Fact[] = [];
+  const limit = Math.min(stepsWithContext.length - 1, previewStepIndex);
+  for (let i = 0; i <= limit; i++) {
+    const {fact, path} = stepsWithContext[i];
+    let isHidden = false;
+    for (const d of path) {
+      if (completedDisproofs.has(d)) {
+        isHidden = true;
+        break;
+      }
+    }
+    if (!isHidden) {
+      visibleFacts.push(fact);
+    }
+
+    // Check if any completed disproof ended at index i, and insert its elimination fact
+    for (const [d, info] of nestedDisproofsInfo.entries()) {
+      if (info.endIndex === i && completedDisproofs.has(d)) {
+        // Only insert if all parents of d are not completed
+        const pathAtStart = stepsWithContext[info.startIndex].path;
+        const dIndex = pathAtStart.indexOf(d);
+        let parentCompleted = false;
+        for (let j = 1; j < dIndex; j++) {
+          if (completedDisproofs.has(pathAtStart[j])) {
+            parentCompleted = true;
+            break;
+          }
+        }
+        if (!parentCompleted) {
+          visibleFacts.push(d);
+        }
+      }
+    }
+  }
+
+  return visibleFacts;
 }

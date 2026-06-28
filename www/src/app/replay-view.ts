@@ -7,6 +7,7 @@ import type {Unit} from '../facts/Unit';
 import {
   flattenImplication,
   getTotalAntecedents,
+  getVisibleFactsAtStep,
   nub,
   unitContains,
 } from '../facts/utils';
@@ -188,6 +189,9 @@ export class ReplayView extends SudokuView {
 
   private getActiveFactDetails(): Fact[] {
     if (!this.selectedFact) return [];
+    if (this.previewStepIndex >= 0 && isDisproof(this.selectedFact)) {
+      return getVisibleFactsAtStep(this.selectedFact, this.previewStepIndex);
+    }
     const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
     let facts = [...antecedents, finalNub];
     if (this.previewStepIndex >= 0) {
@@ -230,7 +234,20 @@ export class ReplayView extends SudokuView {
     const answer: TemplateResult[] = [];
     const {cellCenter} = this;
 
-    if (fact.type === 'SingleLoc') {
+    if (isDisproof(fact)) {
+      const rootAsg = fact.antecedents[0];
+      const loc = Loc.of(rootAsg.loc)!;
+      if (loc && this.isBlank(loc) && this.getNum(loc) == null) {
+        const [x, y] = cellCenter(loc);
+        const angle = 2 * rootAsg.num * (Math.PI / 12);
+        const textRadius = this.cellSize * 0.35;
+        const numX = x + Math.sin(angle) * textRadius;
+        const numY = y - Math.cos(angle) * textRadius;
+        answer.push(
+          svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
+        );
+      }
+    } else if (fact.type === 'SingleLoc') {
       const loc = Loc.of(fact.loc)!;
       if (!occupiedLocs.has(loc.index)) {
         occupiedLocs.add(loc.index);
