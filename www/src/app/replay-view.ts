@@ -1,17 +1,18 @@
 import {css, svg, TemplateResult} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
-import {Loc} from '../game/loc';
-import {ReplayInput} from './replay-input';
-import {SudokuView} from './sudoku-view';
-
 import type {Fact} from '../facts/Fact';
+import {shorthandFact} from '../facts/format';
 import type {Unit} from '../facts/Unit';
 import {
   flattenImplication,
   getTotalAntecedents,
+  isDisproof,
   nub,
   unitContains,
 } from '../facts/utils';
+import {Loc} from '../game/loc';
+import {ReplayInput} from './replay-input';
+import {SudokuView} from './sudoku-view';
 
 @customElement('replay-view')
 export class ReplayView extends SudokuView {
@@ -104,6 +105,11 @@ export class ReplayView extends SudokuView {
   private readonly replayInput = new ReplayInput(this);
 
   @property({attribute: false}) facts?: readonly Fact[];
+  @property({attribute: false}) disproofs?: readonly Fact[];
+  @property({attribute: false}) productivityScores?: Map<
+    string,
+    number | 'loading'
+  >;
   @property({attribute: false}) selectedLoc: Loc | null = null;
   @property({attribute: false}) selectedFact: Fact | null = null;
   @property({attribute: false}) actionLoc: Loc | null = null;
@@ -186,16 +192,23 @@ export class ReplayView extends SudokuView {
     return answer;
   }
 
+  private getActiveFactDetails(): Fact[] {
+    if (!this.selectedFact) return [];
+    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
+    let facts = [...antecedents, finalNub];
+    if (this.previewStepIndex >= 0) {
+      facts = facts.slice(0, this.previewStepIndex + 1);
+    } else if (isDisproof(this.selectedFact) && antecedents.length > 0) {
+      facts = [antecedents[0], finalNub];
+    }
+    return facts;
+  }
+
   private renderSelectedFactDetails(): TemplateResult[] {
     const answer: TemplateResult[] = [];
     if (!this.selectedFact) return answer;
 
-    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
-
-    let facts = [...antecedents, finalNub];
-    if (this.previewStepIndex >= 0) {
-      facts = facts.slice(0, this.previewStepIndex + 1);
-    }
+    const facts = this.getActiveFactDetails();
     const occupiedLocs = new Set<number>();
     const groups: TemplateResult[] = [];
 
@@ -434,11 +447,7 @@ export class ReplayView extends SudokuView {
 
   protected override isFactDetailLoc(loc: Loc): boolean {
     if (!this.selectedFact) return false;
-    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
-    let facts = [...antecedents, finalNub];
-    if (this.previewStepIndex >= 0) {
-      facts = facts.slice(0, this.previewStepIndex + 1);
-    }
+    const facts = this.getActiveFactDetails();
 
     for (const fact of facts) {
       switch (fact.type) {
@@ -678,20 +687,84 @@ export class ReplayView extends SudokuView {
       }
     }
 
+    // Find the max productivity among disproofs
+    let maxProductivity = -1;
+    if (this.disproofs && this.productivityScores) {
+      for (const fact of this.disproofs) {
+        const score = this.productivityScores.get(shorthandFact(fact));
+        if (typeof score === 'number' && score > maxProductivity) {
+          maxProductivity = score;
+        }
+      }
+    }
+
+    // Collect disproofs to draw
+    const disproofsToDraw: {
+      fact: Fact;
+      locIndex: number;
+      totalFacts: number;
+    }[] = [];
+    if (this.disproofs && this.productivityScores && maxProductivity >= 0) {
+      for (const fact of this.disproofs) {
+        if (this.selectedFact && fact !== this.selectedFact) continue;
+        if (fact === this.selectedFact) continue;
+
+        const score = this.productivityScores.get(shorthandFact(fact));
+        if (typeof score === 'number' && score === maxProductivity) {
+          if (isDisproof(fact)) {
+            const locIndex = fact.antecedents[0].loc;
+            if (!assignmentLocs.has(locIndex)) {
+              disproofsToDraw.push({
+                fact,
+                locIndex,
+                totalFacts: getTotalAntecedents(fact),
+              });
+            }
+          }
+        }
+      }
+    }
+
+    // Find min and max trail length among those being rendered
+    let minLen = Infinity;
+    let maxLen = -Infinity;
+    for (const d of disproofsToDraw) {
+      if (d.totalFacts < minLen) minLen = d.totalFacts;
+      if (d.totalFacts > maxLen) maxLen = d.totalFacts;
+    }
+
+    // Render diamonds for disproofs with the largest productivity using relative scaling
+    for (const d of disproofsToDraw) {
+      const [cx, cy] = cellCenter(Loc.of(d.locIndex)!);
+      let r = cellSize * 0.4;
+      if (maxLen > minLen) {
+        const t = (d.totalFacts - minLen) / (maxLen - minLen);
+        r = cellSize * (0.4 - 0.2 * t);
+      }
+      const pointsStr = `${cx},${cy - r} ${cx + r},${cy} ${cx},${cy + r} ${cx - r},${cy}`;
+      answer.push(
+        svg`<polygon points="${pointsStr}" fill="none" stroke="orange" stroke-width="3" opacity="0.6"/>`,
+      );
+    }
+
     return answer;
   }
 
   protected override shouldSuppressNormalCellText(loc: Loc): boolean {
     if (!this.selectedFact) return false;
-    const base = nub(this.selectedFact);
-    if (
-      base.type === 'SingleLoc' ||
-      base.type === 'SingleNum' ||
-      base.type === 'SpeculativeAssignment'
-    ) {
-      return base.loc === loc.index;
-    }
-    return false;
+    const facts = this.getActiveFactDetails();
+    return facts.some(fact => {
+      if (fact.type === 'SpeculativeAssignment') {
+        return fact.loc === loc.index;
+      }
+      const base = nub(fact);
+      return (
+        (base.type === 'SingleLoc' ||
+          base.type === 'SingleNum' ||
+          base.type === 'SpeculativeAssignment') &&
+        base.loc === loc.index
+      );
+    });
   }
 }
 

@@ -11,6 +11,7 @@ import {
   compareFacts,
   flattenImplication,
   getTotalAntecedents,
+  isDisproof,
   nub,
   unitContains,
 } from '../facts/utils';
@@ -45,6 +46,13 @@ function getFactAssignment(fact: Fact): {loc: number; num: number} | null {
     return {loc: base.loc, num: base.num};
   }
   return null;
+}
+
+function getFactLabel(fact: Fact): string {
+  if (isDisproof(fact)) {
+    return formatDisproofDescription(fact);
+  }
+  return describeFact(fact);
 }
 
 @customElement('review-page')
@@ -568,20 +576,18 @@ export class ReviewPage extends LitElement {
     if (!this.playback) return;
     this.clearPlayInterval();
 
-    if (disproof.type === 'Implication' && disproof.antecedents.length > 0) {
+    if (isDisproof(disproof)) {
       const target = disproof.antecedents[0];
-      if (target.type === 'SpeculativeAssignment') {
-        const locObj = Loc.of(target.loc);
-        if (locObj) {
-          const currentNums =
-            this.playback.wrapper.game.getNums(locObj) || new Set<number>();
-          const updated = new Set(currentNums);
-          updated.delete(target.num);
-          if (updated.size > 0) {
-            this.playback.addDeviation(new SetNums(locObj, updated));
-          } else {
-            this.playback.addDeviation(new ClearCell(locObj));
-          }
+      const locObj = Loc.of(target.loc);
+      if (locObj) {
+        const currentNums =
+          this.playback.wrapper.game.getNums(locObj) || new Set<number>();
+        const updated = new Set(currentNums);
+        updated.delete(target.num);
+        if (updated.size > 0) {
+          this.playback.addDeviation(new SetNums(locObj, updated));
+        } else {
+          this.playback.addDeviation(new ClearCell(locObj));
         }
       }
     }
@@ -755,7 +761,7 @@ export class ReviewPage extends LitElement {
 
   private computeRelevantFacts(loc: Loc): Fact[] {
     const locIndex = loc.index;
-    return this.facts.filter(fact => {
+    const localFacts = this.facts.filter(fact => {
       const base = nub(fact);
       switch (base.type) {
         case 'SingleLoc':
@@ -779,6 +785,41 @@ export class ReviewPage extends LitElement {
           ensureExhaustiveSwitch(base);
       }
     });
+
+    const assignsAndErrors: Fact[] = [];
+    const eliminations: Fact[] = [];
+    for (const fact of localFacts) {
+      const base = nub(fact);
+      if (base.type === 'Subset' || base.type === 'Overlap') {
+        eliminations.push(fact);
+      } else {
+        assignsAndErrors.push(fact);
+      }
+    }
+
+    const relevantDisproofs = this.disproofs.filter(fact => {
+      if (isDisproof(fact)) {
+        return fact.antecedents[0].loc === locIndex;
+      }
+      return false;
+    });
+
+    const sortedDisproofs = relevantDisproofs.sort((a, b) => {
+      const getProd = (f: Fact) => {
+        const score = this.productivityScores.get(shorthandFact(f));
+        return typeof score === 'number' ? score : -1;
+      };
+      const getLength = (f: Fact) => getTotalAntecedents(f);
+
+      const prodA = getProd(a);
+      const prodB = getProd(b);
+      if (prodA !== prodB) {
+        return prodB - prodA;
+      }
+      return getLength(a) - getLength(b);
+    });
+
+    return [...assignsAndErrors, ...sortedDisproofs, ...eliminations];
   }
 
   private readonly keydownHandler = (event: KeyboardEvent) => {
@@ -915,6 +956,8 @@ export class ReviewPage extends LitElement {
       <replay-view
         .gameWrapper=${this.playback.wrapper}
         .facts=${this.facts}
+        .disproofs=${this.disproofs}
+        .productivityScores=${this.productivityScores}
         .selectedLoc=${this.selectedLoc}
         .selectedFact=${this.previewedDisproof || effectiveSelectedFact}
         .actionLoc=${command && 'loc' in command.command ?
@@ -1077,22 +1120,34 @@ export class ReviewPage extends LitElement {
 
   private renderSelectedFacts() {
     if (!this.selectedLoc) {
-      return html`<div class="fact-panel">Select a cell to see facts</div>`;
+      return html`
+        <div class="fact-panel">
+          Select a cell to see facts
+          ${this.isSearching ? html`<div class="search-status" style="margin-top: 4px;">${this.searchStatus}</div>` : ''}
+        </div>
+      `;
     }
 
     const relevantFacts = this.selectedLocFacts;
 
     if (relevantFacts.length === 0) {
-      return html`<div class="fact-panel">No deduced facts for this cell</div>`;
+      return html`
+        <div class="fact-panel">
+          No deduced facts for this cell
+          ${this.isSearching ? html`<div class="search-status" style="margin-top: 4px;">${this.searchStatus}</div>` : ''}
+        </div>
+      `;
     }
 
     const assignment =
       this.selectedFact ? getFactAssignment(this.selectedFact) : null;
+    const showDisproofActions = this.selectedFact && isDisproof(this.selectedFact);
 
     return html`
       <div class="fact-panel">
         <h3>
           <span>Facts for Cell ${this.selectedLoc}</span>
+          ${this.isSearching ? html`<span class="search-status" style="margin-left: 8px;">${this.searchStatus}</span>` : ''}
           ${assignment ?
             html`
               <button
@@ -1103,25 +1158,55 @@ export class ReviewPage extends LitElement {
               </button>
             `
           : ''}
+          ${showDisproofActions ?
+            html`
+              <div style="display: flex; gap: 6px;">
+                <button
+                  class="apply-fact-button"
+                  @click=${() => this.enterPreview(this.selectedFact!)}
+                >
+                  Detail View
+                </button>
+                <button
+                  class="apply-fact-button"
+                  style="background-color: var(--multi-value-default); color: #000;"
+                  @click=${() => this.applyDisproof(this.selectedFact!)}
+                >
+                  Apply
+                </button>
+              </div>
+            `
+          : ''}
         </h3>
         <div style="display: flex; flex-direction: column; gap: 6px;">
           ${relevantFacts.map(
-            fact => html`
-              <label
-                style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
-              >
-                <input
-                  type="radio"
-                  name="selectedFact"
-                  .checked=${this.selectedFact === fact}
-                  @change=${() => {
-                    this.selectedFact = fact;
-                  }}
-                  style="margin-top: 2px;"
-                />
-                <span>${describeFact(fact)}</span>
-              </label>
-            `,
+            fact => {
+              let label = getFactLabel(fact);
+              if (isDisproof(fact)) {
+                const score = this.productivityScores.get(shorthandFact(fact));
+                if (typeof score === 'number') {
+                  label = `[Productivity: +${score}] ${label}`;
+                } else if (score === 'loading') {
+                  label = `[Productivity: calculating...] ${label}`;
+                }
+              }
+              return html`
+                <label
+                  style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
+                >
+                  <input
+                    type="radio"
+                    name="selectedFact"
+                    .checked=${this.selectedFact === fact}
+                    @change=${() => {
+                      this.selectedFact = fact;
+                    }}
+                    style="margin-top: 2px;"
+                  />
+                  <span>${label}</span>
+                </label>
+              `;
+            },
           )}
         </div>
       </div>
@@ -1190,86 +1275,7 @@ export class ReviewPage extends LitElement {
         </div>
       `;
     }
-
-    if (this.isPlayingForward || this.isPlayingBackward) {
-      return '';
-    }
-
-    const sortedDisproofs = [...this.disproofs].sort((a, b) => {
-      const getProd = (f: Fact) => {
-        const score = this.productivityScores.get(shorthandFact(f));
-        return typeof score === 'number' ? score : -1;
-      };
-      const getLength = (f: Fact) => getTotalAntecedents(f);
-
-      const prodA = getProd(a);
-      const prodB = getProd(b);
-      if (prodA !== prodB) {
-        return prodB - prodA;
-      }
-      return getLength(a) - getLength(b);
-    });
-
-    return html`
-      <div class="disproof-panel">
-        <h3>
-          Logical Trails / Disproofs
-          ${this.isSearching ?
-            html`<span class="search-status">${this.searchStatus}</span>`
-          : ''}
-        </h3>
-
-        ${sortedDisproofs.length === 0 ?
-          html`<div
-            style="color: var(--text-color, #777); text-align: center; padding: 12px;"
-          >
-            ${this.isSearching ?
-              'Scanning candidates...'
-            : 'No speculative trails found for this step.'}
-          </div>`
-        : html`
-            <div class="disproof-list">
-              ${sortedDisproofs.map(fact => {
-                const key = shorthandFact(fact);
-                const score = this.productivityScores.get(key);
-
-                let prodText = '';
-                if (score === 'loading') {
-                  prodText = 'Productivity: calculating...';
-                } else if (typeof score === 'number') {
-                  prodText = `Productivity: +${score} cells`;
-                }
-
-                return html`
-                  <div class="disproof-item">
-                    <div class="disproof-header">
-                      ${formatDisproofDescription(fact)}
-                    </div>
-                    <div class="disproof-meta">
-                      <span class="productivity-badge">${prodText}</span>
-                      <span>Length: ${getTotalAntecedents(fact)} steps</span>
-                    </div>
-                    <div class="disproof-actions">
-                      <button
-                        class="disproof-btn"
-                        @click=${() => this.enterPreview(fact)}
-                      >
-                        Preview
-                      </button>
-                      <button
-                        class="disproof-btn apply"
-                        @click=${() => this.applyDisproof(fact)}
-                      >
-                        Apply
-                      </button>
-                    </div>
-                  </div>
-                `;
-              })}
-            </div>
-          `}
-      </div>
-    `;
+    return '';
   }
 }
 
