@@ -392,7 +392,7 @@ export class ReplayView extends SudokuView {
       for (const loc of intersection) {
         if (!this.isBlank(loc)) continue;
         if (!occupiedLocs.has(loc.index)) {
-          // DO NOT ADD to occupiedLocs. Overlaps can appear together.
+          occupiedLocs.add(loc.index);
           const [x, y] = cellCenter(loc);
 
           if (fact.unit.type === 'Row') {

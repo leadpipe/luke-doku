@@ -1065,41 +1065,43 @@ export class ReviewPage extends LitElement {
           `}
       </div>
 
-      ${this.playback.deviations.length === 0 ?
-        html`
-          <div class="action-section">
-            ${command ?
-              html`
-                <div>Action: ${command.command.toString()}</div>
-                ${command.command.tag() === CommandTag.RESUME ?
-                  html`<div>
-                    Time:
-                    ${new Date(
-                      (command.command as any).timestamp,
-                    ).toLocaleString()}
-                  </div>`
-                : html`<div>
-                    Time spent:
-                    ${elapsedTimeString(
-                      command.elapsedTimestamp -
-                        (prevCommand ? prevCommand.elapsedTimestamp : 0),
-                    )}
-                  </div>`}
-              `
-            : ''}
-            ${nextCommand ?
-              html`<div>
-                Next: ${nextCommand.command.toString()}
-                (${elapsedTimeString(
-                  nextCommand.elapsedTimestamp -
-                    (command ? command.elapsedTimestamp : 0),
-                )})
-              </div>`
-            : ''}
-          </div>
-        `
-      : ''}
-      ${this.renderSelectedFacts()} ${this.renderLogicalTrails()}
+      ${this.previewedDisproof ?
+        this.renderLogicalTrails()
+      : (this.playback.deviations.length === 0 ?
+          html`
+            <div class="action-section">
+              ${command ?
+                html`
+                  <div>Action: ${command.command.toString()}</div>
+                  ${command.command.tag() === CommandTag.RESUME ?
+                    html`<div>
+                      Time:
+                      ${new Date(
+                        (command.command as any).timestamp,
+                      ).toLocaleString()}
+                    </div>`
+                  : html`<div>
+                      Time spent:
+                      ${elapsedTimeString(
+                        command.elapsedTimestamp -
+                          (prevCommand ? prevCommand.elapsedTimestamp : 0),
+                      )}
+                    </div>`}
+                `
+              : ''}
+              ${nextCommand ?
+                html`<div>
+                  Next: ${nextCommand.command.toString()}
+                  (${elapsedTimeString(
+                    nextCommand.elapsedTimestamp -
+                      (command ? command.elapsedTimestamp : 0),
+                  )})
+                </div>`
+              : ''}
+            </div>
+          `
+        : '')}
+      ${this.renderSelectedFacts()}
       <div id="bottom-info">
         <h2>
           Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
@@ -1236,9 +1238,6 @@ export class ReviewPage extends LitElement {
       <div class="move-counter">
         Trail Step ${this.previewStepIndex + 1} / ${steps.length}
       </div>
-      <button class="reset-digression-button" @click=${this.exitPreviewMode}>
-        Exit Trail Preview
-      </button>
       <div class="playback-controls">
         <icon-button
           @click=${() =>
@@ -1270,10 +1269,12 @@ export class ReviewPage extends LitElement {
         steps[Math.min(steps.length - 1, this.previewStepIndex)];
       return html`
         <div class="disproof-panel">
-          <h3>Active Trail Preview</h3>
-          <div style="font-weight: 500; margin-bottom: 8px;">
-            ${formatDisproofDescription(this.previewedDisproof)}
-          </div>
+          <h3>
+            <span>Active Trail Preview</span>
+            <button class="apply-fact-button" @click=${this.exitPreviewMode}>
+              Exit
+            </button>
+          </h3>
           <div
             style="padding: 10px; border: 1px dashed var(--gc); border-radius: 4px; background: var(--gd);"
           >
