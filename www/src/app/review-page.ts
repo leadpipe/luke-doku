@@ -5,7 +5,7 @@ import './replay-view';
 
 import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
-import {isDisproof} from '../facts/disproof';
+import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
 import {describeFact, shorthandFact} from '../facts/format';
 import {
@@ -309,10 +309,10 @@ export class ReviewPage extends LitElement {
   @state() private selectedLoc: Loc | null = null;
   @state() private selectedFact: Fact | null = null;
   @state() private selectedLocFacts: Fact[] = [];
-  @state() private disproofs: Fact[] = [];
+  @state() private disproofs: Disproof[] = [];
   @state() private searchStatus = '';
   @state() private isSearching = false;
-  @state() private previewedDisproof: Fact | null = null;
+  @state() private previewedDisproof: Disproof | null = null;
   @state() private previewStepIndex = -1;
 
   private productivityScores = new Map<string, number | 'loading'>();
@@ -484,7 +484,7 @@ export class ReviewPage extends LitElement {
     }
   }
 
-  private enterPreview(disproof: Fact) {
+  private enterPreview(disproof: Disproof) {
     this.clearPlayInterval();
     this.previewedDisproof = disproof;
     this.previewStepIndex = 0;
@@ -572,23 +572,21 @@ export class ReviewPage extends LitElement {
     this.previewStepIndex = parseInt(input.value, 10);
   }
 
-  private applyDisproof(disproof: Fact) {
+  private applyDisproof(disproof: Disproof) {
     if (!this.playback) return;
     this.clearPlayInterval();
 
-    if (isDisproof(disproof)) {
-      const target = disproof.antecedents[0];
-      const locObj = Loc.of(target.loc);
-      if (locObj) {
-        const currentNums =
-          this.playback.wrapper.game.getNums(locObj) || new Set<number>();
-        const updated = new Set(currentNums);
-        updated.delete(target.num);
-        if (updated.size > 0) {
-          this.playback.addDeviation(new SetNums(locObj, updated));
-        } else {
-          this.playback.addDeviation(new ClearCell(locObj));
-        }
+    const target = disproof.antecedents[0];
+    const locObj = Loc.of(target.loc);
+    if (locObj) {
+      const currentNums =
+        this.playback.wrapper.game.getNums(locObj) || new Set<number>();
+      const updated = new Set(currentNums);
+      updated.delete(target.num);
+      if (updated.size > 0) {
+        this.playback.addDeviation(new SetNums(locObj, updated));
+      } else {
+        this.playback.addDeviation(new ClearCell(locObj));
       }
     }
 
@@ -798,10 +796,7 @@ export class ReviewPage extends LitElement {
     }
 
     const relevantDisproofs = this.disproofs.filter(fact => {
-      if (isDisproof(fact)) {
-        return fact.antecedents[0].loc === locIndex;
-      }
-      return false;
+      return fact.antecedents[0].loc === locIndex;
     });
 
     const sortedDisproofs = relevantDisproofs.sort((a, b) => {
@@ -1149,8 +1144,11 @@ export class ReviewPage extends LitElement {
 
     const assignment =
       this.selectedFact ? getFactAssignment(this.selectedFact) : null;
-    const showDisproofActions =
-      this.selectedFact && isDisproof(this.selectedFact);
+    const disproof =
+      this.selectedFact && isDisproof(this.selectedFact) ?
+        this.selectedFact
+      : null;
+    const showDisproofActions = disproof !== null;
 
     return html`
       <div class="fact-panel">
@@ -1176,14 +1174,14 @@ export class ReviewPage extends LitElement {
               <div style="display: flex; gap: 6px;">
                 <button
                   class="apply-fact-button"
-                  @click=${() => this.enterPreview(this.selectedFact!)}
+                  @click=${() => this.enterPreview(disproof!)}
                 >
                   Detail View
                 </button>
                 <button
                   class="apply-fact-button"
                   style="background-color: var(--multi-value-default); color: #000;"
-                  @click=${() => this.applyDisproof(this.selectedFact!)}
+                  @click=${() => this.applyDisproof(disproof!)}
                 >
                   Apply
                 </button>

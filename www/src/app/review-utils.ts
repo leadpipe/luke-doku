@@ -1,4 +1,5 @@
 import type {Fact} from '../facts/Fact';
+import type {Disproof} from '../facts/disproof';
 import {formatUnit} from '../facts/format';
 import {nub} from '../facts/utils';
 import {CommandTag, RecordedCommand} from '../game/command';
@@ -64,7 +65,11 @@ export function computeInterestingIndices(
     if (isUndoRedo(cmdTag) && !isUndoRedo(prevCmdTag)) {
       indices.add(i);
     }
-    if (!isUndoRedo(cmdTag) && isUndoRedo(prevCmdTag) && isUndoRedo(prevPrevCmdTag)) {
+    if (
+      !isUndoRedo(cmdTag) &&
+      isUndoRedo(prevCmdTag) &&
+      isUndoRedo(prevPrevCmdTag)
+    ) {
       indices.add(i);
     }
 
@@ -94,14 +99,9 @@ export function getEliminationConstraints(
   return result;
 }
 
-export function formatDisproofDescription(fact: Fact): string {
-  let antecedentsStr = 'Speculating unknown';
-  if (fact.type === 'Implication' && fact.antecedents.length > 0) {
-    const asg = fact.antecedents[0];
-    if (asg.type === 'SpeculativeAssignment') {
-      antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc).toString()}`;
-    }
-  }
+export function formatDisproofDescription(fact: Disproof): string {
+  const asg = fact.antecedents[0];
+  const antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc)}`;
 
   const finalNub = nub(fact);
   let consequentStr = '';
@@ -113,7 +113,7 @@ export function formatDisproofDescription(fact: Fact): string {
       consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
       break;
     case 'NoNum':
-      consequentStr = `leads to no possible numbers at ${Loc.of(finalNub.loc).toString()}`;
+      consequentStr = `leads to no possible numbers at ${Loc.of(finalNub.loc)}`;
       break;
     default:
       consequentStr = `leads to a contradiction`;

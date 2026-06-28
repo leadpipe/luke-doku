@@ -1,4 +1,4 @@
-import {Fact} from '../facts/Fact';
+import {Disproof} from '../facts/disproof';
 import {Command, RecordedCommand} from './command';
 import {BaseGame, type GameWrapper} from './game';
 import {Sudoku} from './sudoku';
@@ -100,26 +100,26 @@ export class PlaybackGame {
     return this.history[this.currentIndex - 1];
   }
 
-  private appliedDisproofsMap = new Map<number, Fact[]>();
+  private appliedDisproofsMap = new Map<number, Disproof[]>();
 
   getEffectiveIndex(): number {
     return this.currentIndex + this.currentDeviations.length;
   }
 
-  applyDisproof(fact: Fact) {
+  applyDisproof(disproof: Disproof) {
     const idx = this.getEffectiveIndex();
     let list = this.appliedDisproofsMap.get(idx);
     if (!list) {
       list = [];
       this.appliedDisproofsMap.set(idx, list);
     }
-    if (!list.some(f => JSON.stringify(f) === JSON.stringify(fact))) {
-      list.push(fact);
+    if (!list.some(f => JSON.stringify(f) === JSON.stringify(disproof))) {
+      list.push(disproof);
     }
   }
 
-  getAppliedDisproofs(): Fact[] {
-    const result: Fact[] = [];
+  getAppliedDisproofs(): Disproof[] {
+    const result: Disproof[] = [];
     const currentEff = this.getEffectiveIndex();
     for (const [k, list] of this.appliedDisproofsMap.entries()) {
       if (k <= currentEff) {

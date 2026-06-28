@@ -1,6 +1,6 @@
 import {css, svg, TemplateResult} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
-import {isDisproof} from '../facts/disproof';
+import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
 import {shorthandFact} from '../facts/format';
 import type {Unit} from '../facts/Unit';
@@ -105,7 +105,7 @@ export class ReplayView extends SudokuView {
   private readonly replayInput = new ReplayInput(this);
 
   @property({attribute: false}) facts?: readonly Fact[];
-  @property({attribute: false}) disproofs?: readonly Fact[];
+  @property({attribute: false}) disproofs?: readonly Disproof[];
   @property({attribute: false}) productivityScores?: Map<
     string,
     number | 'loading'
@@ -118,7 +118,7 @@ export class ReplayView extends SudokuView {
     number,
     'green' | 'yellow' | 'red'
   > | null = null;
-  @property({attribute: false}) appliedDisproofs?: readonly Fact[];
+  @property({attribute: false}) appliedDisproofs?: readonly Disproof[];
 
   protected override renderForeground() {
     return svg`
@@ -159,15 +159,9 @@ export class ReplayView extends SudokuView {
     const {cellCenter, cellSize} = this;
     const eliminatedCandidates = new Set<string>();
 
-    for (const fact of this.appliedDisproofs) {
-      if (
-        fact.type === 'Implication' &&
-        fact.antecedents.length > 0 &&
-        fact.antecedents[0].type === 'SpeculativeAssignment'
-      ) {
-        const rootAsg = fact.antecedents[0] as {loc: number; num: number};
-        eliminatedCandidates.add(`${rootAsg.loc}-${rootAsg.num}`);
-      }
+    for (const disproof of this.appliedDisproofs) {
+      const rootAsg = disproof.antecedents[0];
+      eliminatedCandidates.add(`${rootAsg.loc}-${rootAsg.num}`);
     }
 
     for (const item of eliminatedCandidates) {
@@ -700,26 +694,24 @@ export class ReplayView extends SudokuView {
 
     // Collect disproofs to draw
     const disproofsToDraw: {
-      fact: Fact;
+      fact: Disproof;
       locIndex: number;
       totalFacts: number;
     }[] = [];
     if (this.disproofs && this.productivityScores && maxProductivity >= 0) {
-      for (const fact of this.disproofs) {
-        if (this.selectedFact && fact !== this.selectedFact) continue;
-        if (fact === this.selectedFact) continue;
+      for (const disproof of this.disproofs) {
+        if (this.selectedFact && disproof !== this.selectedFact) continue;
+        if (disproof === this.selectedFact) continue;
 
-        const score = this.productivityScores.get(shorthandFact(fact));
+        const score = this.productivityScores.get(shorthandFact(disproof));
         if (typeof score === 'number' && score === maxProductivity) {
-          if (isDisproof(fact)) {
-            const locIndex = fact.antecedents[0].loc;
-            if (!assignmentLocs.has(locIndex)) {
-              disproofsToDraw.push({
-                fact,
-                locIndex,
-                totalFacts: getTotalAntecedents(fact),
-              });
-            }
+          const locIndex = disproof.antecedents[0].loc;
+          if (!assignmentLocs.has(locIndex)) {
+            disproofsToDraw.push({
+              fact: disproof,
+              locIndex,
+              totalFacts: getTotalAntecedents(disproof),
+            });
           }
         }
       }
