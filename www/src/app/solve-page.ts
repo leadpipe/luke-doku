@@ -439,12 +439,16 @@ export class SolvePage extends LitElement {
           <h1>Luke-doku</h1>
           <h2>${renderPuzzleTitle(game.sudoku, /*assumeToday=*/ true)}</h2>
           <puzzle-rating .game=${game}></puzzle-rating>
-          ${playState === PlayState.COMPLETED ? html`
-            ${renderCompletedGameDescription(game)}
-            <div style="margin-top: 15px">
-              <button class="menu-button" @click=${this.reviewGame}>Review Game</button>
-            </div>
-          ` : ''}
+          ${playState === PlayState.COMPLETED ?
+            html`
+              ${renderCompletedGameDescription(game)}
+              <div style="margin-top: 15px">
+                <button class="menu-button" @click=${this.reviewGame}>
+                  Review Game
+                </button>
+              </div>
+            `
+          : ''}
           ${game.sudoku.id?.toString()}
         `
       )}
@@ -530,7 +534,11 @@ export class SolvePage extends LitElement {
 
   private reviewGame() {
     if (this.game) {
-      navigateToPath(this.game.sudoku.id?.toString() ?? this.game.sudoku.clues.toString(), 'review');
+      navigateToPath(
+        this.game.sudoku.id?.toString() ??
+          this.game.sudoku.clues.toFlatString(),
+        'review',
+      );
     }
   }
 
