@@ -320,11 +320,13 @@ export async function requestFactDeduction(
 export async function requestErroneousProductivityCalculation(
   grid: string,
   solutions?: readonly string[],
+  eliminations?: readonly EliminationConstraint[],
 ): Promise<ErroneousProductivityCalculatedMessage> {
   const message = {
     type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY,
     grid,
     solutions,
+    eliminations,
   };
   return productivityQueue.request(
     message,

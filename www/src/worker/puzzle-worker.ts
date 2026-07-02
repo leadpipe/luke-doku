@@ -249,7 +249,7 @@ function calculateErroneousProductivity(
         }
       }
     }
-    const results = wasm.calculateErroneousProductivity(grid, solutions);
+    const results = wasm.calculateErroneousProductivity(grid, solutions, m.eliminations);
     solutions = undefined;
 
     const elapsedMs = performance.now() - startTimeMs;

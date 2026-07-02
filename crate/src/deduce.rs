@@ -419,11 +419,21 @@ pub struct ErroneousAssignmentProductivity {
 pub fn calculate_erroneous_productivity_native(
   grid: &Grid,
   solutions: &[SolvedGrid],
+  constraints: Option<&[Vec<WasmAsgmt>]>,
 ) -> Vec<ErroneousAssignmentProductivity> {
   let mut base_ledger = match Ledger::new(grid) {
     Ok(l) => l,
     Err(_) => return Vec::new(),
   };
+
+  if let Some(c) = constraints {
+    for constraint in c {
+      if constraint.len() == 1 {
+        let wa = &constraint[0];
+        base_ledger.eliminate(Num::new(wa.num).unwrap(), Loc::new(wa.loc).unwrap());
+      }
+    }
+  }
 
   if base_ledger.apply_implications().is_err() {
     return Vec::new();
@@ -476,9 +486,17 @@ pub fn calculate_erroneous_productivity_native(
 pub fn calculate_erroneous_productivity(
   grid: &Grid,
   solutions: Option<Vec<SolvedGrid>>,
+  eliminations: wasm_bindgen::JsValue,
 ) -> wasm_bindgen::JsValue {
   let solutions = solutions.unwrap_or_default();
-  let results = calculate_erroneous_productivity_native(grid, &solutions);
+  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
+    if eliminations.is_undefined() || eliminations.is_null() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+    };
+
+  let results = calculate_erroneous_productivity_native(grid, &solutions, constraints.as_deref());
   serde_wasm_bindgen::to_value(&results).unwrap()
 }
 
@@ -611,7 +629,7 @@ fn disprove_recursive(
 
   // 4. Find erroneous candidates in the current hypothetical state
   let mut err_candidates =
-    calculate_erroneous_productivity_native(&current_finder.to_grid(), solutions);
+    calculate_erroneous_productivity_native(&current_finder.to_grid(), solutions, None);
 
   if let Ok(base_ledger) = Ledger::new(&current_finder.to_grid()) {
     err_candidates.sort_by_key(|cand| {
@@ -937,7 +955,7 @@ mod tests {
     let summary = crate::solve::solve(&grid, 10, &mut helper);
     assert!(!summary.solutions.is_empty());
 
-    let results = calculate_erroneous_productivity_native(&grid, &summary.solutions);
+    let results = calculate_erroneous_productivity_native(&grid, &summary.solutions, None);
 
     let mut solutions_asgmt_set = AsgmtSet::new();
     for solution in &summary.solutions {

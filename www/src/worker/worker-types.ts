@@ -71,6 +71,7 @@ export interface CalculateErroneousProductivityMessage extends ToWorkerMessageBa
   readonly type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY;
   readonly grid: string;
   readonly solutions?: readonly string[];
+  readonly eliminations?: readonly EliminationConstraint[];
 }
 
 export interface DisproveErroneousAssignmentMessage extends ToWorkerMessageBase {

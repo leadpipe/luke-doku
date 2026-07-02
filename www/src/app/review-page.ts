@@ -401,10 +401,14 @@ export class ReviewPage extends LitElement {
     this.searchStatus = 'Calculating productivity...';
     this.requestUpdate();
 
+    const elims = this.playback.getAppliedDisproofs();
+    const constraints = getEliminationConstraints(elims);
+
     try {
       const prodResult = await requestErroneousProductivityCalculation(
         gridString,
         solutions,
+        constraints,
       );
 
       if (token !== this.searchToken) return;
@@ -431,9 +435,6 @@ export class ReviewPage extends LitElement {
         const percent = Math.round((i / candidates.length) * 100);
         this.searchStatus = `Searching disproofs (quick pass)... (${percent}% complete)`;
         this.requestUpdate();
-
-        const elims = this.playback.getAppliedDisproofs();
-        const constraints = getEliminationConstraints(elims);
 
         const useLongQueue = false;
         const maxTimeMs = 500;
@@ -497,9 +498,6 @@ export class ReviewPage extends LitElement {
             );
             this.searchStatus = `Searching disproofs (depth ${passDepth})... (${percent}% complete)`;
             this.requestUpdate();
-
-            const elims = this.playback.getAppliedDisproofs();
-            const constraints = getEliminationConstraints(elims);
 
             const useLongQueue = true;
             const maxTimeMs = 2000;
