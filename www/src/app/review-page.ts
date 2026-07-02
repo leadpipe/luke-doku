@@ -1281,10 +1281,12 @@ export class ReviewPage extends LitElement {
             let label = getFactLabel(fact);
             if (isDisproof(fact)) {
               const score = this.productivityScores.get(shorthandFact(fact));
+              const steps = getTotalAntecedents(fact);
+              const stepsText = steps === 1 ? '1 step' : `${steps} steps`;
               if (typeof score === 'number') {
-                label = `[Productivity: +${score}] ${label}`;
+                label = `[Productivity +${score}, ${stepsText}] ${label}`;
               } else if (score === 'loading') {
-                label = `[Productivity: calculating...] ${label}`;
+                label = `[Productivity calculating..., ${stepsText}] ${label}`;
               }
             }
             return html`
