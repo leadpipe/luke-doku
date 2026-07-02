@@ -15,6 +15,7 @@ import {ensureExhaustiveSwitch} from '../game/utils';
 import {log} from '../system/analytics';
 import {
   iterateOngoingPuzzlesDesc,
+  lookUpPuzzleByClues,
   lookUpPuzzleById,
   openDb,
 } from '../system/database';
@@ -263,7 +264,10 @@ export class LukeDoku extends LitElement {
       }
       return await Game.createGame(db, puzzleId.date, puzzleId.counter);
     }
-    // TODO: handle a clues string
+    const record = await lookUpPuzzleByClues(db, cluesOrId);
+    if (record) {
+      return Game.forDbRecord(db, record);
+    }
     return null;
   }
 
