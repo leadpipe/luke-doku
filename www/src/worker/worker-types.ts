@@ -80,6 +80,7 @@ export interface DisproveErroneousAssignmentMessage extends ToWorkerMessageBase 
   readonly solutions?: readonly string[];
   readonly eliminations?: readonly EliminationConstraint[];
   readonly maxTimeMs?: number;
+  readonly maxDepth?: number;
 }
 
 export type ToWorkerMessage =

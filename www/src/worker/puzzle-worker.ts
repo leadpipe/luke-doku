@@ -1,7 +1,9 @@
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 import {
+  type CalculateErroneousProductivityMessage,
   type DeduceFactsMessage,
+  type DisproveErroneousAssignmentMessage,
   type ErrorCaughtMessage,
   type EvaluatePuzzleMessage,
   type FindSymmetriesMessage,
@@ -12,8 +14,6 @@ import {
   type TestPuzzleMessage,
   ToWorkerMessage,
   ToWorkerMessageType,
-  type CalculateErroneousProductivityMessage,
-  type DisproveErroneousAssignmentMessage,
 } from './worker-types';
 
 export async function handleToWorkerMessage(
@@ -226,13 +226,16 @@ function toErrorCaught(
   return answer;
 }
 
-
 function calculateErroneousProductivity(
   m: CalculateErroneousProductivityMessage,
 ): FromWorkerMessage {
   const grid = wasm.Grid.newFromString(m.grid);
   if (!grid) {
-    return toErrorCaught(m, 'calculateErroneousProductivity', new Error('Invalid grid'));
+    return toErrorCaught(
+      m,
+      'calculateErroneousProductivity',
+      new Error('Invalid grid'),
+    );
   }
   let solutions: wasm.SolvedGrid[] | undefined;
   const startTimeMs = performance.now();
@@ -273,7 +276,11 @@ function disproveErroneousAssignment(
 ): FromWorkerMessage {
   const grid = wasm.Grid.newFromString(m.grid);
   if (!grid) {
-    return toErrorCaught(m, 'disproveErroneousAssignment', new Error('Invalid grid'));
+    return toErrorCaught(
+      m,
+      'disproveErroneousAssignment',
+      new Error('Invalid grid'),
+    );
   }
   let solutions: wasm.SolvedGrid[] | undefined;
   const startTimeMs = performance.now();
@@ -293,6 +300,7 @@ function disproveErroneousAssignment(
       solutions,
       m.eliminations,
       m.maxTimeMs,
+      m.maxDepth,
     );
     solutions = undefined;
 

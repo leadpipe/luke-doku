@@ -11,7 +11,6 @@ import {describeFact, shorthandFact} from '../facts/format';
 import {
   collectStepsWithContext,
   compareFacts,
-  flattenImplication,
   getTotalAntecedents,
   getVisibleFactsAtStep,
   nub,
@@ -418,23 +417,27 @@ export class ReviewPage extends LitElement {
         return;
       }
 
-      // We will check each candidate sequentially
+      const complexity = this.game?.complexity;
+      const isLunatic =
+        complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
+
+      const slowPassCandidates: (typeof candidates)[number][] = [];
+
+      // Quick pass
       for (let i = 0; i < candidates.length; i++) {
         if (token !== this.searchToken) return;
 
         const cand = candidates[i];
         const percent = Math.round((i / candidates.length) * 100);
-        this.searchStatus = `Searching disproofs... (${percent}% complete)`;
+        this.searchStatus = `Searching disproofs (quick pass)... (${percent}% complete)`;
         this.requestUpdate();
 
         const elims = this.playback.getAppliedDisproofs();
         const constraints = getEliminationConstraints(elims);
 
-        const complexity = this.game?.complexity;
-        const isLunatic =
-          complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
-        const useLongQueue = isLunatic;
-        const maxTimeMs = isLunatic ? 2000 : 500;
+        const useLongQueue = false;
+        const maxTimeMs = 500;
+        const maxDepth = 1;
 
         try {
           const response = await requestErroneousAssignmentDisproof(
@@ -444,6 +447,7 @@ export class ReviewPage extends LitElement {
             constraints,
             maxTimeMs,
             useLongQueue,
+            maxDepth,
           );
 
           if (token !== this.searchToken) return;
@@ -460,6 +464,8 @@ export class ReviewPage extends LitElement {
               this.productivityScores.set(key, cand.productivity);
               this.requestUpdate();
             }
+          } else if (isLunatic) {
+            slowPassCandidates.push(cand);
           }
         } catch (e) {
           console.error(
@@ -470,6 +476,83 @@ export class ReviewPage extends LitElement {
 
         // Yield control to browser
         await new Promise(resolve => window.setTimeout(resolve, 30));
+      }
+
+      // Slow passes for Lunatic
+      if (isLunatic && slowPassCandidates.length > 0) {
+        let currentPassCandidates = [...slowPassCandidates];
+
+        for (let passDepth = 2; passDepth <= 5; passDepth++) {
+          if (currentPassCandidates.length === 0) break;
+
+          let foundPositiveProductivity = false;
+          const nextPassCandidates: (typeof candidates)[number][] = [];
+
+          for (let i = 0; i < currentPassCandidates.length; i++) {
+            if (token !== this.searchToken) return;
+
+            const cand = currentPassCandidates[i];
+            const percent = Math.round(
+              (i / currentPassCandidates.length) * 100,
+            );
+            this.searchStatus = `Searching disproofs (depth ${passDepth})... (${percent}% complete)`;
+            this.requestUpdate();
+
+            const elims = this.playback.getAppliedDisproofs();
+            const constraints = getEliminationConstraints(elims);
+
+            const useLongQueue = true;
+            const maxTimeMs = 2000;
+            const maxDepth = passDepth;
+
+            try {
+              const response = await requestErroneousAssignmentDisproof(
+                gridString,
+                {loc: cand.loc, num: cand.num},
+                solutions,
+                constraints,
+                maxTimeMs,
+                useLongQueue,
+                maxDepth,
+              );
+
+              if (token !== this.searchToken) return;
+
+              if (response.disproof) {
+                const newFact = response.disproof;
+                if (
+                  !this.disproofs.some(
+                    f => shorthandFact(f) === shorthandFact(newFact),
+                  )
+                ) {
+                  this.disproofs.push(newFact);
+                  const key = shorthandFact(newFact);
+                  this.productivityScores.set(key, cand.productivity);
+                  this.requestUpdate();
+
+                  if (cand.productivity > 0) {
+                    foundPositiveProductivity = true;
+                  }
+                }
+              } else {
+                nextPassCandidates.push(cand);
+              }
+            } catch (e) {
+              console.error(
+                `Failed to disprove candidate at loc ${cand.loc} num ${cand.num} at depth ${passDepth}:`,
+                e,
+              );
+            }
+
+            // Yield control to browser
+            await new Promise(resolve => window.setTimeout(resolve, 30));
+          }
+
+          if (foundPositiveProductivity) {
+            break;
+          }
+          currentPassCandidates = nextPassCandidates;
+        }
       }
 
       if (token !== this.searchToken) return;
@@ -1070,42 +1153,41 @@ export class ReviewPage extends LitElement {
           `}
       </div>
 
-      ${this.previewedDisproof ?
-        this.renderLogicalTrails()
-      : (this.playback.deviations.length === 0 ?
-          html`
-            <div class="action-section">
-              ${command ?
-                html`
-                  <div>Action: ${command.command.toString()}</div>
-                  ${command.command.tag() === CommandTag.RESUME ?
-                    html`<div>
-                      Time:
-                      ${new Date(
-                        (command.command as any).timestamp,
-                      ).toLocaleString()}
-                    </div>`
-                  : html`<div>
-                      Time spent:
-                      ${elapsedTimeString(
-                        command.elapsedTimestamp -
-                          (prevCommand ? prevCommand.elapsedTimestamp : 0),
-                      )}
-                    </div>`}
-                `
-              : ''}
-              ${nextCommand ?
-                html`<div>
-                  Next: ${nextCommand.command.toString()}
-                  (${elapsedTimeString(
-                    nextCommand.elapsedTimestamp -
-                      (command ? command.elapsedTimestamp : 0),
-                  )})
-                </div>`
-              : ''}
-            </div>
-          `
-        : '')}
+      ${this.previewedDisproof ? this.renderLogicalTrails()
+      : this.playback.deviations.length === 0 ?
+        html`
+          <div class="action-section">
+            ${command ?
+              html`
+                <div>Action: ${command.command.toString()}</div>
+                ${command.command.tag() === CommandTag.RESUME ?
+                  html`<div>
+                    Time:
+                    ${new Date(
+                      (command.command as any).timestamp,
+                    ).toLocaleString()}
+                  </div>`
+                : html`<div>
+                    Time spent:
+                    ${elapsedTimeString(
+                      command.elapsedTimestamp -
+                        (prevCommand ? prevCommand.elapsedTimestamp : 0),
+                    )}
+                  </div>`}
+              `
+            : ''}
+            ${nextCommand ?
+              html`<div>
+                Next: ${nextCommand.command.toString()}
+                (${elapsedTimeString(
+                  nextCommand.elapsedTimestamp -
+                    (command ? command.elapsedTimestamp : 0),
+                )})
+              </div>`
+            : ''}
+          </div>
+        `
+      : ''}
       ${this.renderSelectedFacts()}
       <div id="bottom-info">
         <h2>

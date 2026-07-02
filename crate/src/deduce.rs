@@ -489,6 +489,7 @@ pub fn disprove_erroneous_assignment_wasm(
   solutions: Option<Vec<SolvedGrid>>,
   eliminations: wasm_bindgen::JsValue,
   max_time_ms: Option<f64>,
+  max_depth: Option<usize>,
 ) -> wasm_bindgen::JsValue {
   let target: WasmAsgmt = serde_wasm_bindgen::from_value(target).unwrap();
   let target_asgmt = Asgmt::new(Num::new(target.num).unwrap(), Loc::new(target.loc).unwrap());
@@ -506,7 +507,14 @@ pub fn disprove_erroneous_assignment_wasm(
   }
 
   let solutions = solutions.unwrap_or_default();
-  let fact_opt = disprove_erroneous_assignment(&base_finder, target_asgmt, &solutions, max_time_ms);
+  let max_depth = max_depth.unwrap_or(5);
+  let fact_opt = disprove_erroneous_assignment(
+    &base_finder,
+    target_asgmt,
+    &solutions,
+    max_time_ms,
+    max_depth,
+  );
   serde_wasm_bindgen::to_value(&fact_opt).unwrap()
 }
 
@@ -515,6 +523,7 @@ pub fn disprove_erroneous_assignment(
   target: Asgmt,
   solutions: &[SolvedGrid],
   max_time_ms: Option<f64>,
+  max_depth: usize,
 ) -> Option<Fact> {
   let start_time = time::now();
   let target_fact = Fact::SpeculativeAssignment {
@@ -524,8 +533,6 @@ pub fn disprove_erroneous_assignment(
 
   let mut current_finder = base_finder.clone();
   current_finder.apply(target);
-
-  let max_depth = 5;
 
   let err_fact = disprove_recursive(
     base_finder,
@@ -990,7 +997,8 @@ mod tests {
     let base_finder = FactFinder::new(&grid);
 
     let target = Asgmt::new(N8, L54);
-    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(10000.0));
+    let fact_opt =
+      disprove_erroneous_assignment(&base_finder, target, &solutions, Some(10000.0), 5);
     assert!(
       fact_opt.is_some(),
       "Should have successfully disproved target L54=N8"
@@ -1068,7 +1076,7 @@ mod tests {
     let deduced = finder.deduce_all_with_timeout(None);
     println!("Deductions under target: {:#?}", deduced.0);
 
-    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0));
+    let fact_opt = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(5000.0), 5);
     assert!(
       fact_opt.is_some(),
       "Should have successfully disproved target L14=N4"

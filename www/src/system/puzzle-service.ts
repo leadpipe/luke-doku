@@ -311,7 +311,6 @@ export async function requestFactDeduction(
   ) as Promise<FactsDeducedMessage>;
 }
 
-
 /**
  * Sends a message to the worker to calculate productivity for all erroneous assignments.
  * @param grid The grid state, as a flat string.
@@ -350,6 +349,7 @@ export async function requestErroneousAssignmentDisproof(
   eliminations?: readonly EliminationConstraint[],
   maxTimeMs?: number,
   useLongQueue?: boolean,
+  maxDepth?: number,
 ): Promise<ErroneousAssignmentDisprovedMessage> {
   const message = {
     type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT,
@@ -358,6 +358,7 @@ export async function requestErroneousAssignmentDisproof(
     solutions,
     eliminations,
     maxTimeMs,
+    maxDepth,
   };
   const queue = useLongQueue ? disproveLongQueue : disproveQueue;
   return queue.request(
