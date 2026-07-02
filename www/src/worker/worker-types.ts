@@ -1,6 +1,5 @@
 import type {ErroneousAssignmentProductivity} from '../facts/ErroneousAssignmentProductivity';
 import type {Fact} from '../facts/Fact';
-import type {Disproof} from '../facts/disproof';
 import * as wasm from '../wasm';
 
 export enum ToWorkerMessageType {
@@ -236,10 +235,20 @@ export interface ErroneousProductivityCalculatedMessage extends FromWorkerMessag
   readonly elapsedMs: number;
 }
 
+export interface DisproofMetadata {
+  readonly type: 'DisproofMetadata';
+  readonly shorthand: string;
+  readonly label: string;
+  readonly totalAntecedents: number;
+  readonly rootLoc: number;
+  readonly rootNum: number;
+  readonly json: string;
+}
+
 export interface ErroneousAssignmentDisprovedMessage extends FromWorkerMessageBase {
   readonly type: FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED;
   readonly toWorkerMessage: DisproveErroneousAssignmentMessage;
-  readonly disproof?: Disproof;
+  readonly disproofMetadata?: DisproofMetadata;
   readonly elapsedMs: number;
 }
 

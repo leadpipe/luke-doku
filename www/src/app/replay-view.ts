@@ -2,7 +2,6 @@ import {css, svg, TemplateResult} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
-import {shorthandFact} from '../facts/format';
 import type {Unit} from '../facts/Unit';
 import {
   flattenImplication,
@@ -12,6 +11,7 @@ import {
   unitContains,
 } from '../facts/utils';
 import {Loc} from '../game/loc';
+import type {DisproofMetadata} from '../worker/worker-types';
 import {ReplayInput} from './replay-input';
 import {SudokuView} from './sudoku-view';
 
@@ -106,13 +106,14 @@ export class ReplayView extends SudokuView {
   private readonly replayInput = new ReplayInput(this);
 
   @property({attribute: false}) facts?: readonly Fact[];
-  @property({attribute: false}) disproofs?: readonly Disproof[];
+  @property({attribute: false}) disproofs?: readonly DisproofMetadata[];
   @property({attribute: false}) productivityScores?: Map<
     string,
     number | 'loading'
   >;
   @property({attribute: false}) selectedLoc: Loc | null = null;
-  @property({attribute: false}) selectedFact: Fact | null = null;
+  @property({attribute: false}) selectedFact: Fact | DisproofMetadata | null =
+    null;
   @property({attribute: false}) actionLoc: Loc | null = null;
   @property({type: Number}) previewStepIndex = -1;
   @property({attribute: false}) previewHighlights: Map<
@@ -188,15 +189,19 @@ export class ReplayView extends SudokuView {
   }
 
   private getActiveFactDetails(): Fact[] {
-    if (!this.selectedFact) return [];
-    if (this.previewStepIndex >= 0 && isDisproof(this.selectedFact)) {
-      return getVisibleFactsAtStep(this.selectedFact, this.previewStepIndex);
+    const selectedFact = this.selectedFact;
+    if (!selectedFact) return [];
+    if ('type' in selectedFact && selectedFact.type === 'DisproofMetadata') {
+      return [];
     }
-    const {antecedents, nub: finalNub} = flattenImplication(this.selectedFact);
+    if (this.previewStepIndex >= 0 && isDisproof(selectedFact)) {
+      return getVisibleFactsAtStep(selectedFact, this.previewStepIndex);
+    }
+    const {antecedents, nub: finalNub} = flattenImplication(selectedFact);
     let facts = [...antecedents, finalNub];
     if (this.previewStepIndex >= 0) {
       facts = facts.slice(0, this.previewStepIndex + 1);
-    } else if (isDisproof(this.selectedFact) && antecedents.length > 0) {
+    } else if (isDisproof(selectedFact) && antecedents.length > 0) {
       facts = [antecedents[0], finalNub];
     }
     return facts;
@@ -516,6 +521,8 @@ export class ReplayView extends SudokuView {
     let hasSubsets = false;
 
     for (const fact of this.facts) {
+      if (this.selectedFact && fact !== this.selectedFact) continue;
+      if (isDisproof(fact)) continue; // Disproofs are drawn later, don't treat their consequents as grid errors
       const base = nub(fact);
       if (
         base.type === 'SingleLoc' ||
@@ -574,57 +581,55 @@ export class ReplayView extends SudokuView {
     const hasAssignmentsOrErrors =
       assignmentLocs.size > 0 || errorLocs.size > 0 || errorUnits.size > 0;
 
-    if (!hasAssignmentsOrErrors) {
-      for (const fact of this.facts) {
-        if (this.selectedFact && fact !== this.selectedFact) continue;
-        const base = nub(fact);
-        if (base.type === 'Subset') {
-          const {locs, unit} = base;
-          for (const loc of locs) {
-            const [x, y] = cellCenter(Loc.of(loc)!);
-            if (unit.type === 'Row') {
-              answer.push(
-                svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-              );
-            } else if (unit.type === 'Col') {
-              answer.push(
-                svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-              );
-            } else if (unit.type === 'Blk') {
-              const size = this.cellSize / 2;
-              answer.push(
-                svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-              );
-            }
+    for (const fact of this.facts) {
+      if (this.selectedFact && fact !== this.selectedFact) continue;
+      const base = nub(fact);
+      if (base.type === 'Subset') {
+        const {locs, unit} = base;
+        for (const loc of locs) {
+          const [x, y] = cellCenter(Loc.of(loc)!);
+          if (unit.type === 'Row') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+            );
+          } else if (unit.type === 'Col') {
+            answer.push(
+              svg`<line class="subset-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+            );
+          } else if (unit.type === 'Blk') {
+            const size = this.cellSize / 2;
+            answer.push(
+              svg`<rect class="subset-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+            );
           }
         }
       }
-      if (!hasSubsets) {
-        for (const fact of this.facts) {
-          if (this.selectedFact && fact !== this.selectedFact) continue;
-          const base = nub(fact);
-          if (base.type === 'Overlap') {
-            for (const loc of Loc.ALL) {
-              if (
-                !unitContains(base.unit, loc) ||
-                !unitContains(base.cross_unit, loc)
-              )
-                continue;
-              const [x, y] = cellCenter(loc);
-              if (base.unit.type === 'Row') {
-                answer.push(
-                  svg`<line class="overlap-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
-                );
-              } else if (base.unit.type === 'Col') {
-                answer.push(
-                  svg`<line class="overlap-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
-                );
-              } else if (base.unit.type === 'Blk') {
-                const size = this.cellSize / 2;
-                answer.push(
-                  svg`<rect class="overlap-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
-                );
-              }
+    }
+    if (!hasSubsets) {
+      for (const fact of this.facts) {
+        if (this.selectedFact && fact !== this.selectedFact) continue;
+        const base = nub(fact);
+        if (base.type === 'Overlap') {
+          for (const loc of Loc.ALL) {
+            if (
+              !unitContains(base.unit, loc) ||
+              !unitContains(base.cross_unit, loc)
+            )
+              continue;
+            const [x, y] = cellCenter(loc);
+            if (base.unit.type === 'Row') {
+              answer.push(
+                svg`<line class="overlap-line" x1=${x - this.cellSize / 2} y1=${y} x2=${x + this.cellSize / 2} y2=${y} />`,
+              );
+            } else if (base.unit.type === 'Col') {
+              answer.push(
+                svg`<line class="overlap-line" x1=${x} y1=${y - this.cellSize / 2} x2=${x} y2=${y + this.cellSize / 2} />`,
+              );
+            } else if (base.unit.type === 'Blk') {
+              const size = this.cellSize / 2;
+              answer.push(
+                svg`<rect class="overlap-line" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+              );
             }
           }
         }
@@ -634,6 +639,7 @@ export class ReplayView extends SudokuView {
     // Filter and sort assignment facts from least to most relevant (reverse of compareFacts)
     const assignmentFacts = this.facts.filter(fact => {
       if (this.selectedFact && fact !== this.selectedFact) return false;
+      if (isDisproof(fact)) return true;
       const base = nub(fact);
       return (
         base.type === 'SingleLoc' ||
@@ -644,6 +650,7 @@ export class ReplayView extends SudokuView {
 
     assignmentFacts.sort((a, b) => {
       const typeRank = (fact: Fact) => {
+        if (isDisproof(fact)) return 0;
         const base = nub(fact);
         switch (base.type) {
           case 'SpeculativeAssignment':
@@ -666,6 +673,10 @@ export class ReplayView extends SudokuView {
 
     const mostRelevantByLoc = new Map<number, Fact>();
     for (const fact of assignmentFacts) {
+      if (isDisproof(fact)) {
+        mostRelevantByLoc.set(fact.antecedents[0].loc, fact);
+        continue;
+      }
       const base = nub(fact);
       if (
         base.type === 'SingleLoc' ||
@@ -702,7 +713,7 @@ export class ReplayView extends SudokuView {
     let maxProductivity = -1;
     if (this.disproofs && this.productivityScores) {
       for (const fact of this.disproofs) {
-        const score = this.productivityScores.get(shorthandFact(fact));
+        const score = this.productivityScores.get(fact.shorthand);
         if (typeof score === 'number' && score > maxProductivity) {
           maxProductivity = score;
         }
@@ -711,7 +722,7 @@ export class ReplayView extends SudokuView {
 
     // Collect disproofs to draw
     const disproofsToDraw: {
-      fact: Disproof;
+      fact: DisproofMetadata;
       locIndex: number;
       totalFacts: number;
     }[] = [];
@@ -720,14 +731,14 @@ export class ReplayView extends SudokuView {
         if (this.selectedFact && disproof !== this.selectedFact) continue;
         if (disproof === this.selectedFact) continue;
 
-        const score = this.productivityScores.get(shorthandFact(disproof));
+        const score = this.productivityScores.get(disproof.shorthand);
         if (typeof score === 'number' && score === maxProductivity) {
-          const locIndex = disproof.antecedents[0].loc;
+          const locIndex = disproof.rootLoc;
           if (!assignmentLocs.has(locIndex)) {
             disproofsToDraw.push({
               fact: disproof,
               locIndex,
-              totalFacts: getTotalAntecedents(disproof),
+              totalFacts: disproof.totalAntecedents,
             });
           }
         }

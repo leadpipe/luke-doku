@@ -1,5 +1,9 @@
+import type {Disproof} from '../facts/disproof';
+import {formatDisproofDescription, shorthandFact} from '../facts/format';
+import {getTotalAntecedents} from '../facts/utils';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
+import type {DisproofMetadata} from './worker-types';
 import {
   type CalculateErroneousProductivityMessage,
   type DeduceFactsMessage,
@@ -249,7 +253,11 @@ function calculateErroneousProductivity(
         }
       }
     }
-    const results = wasm.calculateErroneousProductivity(grid, solutions, m.eliminations);
+    const results = wasm.calculateErroneousProductivity(
+      grid,
+      solutions,
+      m.eliminations,
+    );
     solutions = undefined;
 
     const elapsedMs = performance.now() - startTimeMs;
@@ -294,7 +302,7 @@ function disproveErroneousAssignment(
         }
       }
     }
-    const disproof = wasm.disproveErroneousAssignment(
+    const disproofObj = wasm.disproveErroneousAssignment(
       grid,
       m.target,
       solutions,
@@ -304,11 +312,25 @@ function disproveErroneousAssignment(
     );
     solutions = undefined;
 
+    let disproofMetadata: DisproofMetadata | undefined = undefined;
+    if (disproofObj) {
+      const disproof = disproofObj as Disproof;
+      disproofMetadata = {
+        type: 'DisproofMetadata',
+        shorthand: shorthandFact(disproof),
+        label: formatDisproofDescription(disproof),
+        totalAntecedents: getTotalAntecedents(disproof),
+        rootLoc: disproof.antecedents[0].loc,
+        rootNum: disproof.antecedents[0].num,
+        json: JSON.stringify(disproof),
+      };
+    }
+
     const elapsedMs = performance.now() - startTimeMs;
     return {
       type: FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED,
       toWorkerMessage: m,
-      disproof,
+      disproofMetadata,
       elapsedMs,
     };
   } catch (e: unknown) {

@@ -1,9 +1,5 @@
 import type {Fact} from '../facts/Fact';
-import type {Disproof} from '../facts/disproof';
-import {formatUnit} from '../facts/format';
-import {nub} from '../facts/utils';
 import {CommandTag, RecordedCommand} from '../game/command';
-import {Loc} from '../game/loc';
 
 export function computeInterestingIndices(
   history: readonly RecordedCommand[],
@@ -97,28 +93,4 @@ export function getEliminationConstraints(
     }
   }
   return result;
-}
-
-export function formatDisproofDescription(fact: Disproof): string {
-  const asg = fact.antecedents[0];
-  const antecedentsStr = `Speculating ${asg.num} at ${Loc.of(asg.loc)}`;
-
-  const finalNub = nub(fact);
-  let consequentStr = '';
-  switch (finalNub.type) {
-    case 'Conflict':
-      consequentStr = `leads to a conflict for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
-      break;
-    case 'NoLoc':
-      consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
-      break;
-    case 'NoNum':
-      consequentStr = `leads to no possible numbers at ${Loc.of(finalNub.loc)}`;
-      break;
-    default:
-      consequentStr = `leads to a contradiction`;
-      break;
-  }
-
-  return `${antecedentsStr} ${consequentStr}`;
 }

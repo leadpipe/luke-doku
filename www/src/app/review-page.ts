@@ -7,7 +7,11 @@ import {css, html, LitElement} from 'lit';
 import {customElement, property, state} from 'lit/decorators.js';
 import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
-import {describeFact, shorthandFact} from '../facts/format';
+import {
+  describeFact,
+  formatDisproofDescription,
+  shorthandFact,
+} from '../facts/format';
 import {
   collectStepsWithContext,
   compareFacts,
@@ -23,6 +27,7 @@ import {Loc} from '../game/loc';
 import {PlaybackGame} from '../game/playback';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
+import type {DisproofMetadata} from '../worker/worker-types';
 
 import {
   requestErroneousAssignmentDisproof,
@@ -32,13 +37,17 @@ import {
 import {navigateToPuzzle} from './nav';
 import {
   computeInterestingIndices,
-  formatDisproofDescription,
   getEliminationConstraints,
 } from './review-utils';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
 
-function getFactAssignment(fact: Fact): {loc: number; num: number} | null {
-  const base = nub(fact);
+function getFactAssignment(
+  fact: Fact | DisproofMetadata,
+): {loc: number; num: number} | null {
+  if (fact.type === 'DisproofMetadata') {
+    return null;
+  }
+  const base = nub(fact as Fact);
   if (
     base.type === 'SingleLoc' ||
     base.type === 'SingleNum' ||
@@ -49,11 +58,14 @@ function getFactAssignment(fact: Fact): {loc: number; num: number} | null {
   return null;
 }
 
-function getFactLabel(fact: Fact): string {
-  if (isDisproof(fact)) {
-    return formatDisproofDescription(fact);
+function getFactLabel(fact: Fact | DisproofMetadata): string {
+  if (fact.type === 'DisproofMetadata') {
+    return fact.label;
   }
-  return describeFact(fact);
+  if (isDisproof(fact as Fact)) {
+    return formatDisproofDescription(fact as Disproof);
+  }
+  return describeFact(fact as Fact);
 }
 
 @customElement('review-page')
@@ -308,9 +320,9 @@ export class ReviewPage extends LitElement {
   @state() private isPlayingForward = false;
   @state() private isPlayingBackward = false;
   @state() private selectedLoc: Loc | null = null;
-  @state() private selectedFact: Fact | null = null;
-  @state() private selectedLocFacts: Fact[] = [];
-  @state() private disproofs: Disproof[] = [];
+  @state() private selectedFact: Fact | DisproofMetadata | null = null;
+  @state() private selectedLocFacts: (Fact | DisproofMetadata)[] = [];
+  @state() private disproofs: DisproofMetadata[] = [];
   @state() private searchStatus = '';
   @state() private isSearching = false;
   @state() private previewedDisproof: Disproof | null = null;
@@ -453,17 +465,14 @@ export class ReviewPage extends LitElement {
 
           if (token !== this.searchToken) return;
 
-          if (response.disproof) {
-            const newFact = response.disproof;
-            if (
-              !this.disproofs.some(
-                f => shorthandFact(f) === shorthandFact(newFact),
-              )
-            ) {
-              this.disproofs.push(newFact);
-              const key = shorthandFact(newFact);
-              this.productivityScores.set(key, cand.productivity);
-              this.requestUpdate();
+          if (response.metadata) {
+            const newFact = response.metadata;
+            if (!this.disproofs.some(f => f.shorthand === newFact.shorthand)) {
+              this.disproofs = [...this.disproofs, newFact];
+              const key = newFact.shorthand;
+              const newScores = new Map(this.productivityScores);
+              newScores.set(key, cand.productivity);
+              this.productivityScores = newScores;
             }
           } else if (isLunatic) {
             slowPassCandidates.push(cand);
@@ -516,17 +525,16 @@ export class ReviewPage extends LitElement {
 
               if (token !== this.searchToken) return;
 
-              if (response.disproof) {
-                const newFact = response.disproof;
+              if (response.metadata) {
+                const newFact = response.metadata;
                 if (
-                  !this.disproofs.some(
-                    f => shorthandFact(f) === shorthandFact(newFact),
-                  )
+                  !this.disproofs.some(f => f.shorthand === newFact.shorthand)
                 ) {
-                  this.disproofs.push(newFact);
-                  const key = shorthandFact(newFact);
-                  this.productivityScores.set(key, cand.productivity);
-                  this.requestUpdate();
+                  this.disproofs = [...this.disproofs, newFact];
+                  const key = newFact.shorthand;
+                  const newScores = new Map(this.productivityScores);
+                  newScores.set(key, cand.productivity);
+                  this.productivityScores = newScores;
 
                   if (cand.productivity > 0) {
                     foundPositiveProductivity = true;
@@ -567,30 +575,37 @@ export class ReviewPage extends LitElement {
     }
   }
 
-  private enterPreview(disproof: Disproof) {
-    this.clearPlayInterval();
+  private enterPreview(metadata: DisproofMetadata) {
+    const disproof = JSON.parse(metadata.json) as Disproof;
     this.previewedDisproof = disproof;
     this.previewStepIndex = 0;
+    this.clearPlayInterval();
+
+    const checkedRadio = this.shadowRoot?.querySelector(
+      'input[name="selectedFact"]:checked',
+    );
+    if (checkedRadio) {
+      checkedRadio.parentElement?.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start',
+      });
+    }
   }
 
-  private exitPreviewMode() {
+  private exitPreviewMode = () => {
     this.previewedDisproof = null;
     this.previewStepIndex = -1;
-  }
+    this.requestUpdate();
+  };
 
   private getPreviewTrailSteps(): Fact[] {
     if (!this.previewedDisproof) return [];
-    return collectStepsWithContext(this.previewedDisproof).map(s => s.fact);
+    const steps = collectStepsWithContext(this.previewedDisproof);
+    return steps.map(s => s.fact);
   }
 
   private getPreviewHighlights(): Map<number, 'green' | 'yellow' | 'red'> {
     const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
-    if (!this.previewedDisproof) return highlights;
-
-    const visibleFacts = getVisibleFactsAtStep(
-      this.previewedDisproof,
-      this.previewStepIndex,
-    );
 
     const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
       const existing = highlights.get(loc);
@@ -598,6 +613,29 @@ export class ReviewPage extends LitElement {
       if (existing === 'red' && color === 'yellow') return;
       highlights.set(loc, color);
     };
+
+    if (!this.previewedDisproof) {
+      if (
+        this.selectedFact &&
+        'type' in this.selectedFact &&
+        this.selectedFact.type === 'DisproofMetadata'
+      ) {
+        highlights.set(this.selectedFact.rootLoc, 'yellow');
+      } else if (this.selectedFact && isDisproof(this.selectedFact)) {
+        highlights.set(this.selectedFact.antecedents[0].loc, 'yellow');
+      } else if (this.selectedFact) {
+        const base = nub(this.selectedFact as Fact);
+        if (base.type === 'SpeculativeAssignment') {
+          highlights.set(base.loc, 'green');
+        }
+      }
+      return highlights;
+    }
+
+    const visibleFacts = getVisibleFactsAtStep(
+      this.previewedDisproof,
+      this.previewStepIndex,
+    );
 
     for (const fact of visibleFacts) {
       if (isDisproof(fact)) {
@@ -658,10 +696,11 @@ export class ReviewPage extends LitElement {
     this.previewStepIndex = parseInt(input.value, 10);
   }
 
-  private applyDisproof(disproof: Disproof) {
+  private applyDisproof(metadata: DisproofMetadata) {
     if (!this.playback) return;
     this.clearPlayInterval();
 
+    const disproof = JSON.parse(metadata.json) as Disproof;
     const target = disproof.antecedents[0];
     const locObj = Loc.of(target.loc);
     if (locObj) {
@@ -843,7 +882,7 @@ export class ReviewPage extends LitElement {
     }
   }
 
-  private computeRelevantFacts(loc: Loc): Fact[] {
+  private computeRelevantFacts(loc: Loc): (Fact | DisproofMetadata)[] {
     const locIndex = loc.index;
     const localFacts = this.facts.filter(fact => {
       const base = nub(fact);
@@ -882,15 +921,15 @@ export class ReviewPage extends LitElement {
     }
 
     const relevantDisproofs = this.disproofs.filter(fact => {
-      return fact.antecedents[0].loc === locIndex;
+      return fact.rootLoc === locIndex;
     });
 
     const sortedDisproofs = relevantDisproofs.sort((a, b) => {
-      const getProd = (f: Fact) => {
-        const score = this.productivityScores.get(shorthandFact(f));
+      const getProd = (f: DisproofMetadata) => {
+        const score = this.productivityScores.get(f.shorthand);
         return typeof score === 'number' ? score : -1;
       };
-      const getLength = (f: Fact) => getTotalAntecedents(f);
+      const getLength = (f: DisproofMetadata) => f.totalAntecedents;
 
       const prodA = getProd(a);
       const prodB = getProd(b);
@@ -1231,10 +1270,12 @@ export class ReviewPage extends LitElement {
 
     const assignment =
       this.selectedFact ? getFactAssignment(this.selectedFact) : null;
+    const isMetadata =
+      this.selectedFact &&
+      'type' in this.selectedFact &&
+      this.selectedFact.type === 'DisproofMetadata';
     const disproof =
-      this.selectedFact && isDisproof(this.selectedFact) ?
-        this.selectedFact
-      : null;
+      isMetadata ? (this.selectedFact as DisproofMetadata) : null;
     const showDisproofActions = disproof !== null;
 
     return html`
@@ -1279,9 +1320,19 @@ export class ReviewPage extends LitElement {
         <div style="display: flex; flex-direction: column; gap: 6px;">
           ${relevantFacts.map(fact => {
             let label = getFactLabel(fact);
-            if (isDisproof(fact)) {
-              const score = this.productivityScores.get(shorthandFact(fact));
-              const steps = getTotalAntecedents(fact);
+            const isFactDisproof = isDisproof(fact as Fact);
+            const isMetadata =
+              'type' in fact && fact.type === 'DisproofMetadata';
+            if (isFactDisproof || isMetadata) {
+              const shorthand =
+                isMetadata ?
+                  (fact as DisproofMetadata).shorthand
+                : shorthandFact(fact as Fact);
+              const steps =
+                isMetadata ?
+                  (fact as DisproofMetadata).totalAntecedents
+                : getTotalAntecedents(fact as Fact);
+              const score = this.productivityScores.get(shorthand);
               const stepsText = steps === 1 ? '1 step' : `${steps} steps`;
               if (typeof score === 'number') {
                 label = `[Productivity +${score}, ${stepsText}] ${label}`;

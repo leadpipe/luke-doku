@@ -5,6 +5,7 @@ import {
   FromWorkerMessage,
   FromWorkerMessageType,
   ToWorkerMessageType,
+  type DisproofMetadata,
   type EliminationConstraint,
   type ErroneousAssignmentDisprovedMessage,
   type ErroneousProductivityCalculatedMessage,
@@ -352,7 +353,7 @@ export async function requestErroneousAssignmentDisproof(
   maxTimeMs?: number,
   useLongQueue?: boolean,
   maxDepth?: number,
-): Promise<ErroneousAssignmentDisprovedMessage> {
+): Promise<{metadata?: DisproofMetadata; elapsedMs: number}> {
   const message = {
     type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT,
     grid,
@@ -363,8 +364,13 @@ export async function requestErroneousAssignmentDisproof(
     maxDepth,
   };
   const queue = useLongQueue ? disproveLongQueue : disproveQueue;
-  return queue.request(
+  const res = (await queue.request(
     message,
     FromWorkerMessageType.ERRONEOUS_ASSIGNMENT_DISPROVED,
-  ) as Promise<ErroneousAssignmentDisprovedMessage>;
+  )) as ErroneousAssignmentDisprovedMessage;
+
+  return {
+    metadata: res.disproofMetadata,
+    elapsedMs: res.elapsedMs,
+  };
 }

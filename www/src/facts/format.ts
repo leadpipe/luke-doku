@@ -1,11 +1,12 @@
 import {Loc as GameLoc} from '../game/loc';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import type {Fact} from './Fact';
-import type {Loc} from './Loc';
 import type {LocSet} from './LocSet';
 import type {Num} from './Num';
 import type {NumSet} from './NumSet';
 import type {Unit} from './Unit';
+import type {Disproof} from './disproof';
+import {nub} from './utils';
 
 /** Formats a set of locations. Example: "{R1C3, R1C5}" */
 export function formatLocs(locs: LocSet): string {
@@ -118,4 +119,28 @@ export function describeFact(fact: Fact): string {
     default:
       ensureExhaustiveSwitch(fact);
   }
+}
+
+export function formatDisproofDescription(fact: Disproof): string {
+  const asg = fact.antecedents[0];
+  const antecedentsStr = `Speculating ${asg.num} at ${GameLoc.of(asg.loc)}`;
+
+  const finalNub = nub(fact);
+  let consequentStr = '';
+  switch (finalNub.type) {
+    case 'Conflict':
+      consequentStr = `leads to a conflict for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
+      break;
+    case 'NoLoc':
+      consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
+      break;
+    case 'NoNum':
+      consequentStr = `leads to no possible numbers at ${GameLoc.of(finalNub.loc)}`;
+      break;
+    default:
+      consequentStr = `leads to a contradiction`;
+      break;
+  }
+
+  return `${antecedentsStr} ${consequentStr}`;
 }
