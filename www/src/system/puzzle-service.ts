@@ -48,8 +48,12 @@ class WorkerQueue {
     worker.onerror = (e: ErrorEvent) => {
       logEvent(EventType.ERROR, {
         category: 'uncaught worker error',
-        detail: String(e),
+        detail: String(e.message || e),
       });
+      while (this.pending.length > 0) {
+        const p = this.pending.shift();
+        p?.reject(`Worker crashed: ${e.message || 'unknown error'}`);
+      }
     };
     worker.onmessage = (e: MessageEvent<FromWorkerMessage>) => {
       if (!this.pending.length) {
@@ -353,6 +357,7 @@ export async function requestErroneousAssignmentDisproof(
   maxTimeMs?: number,
   useLongQueue?: boolean,
   maxDepth?: number,
+  includeJson?: boolean,
 ): Promise<{metadata?: DisproofMetadata; elapsedMs: number}> {
   const message = {
     type: ToWorkerMessageType.DISPROVE_ERRONEOUS_ASSIGNMENT,
@@ -362,6 +367,7 @@ export async function requestErroneousAssignmentDisproof(
     eliminations,
     maxTimeMs,
     maxDepth,
+    includeJson,
   };
   const queue = useLongQueue ? disproveLongQueue : disproveQueue;
   const res = (await queue.request(

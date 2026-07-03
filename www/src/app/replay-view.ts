@@ -121,6 +121,8 @@ export class ReplayView extends SudokuView {
     'green' | 'yellow' | 'red'
   > | null = null;
   @property({attribute: false}) appliedDisproofs?: readonly Disproof[];
+  @property({attribute: false})
+  previewVisibleFacts: Fact[] = [];
 
   protected override renderForeground() {
     return svg`
@@ -195,7 +197,7 @@ export class ReplayView extends SudokuView {
       return [];
     }
     if (this.previewStepIndex >= 0 && isDisproof(selectedFact)) {
-      return getVisibleFactsAtStep(selectedFact, this.previewStepIndex);
+      return this.previewVisibleFacts;
     }
     const {antecedents, nub: finalNub} = flattenImplication(selectedFact);
     let facts = [...antecedents, finalNub];

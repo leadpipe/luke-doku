@@ -5,7 +5,7 @@ import type {LocSet} from './LocSet';
 import type {Num} from './Num';
 import type {NumSet} from './NumSet';
 import type {Unit} from './Unit';
-import type {Disproof} from './disproof';
+import {type Disproof, isDisproof} from './disproof';
 import {nub} from './utils';
 
 /** Formats a set of locations. Example: "{R1C3, R1C5}" */
@@ -68,9 +68,13 @@ export function shorthandFact(fact: Fact): string {
     case 'Subset':
       return `${formatNums(fact.nums)} ⊂ ${formatUnitShorthand(fact.unit)}`;
 
-    case 'Implication':
+    case 'Implication': {
+      if (isDisproof(fact)) {
+        return `!(${shorthandFact(fact.antecedents[0])} ➔ ${shorthandFact(nub(fact))})`;
+      }
       const antecedents = fact.antecedents.map(shorthandFact).join(' & ');
       return `${antecedents} ➔ ${shorthandFact(fact.consequent)}`;
+    }
 
     default:
       ensureExhaustiveSwitch(fact);
@@ -111,10 +115,14 @@ export function describeFact(fact: Fact): string {
         : '';
       return `${shorthand}: ${subsetType} subset of ${formatNums(fact.nums)} in ${formatUnit(fact.unit)} at ${formatLocs(fact.locs)}${crossUnitStr}`;
 
-    case 'Implication':
+    case 'Implication': {
+      if (isDisproof(fact)) {
+        return formatDisproofDescription(fact as Disproof);
+      }
       const antecedentsDesc = fact.antecedents.map(describeFact).join(' and ');
       const consequentDesc = describeFact(fact.consequent);
       return `${consequentDesc}, because ${antecedentsDesc}`;
+    }
 
     default:
       ensureExhaustiveSwitch(fact);

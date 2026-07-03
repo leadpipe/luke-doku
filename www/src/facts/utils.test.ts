@@ -123,39 +123,50 @@ describe('Fact utils', () => {
         fact2,
         E_A,
       ]);
-      expect(steps[0].path).to.deep.equal([P_A]);
-      expect(steps[1].path).to.deep.equal([P_A]);
-      expect(steps[2].path).to.deep.equal([P_A, D_1]);
-      expect(steps[3].path).to.deep.equal([P_A, D_1]);
-      expect(steps[4].path).to.deep.equal([P_A]);
-      expect(steps[5].path).to.deep.equal([P_A]);
+      
+      const getPathArray = (node: any) => {
+        const arr = [];
+        let curr = node;
+        while (curr) {
+          arr.unshift(curr.disproof);
+          curr = curr.parent;
+        }
+        return arr;
+      };
+
+      expect(getPathArray(steps[0].pathNode)).to.deep.equal([P_A]);
+      expect(getPathArray(steps[1].pathNode)).to.deep.equal([P_A]);
+      expect(getPathArray(steps[2].pathNode)).to.deep.equal([P_A, D_1]);
+      expect(getPathArray(steps[3].pathNode)).to.deep.equal([P_A, D_1]);
+      expect(getPathArray(steps[4].pathNode)).to.deep.equal([P_A]);
+      expect(getPathArray(steps[5].pathNode)).to.deep.equal([P_A]);
     });
 
     it('computes visible facts at each step index correctly', () => {
-      const disproofPA = P_A as any; // Cast as Disproof for the function
+      const stepsWithContext = collectStepsWithContext(P_A);
 
       // Step 0: [A]
-      expect(getVisibleFactsAtStep(disproofPA, 0)).to.deep.equal([A]);
+      expect(getVisibleFactsAtStep(stepsWithContext, 0)).to.deep.equal([A]);
       // Step 1: [A, fact1]
-      expect(getVisibleFactsAtStep(disproofPA, 1)).to.deep.equal([A, fact1]);
+      expect(getVisibleFactsAtStep(stepsWithContext, 1)).to.deep.equal([A, fact1]);
       // Step 2: [A, fact1, B] (D_1 active)
-      expect(getVisibleFactsAtStep(disproofPA, 2)).to.deep.equal([A, fact1, B]);
+      expect(getVisibleFactsAtStep(stepsWithContext, 2)).to.deep.equal([A, fact1, B]);
       // Step 3: [A, fact1, B, E_B] (D_1 reached consequent error)
-      expect(getVisibleFactsAtStep(disproofPA, 3)).to.deep.equal([
+      expect(getVisibleFactsAtStep(stepsWithContext, 3)).to.deep.equal([
         A,
         fact1,
         B,
         E_B,
       ]);
       // Step 4: [A, fact1, D_1, fact2] (stepped beyond D_1's error, D_1 shown as elimination, B/E_B hidden)
-      expect(getVisibleFactsAtStep(disproofPA, 4)).to.deep.equal([
+      expect(getVisibleFactsAtStep(stepsWithContext, 4)).to.deep.equal([
         A,
         fact1,
         D_1,
         fact2,
       ]);
       // Step 5: [A, fact1, D_1, fact2, E_A]
-      expect(getVisibleFactsAtStep(disproofPA, 5)).to.deep.equal([
+      expect(getVisibleFactsAtStep(stepsWithContext, 5)).to.deep.equal([
         A,
         fact1,
         D_1,

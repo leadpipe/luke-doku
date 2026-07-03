@@ -2,71 +2,23 @@ import './game-clock';
 import './icon-button';
 import './puzzle-rating';
 import './replay-view';
+import './review-fact-panel';
+import './review-playback-controls';
+import './review-trail-preview';
 
 import {css, html, LitElement} from 'lit';
-import {customElement, property, state} from 'lit/decorators.js';
-import {Disproof, isDisproof} from '../facts/disproof';
+import {customElement, property} from 'lit/decorators.js';
 import type {Fact} from '../facts/Fact';
-import {
-  describeFact,
-  formatDisproofDescription,
-  shorthandFact,
-} from '../facts/format';
-import {
-  collectStepsWithContext,
-  compareFacts,
-  getTotalAntecedents,
-  getVisibleFactsAtStep,
-  nub,
-  unitContains,
-} from '../facts/utils';
-import {CommandTag, CompletionState} from '../game/command';
-import {ClearCell, SetNum, SetNums} from '../game/commands';
+import {nub} from '../facts/utils';
+import {CommandTag} from '../game/command';
+import {SetNum} from '../game/commands';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
-import {PlaybackGame} from '../game/playback';
-import {ensureExhaustiveSwitch} from '../game/utils';
-import * as wasm from '../wasm';
 import type {DisproofMetadata} from '../worker/worker-types';
 
-import {
-  requestErroneousAssignmentDisproof,
-  requestErroneousProductivityCalculation,
-  requestFactDeduction,
-} from '../system/puzzle-service';
 import {navigateToPuzzle} from './nav';
-import {
-  computeInterestingIndices,
-  getEliminationConstraints,
-} from './review-utils';
+import {ReviewController} from './review-controller';
 import {elapsedTimeString, renderPuzzleTitle} from './utils';
-
-function getFactAssignment(
-  fact: Fact | DisproofMetadata,
-): {loc: number; num: number} | null {
-  if (fact.type === 'DisproofMetadata') {
-    return null;
-  }
-  const base = nub(fact as Fact);
-  if (
-    base.type === 'SingleLoc' ||
-    base.type === 'SingleNum' ||
-    base.type === 'SpeculativeAssignment'
-  ) {
-    return {loc: base.loc, num: base.num};
-  }
-  return null;
-}
-
-function getFactLabel(fact: Fact | DisproofMetadata): string {
-  if (fact.type === 'DisproofMetadata') {
-    return fact.label;
-  }
-  if (isDisproof(fact as Fact)) {
-    return formatDisproofDescription(fact as Disproof);
-  }
-  return describeFact(fact as Fact);
-}
 
 @customElement('review-page')
 export class ReviewPage extends LitElement {
@@ -110,22 +62,6 @@ export class ReviewPage extends LitElement {
       width: var(--board-size);
       flex-shrink: 0;
     }
-    .scrubber {
-      width: 100%;
-      margin-top: 8px;
-      margin-bottom: 4px;
-    }
-    .move-counter {
-      margin-bottom: 8px;
-      font-weight: 500;
-    }
-    .playback-controls {
-      display: flex;
-      justify-content: center;
-      gap: 12px;
-      width: 100%;
-      margin-bottom: 16px;
-    }
     .action-section {
       text-align: center;
       margin-bottom: 16px;
@@ -134,37 +70,6 @@ export class ReviewPage extends LitElement {
       gap: 4px;
       min-height: 60px;
       flex-shrink: 0;
-    }
-    .fact-panel {
-      width: var(--board-size);
-      max-height: 200px;
-      overflow-y: auto;
-      background: var(--gd);
-      padding: 8px;
-      border-radius: 4px;
-      box-sizing: border-box;
-      margin-bottom: 16px;
-      font-size: 0.9em;
-      flex-shrink: 0;
-    }
-    .fact-panel pre {
-      margin: 0;
-      white-space: pre-wrap;
-    }
-    .fact-panel h3 {
-      position: sticky;
-      top: -8px;
-      margin-top: -8px;
-      margin-left: -8px;
-      margin-right: -8px;
-      padding: 8px;
-      background: var(--gd);
-      z-index: 10;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      border-bottom: 1px solid var(--gc, #ccc);
-      margin-bottom: 8px;
     }
     #bottom-info {
       display: flex;
@@ -183,804 +88,64 @@ export class ReviewPage extends LitElement {
       width: 100%;
       margin-top: 8px;
     }
-    .apply-fact-button {
-      background-color: var(--hover-loc, #bdd4f9);
-      color: var(--text-color, #000);
-      border: 1px solid var(--gc, #ccc);
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-weight: 500;
-      font-size: 0.85em;
-      font-family: inherit;
-      transition:
-        background-color 0.2s,
-        transform 0.1s;
-    }
-    .apply-fact-button:hover {
-      background-color: var(--selection-fill, #bdfe);
-    }
-    .apply-fact-button:active {
-      transform: scale(0.98);
-    }
-    .deviation-count {
-      color: var(--multi-value-default, #0a0);
-      font-weight: bold;
-    }
-    .digression-active {
-      color: var(--multi-value-default, #0a0);
-    }
-    .reset-digression-button {
-      margin-top: 4px;
-      margin-bottom: 8px;
-      background: none;
-      border: 1px solid var(--gc, #ccc);
-      color: var(--text-color);
-      padding: 4px 12px;
-      border-radius: 12px;
-      cursor: pointer;
-      font-size: 0.85em;
-      font-family: inherit;
-      transition: background-color 0.2s;
-    }
-    .reset-digression-button:hover {
-      background-color: var(--gd, #ddd);
-    }
-    .disproof-panel {
-      width: var(--board-size);
-      max-height: 250px;
-      overflow-y: auto;
-      background: var(--gd);
-      border: 1px solid var(--gc);
-      padding: 12px;
-      border-radius: 6px;
-      box-sizing: border-box;
-      margin-bottom: 16px;
-      font-size: 0.9em;
-      flex-shrink: 0;
-    }
-    .disproof-panel h3 {
-      margin-top: 0;
-      margin-bottom: 10px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      font-size: 1.1em;
-    }
-    .search-status {
-      font-size: 0.85em;
-      color: var(--multi-value-default);
-      font-weight: normal;
-    }
-    .disproof-list {
-      display: flex;
-      flex-direction: column;
-      gap: 10px;
-    }
-    .disproof-item {
-      padding: 8px;
-      border: 1px solid var(--gc);
-      border-radius: 4px;
-      background: var(--gf);
-      transition: background-color 0.2s;
-    }
-    .disproof-item:hover {
-      background: var(--gd);
-    }
-    .disproof-header {
-      font-weight: 500;
-      line-height: 1.3em;
-    }
-    .disproof-meta {
-      margin-top: 4px;
-      font-size: 0.85em;
-      color: var(--text-color, #777);
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
-    .disproof-actions {
-      display: flex;
-      gap: 8px;
-      margin-top: 6px;
-    }
-    .disproof-btn {
-      background: none;
-      border: 1px solid var(--gc);
-      color: var(--text-color);
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.85em;
-      font-family: inherit;
-      transition: background-color 0.2s;
-    }
-    .disproof-btn:hover {
-      background-color: var(--hover-loc, #bdd4f9);
-      color: #000;
-    }
-    .disproof-btn.apply {
-      background-color: var(--multi-value-default);
-      color: #000;
-      border-color: var(--multi-value-default);
-    }
-    .disproof-btn.apply:hover {
-      background-color: #0d0;
-      border-color: #0d0;
-    }
-    .productivity-badge {
-      font-weight: bold;
-      color: var(--multi-value-default);
-    }
   `;
 
-  @property({attribute: false}) game: Game | null = null;
-  @state() private playback: PlaybackGame | null = null;
-  @state() private facts: readonly Fact[] = [];
-  @state() private isPlayingForward = false;
-  @state() private isPlayingBackward = false;
-  @state() private selectedLoc: Loc | null = null;
-  @state() private selectedFact: Fact | DisproofMetadata | null = null;
-  @state() private selectedLocFacts: (Fact | DisproofMetadata)[] = [];
-  @state() private disproofs: DisproofMetadata[] = [];
-  @state() private searchStatus = '';
-  @state() private isSearching = false;
-  @state() private previewedDisproof: Disproof | null = null;
-  @state() private previewStepIndex = -1;
+  private controller = new ReviewController(this);
 
-  private productivityScores = new Map<string, number | 'loading'>();
-  private searchToken = 0;
-
-  private playIntervalId: number | null = null;
-  private interestingIndices: number[] = [];
-
-  override willUpdate(changedProperties: Map<string, any>) {
-    if (changedProperties.has('game') && this.game) {
-      this.playback = new PlaybackGame(this.game.sudoku, this.game.history);
-      this.computeInterestingIndices();
-      if (this.game.completionState === CompletionState.SOLVED) {
-        this.playback.index = 0;
-      }
-      this.updateFacts();
-      // Start playback when arriving on the page
-      this.playForward();
-    }
+  @property({attribute: false})
+  get game(): Game | null {
+    return this.controller.game;
+  }
+  set game(newGame: Game | null) {
+    this.controller.game = newGame;
   }
 
-  private computeInterestingIndices() {
-    if (!this.game) {
-      this.interestingIndices = [];
-      return;
-    }
-    this.interestingIndices = computeInterestingIndices(this.game.history);
-  }
-
-  private async updateFacts(keepSelection = false) {
-    if (!keepSelection) {
-      this.selectedLoc = null;
-      this.selectedFact = null;
-      this.selectedLocFacts = [];
-    }
-    if (!this.playback) return;
-    const grid = this.playback.wrapper.game.asGrid();
-    const gridString = grid.toFlatString();
-    const elims = this.playback.getAppliedDisproofs();
-    const constraints = getEliminationConstraints(elims);
-
-    try {
-      const response = await requestFactDeduction(
-        gridString,
-        5000,
-        constraints,
-      );
-      this.facts = [...response.facts].sort(compareFacts);
-    } catch (e) {
-      console.error('Failed to deduce facts:', e);
-      this.facts = [];
-    }
-
-    this.startDisproofSearch();
-  }
-
-  private startDisproofSearch() {
-    this.searchToken++;
-    const token = this.searchToken;
-
-    this.disproofs = [];
-    this.productivityScores.clear();
-    this.searchStatus = '';
-    this.isSearching = false;
-
-    this.exitPreviewMode();
-
-    if (!this.playback) return;
-    if (this.isPlayingForward || this.isPlayingBackward) return;
-    if (this.playback.wrapper.game.marks.asGrid().isSolved()) return;
-
-    this.isSearching = true;
-    this.runSequentialSearch(token);
-  }
-
-  private async runSequentialSearch(token: number) {
-    if (token !== this.searchToken || !this.playback) return;
-
-    const grid = this.playback.wrapper.game.asGrid();
-    const gridString = grid.toFlatString();
-    const solutions = this.playback.wrapper.game.sudoku.solutions.map(g =>
-      g.toFlatString(),
-    );
-
-    this.searchStatus = 'Calculating productivity...';
-    this.requestUpdate();
-
-    const elims = this.playback.getAppliedDisproofs();
-    const constraints = getEliminationConstraints(elims);
-
-    try {
-      const prodResult = await requestErroneousProductivityCalculation(
-        gridString,
-        solutions,
-        constraints,
-      );
-
-      if (token !== this.searchToken) return;
-
-      const candidates = prodResult.results;
-      if (!candidates || candidates.length === 0) {
-        this.isSearching = false;
-        this.searchStatus = '';
-        this.requestUpdate();
-        return;
-      }
-
-      const complexity = this.game?.complexity;
-      const isLunatic =
-        complexity !== undefined && complexity >= wasm.Complexity.Lunatic;
-
-      const slowPassCandidates: (typeof candidates)[number][] = [];
-
-      // Quick pass
-      for (let i = 0; i < candidates.length; i++) {
-        if (token !== this.searchToken) return;
-
-        const cand = candidates[i];
-        const percent = Math.round((i / candidates.length) * 100);
-        this.searchStatus = `Searching disproofs (quick pass)... (${percent}% complete)`;
-        this.requestUpdate();
-
-        const useLongQueue = false;
-        const maxTimeMs = 500;
-        const maxDepth = 1;
-
-        try {
-          const response = await requestErroneousAssignmentDisproof(
-            gridString,
-            {loc: cand.loc, num: cand.num},
-            solutions,
-            constraints,
-            maxTimeMs,
-            useLongQueue,
-            maxDepth,
-          );
-
-          if (token !== this.searchToken) return;
-
-          if (response.metadata) {
-            const newFact = response.metadata;
-            if (!this.disproofs.some(f => f.shorthand === newFact.shorthand)) {
-              this.disproofs = [...this.disproofs, newFact];
-              const key = newFact.shorthand;
-              const newScores = new Map(this.productivityScores);
-              newScores.set(key, cand.productivity);
-              this.productivityScores = newScores;
-            }
-          } else if (isLunatic) {
-            slowPassCandidates.push(cand);
-          }
-        } catch (e) {
-          console.error(
-            `Failed to disprove candidate at loc ${cand.loc} num ${cand.num}:`,
-            e,
-          );
-        }
-
-        // Yield control to browser
-        await new Promise(resolve => window.setTimeout(resolve, 30));
-      }
-
-      // Slow passes for Lunatic
-      if (isLunatic && slowPassCandidates.length > 0) {
-        let currentPassCandidates = [...slowPassCandidates];
-
-        for (let passDepth = 2; passDepth <= 5; passDepth++) {
-          if (currentPassCandidates.length === 0) break;
-
-          let foundPositiveProductivity = false;
-          const nextPassCandidates: (typeof candidates)[number][] = [];
-
-          for (let i = 0; i < currentPassCandidates.length; i++) {
-            if (token !== this.searchToken) return;
-
-            const cand = currentPassCandidates[i];
-            const percent = Math.round(
-              (i / currentPassCandidates.length) * 100,
-            );
-            this.searchStatus = `Searching disproofs (depth ${passDepth})... (${percent}% complete)`;
-            this.requestUpdate();
-
-            const useLongQueue = true;
-            const maxTimeMs = 2000;
-            const maxDepth = passDepth;
-
-            try {
-              const response = await requestErroneousAssignmentDisproof(
-                gridString,
-                {loc: cand.loc, num: cand.num},
-                solutions,
-                constraints,
-                maxTimeMs,
-                useLongQueue,
-                maxDepth,
-              );
-
-              if (token !== this.searchToken) return;
-
-              if (response.metadata) {
-                const newFact = response.metadata;
-                if (
-                  !this.disproofs.some(f => f.shorthand === newFact.shorthand)
-                ) {
-                  this.disproofs = [...this.disproofs, newFact];
-                  const key = newFact.shorthand;
-                  const newScores = new Map(this.productivityScores);
-                  newScores.set(key, cand.productivity);
-                  this.productivityScores = newScores;
-
-                  if (cand.productivity > 0) {
-                    foundPositiveProductivity = true;
-                  }
-                }
-              } else {
-                nextPassCandidates.push(cand);
-              }
-            } catch (e) {
-              console.error(
-                `Failed to disprove candidate at loc ${cand.loc} num ${cand.num} at depth ${passDepth}:`,
-                e,
-              );
-            }
-
-            // Yield control to browser
-            await new Promise(resolve => window.setTimeout(resolve, 30));
-          }
-
-          if (foundPositiveProductivity) {
-            break;
-          }
-          currentPassCandidates = nextPassCandidates;
-        }
-      }
-
-      if (token !== this.searchToken) return;
-      this.isSearching = false;
-      this.searchStatus = '';
-      this.requestUpdate();
-    } catch (e) {
-      console.error('Error in sequential disproof search:', e);
-      if (token === this.searchToken) {
-        this.isSearching = false;
-        this.searchStatus = 'Search failed';
-        this.requestUpdate();
-      }
-    }
-  }
-
-  private enterPreview(metadata: DisproofMetadata) {
-    const disproof = JSON.parse(metadata.json) as Disproof;
-    this.previewedDisproof = disproof;
-    this.previewStepIndex = 0;
-    this.clearPlayInterval();
-
-    const checkedRadio = this.shadowRoot?.querySelector(
-      'input[name="selectedFact"]:checked',
-    );
-    if (checkedRadio) {
-      checkedRadio.parentElement?.scrollIntoView({
-        behavior: 'smooth',
-        block: 'start',
-      });
-    }
-  }
-
-  private exitPreviewMode = () => {
-    this.previewedDisproof = null;
-    this.previewStepIndex = -1;
-    this.requestUpdate();
-  };
-
-  private getPreviewTrailSteps(): Fact[] {
-    if (!this.previewedDisproof) return [];
-    const steps = collectStepsWithContext(this.previewedDisproof);
-    return steps.map(s => s.fact);
-  }
-
-  private getPreviewHighlights(): Map<number, 'green' | 'yellow' | 'red'> {
-    const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
-
-    const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
-      const existing = highlights.get(loc);
-      if (existing === 'green') return;
-      if (existing === 'red' && color === 'yellow') return;
-      highlights.set(loc, color);
-    };
-
-    if (!this.previewedDisproof) {
-      if (
-        this.selectedFact &&
-        'type' in this.selectedFact &&
-        this.selectedFact.type === 'DisproofMetadata'
-      ) {
-        highlights.set(this.selectedFact.rootLoc, 'yellow');
-      } else if (this.selectedFact && isDisproof(this.selectedFact)) {
-        highlights.set(this.selectedFact.antecedents[0].loc, 'yellow');
-      } else if (this.selectedFact) {
-        const base = nub(this.selectedFact as Fact);
-        if (base.type === 'SpeculativeAssignment') {
-          highlights.set(base.loc, 'green');
-        }
-      }
-      return highlights;
-    }
-
-    const visibleFacts = getVisibleFactsAtStep(
-      this.previewedDisproof,
-      this.previewStepIndex,
-    );
-
-    for (const fact of visibleFacts) {
-      if (isDisproof(fact)) {
-        setHighlight(fact.antecedents[0].loc, 'yellow');
-        continue;
-      }
-
-      const isError =
-        fact.type === 'Conflict' ||
-        fact.type === 'NoNum' ||
-        fact.type === 'NoLoc';
-
-      if (fact.type === 'SpeculativeAssignment') {
-        setHighlight(fact.loc, 'green');
-      } else if (isError) {
-        if (fact.type === 'Conflict') {
-          for (const l of fact.locs) {
-            setHighlight(l, 'red');
-          }
-        } else if (fact.type === 'NoNum') {
-          setHighlight(fact.loc, 'red');
-        } else if (fact.type === 'NoLoc') {
-          for (const loc of Loc.ALL) {
-            if (
-              unitContains(fact.unit, loc) &&
-              this.playback?.wrapper?.game?.isBlank(loc)
-            ) {
-              setHighlight(loc.index, 'red');
-            }
-          }
-        }
-      } else {
-        const base = nub(fact);
-        if (
-          base.type === 'SingleLoc' ||
-          base.type === 'SingleNum' ||
-          base.type === 'SpeculativeAssignment'
-        ) {
-          setHighlight(base.loc, 'yellow');
-        } else if (base.type === 'Conflict') {
-          for (const l of base.locs) {
-            setHighlight(l, 'yellow');
-          }
-        } else if (base.type === 'NoNum') {
-          setHighlight(base.loc, 'yellow');
-        } else if (base.type === 'Subset') {
-          for (const l of base.locs) {
-            setHighlight(l, 'yellow');
-          }
-        }
-      }
-    }
-    return highlights;
-  }
-
-  private onPreviewScrub(e: Event) {
-    const input = e.target as HTMLInputElement;
-    this.previewStepIndex = parseInt(input.value, 10);
-  }
-
-  private applyDisproof(metadata: DisproofMetadata) {
-    if (!this.playback) return;
-    this.clearPlayInterval();
-
-    const disproof = JSON.parse(metadata.json) as Disproof;
-    const target = disproof.antecedents[0];
-    const locObj = Loc.of(target.loc);
-    if (locObj) {
-      const currentNums =
-        this.playback.wrapper.game.getNums(locObj) || new Set<number>();
-      const updated = new Set(currentNums);
-      updated.delete(target.num);
-      if (updated.size > 0) {
-        this.playback.addDeviation(new SetNums(locObj, updated));
-      } else {
-        this.playback.addDeviation(new ClearCell(locObj));
-      }
-    }
-
-    this.playback.applyDisproof(disproof);
-
-    this.selectedLoc = null;
-    this.selectedFact = null;
-    this.selectedLocFacts = [];
-    this.exitPreviewMode();
-    this.updateFacts();
-  }
-
-  private clearPlayInterval() {
-    if (this.playIntervalId !== null) {
-      window.clearInterval(this.playIntervalId);
-      this.playIntervalId = null;
-    }
-    this.isPlayingForward = false;
-    this.isPlayingBackward = false;
-  }
-
-  private playForward() {
-    this.clearPlayInterval();
-    this.isPlayingForward = true;
-    this.playIntervalId = window.setInterval(() => this.stepForward(true), 500);
-  }
-
-  private playBackward() {
-    this.clearPlayInterval();
-    this.isPlayingBackward = true;
-    this.playIntervalId = window.setInterval(
-      () => this.stepBackward(true),
-      500,
-    );
-  }
-
-  private stepForward(fromInterval = false) {
-    if (!fromInterval) this.clearPlayInterval();
-    if (!this.playback) return;
-    if (this.playback.deviations.length > 0) return;
-    if (this.playback.index < this.playback.history.length) {
-      this.playback.index++;
-      this.updateFacts();
-    } else if (fromInterval) {
-      this.clearPlayInterval();
-    }
-  }
-
-  private stepBackward(fromInterval = false) {
-    if (!fromInterval) this.clearPlayInterval();
-    if (!this.playback) return;
-    if (this.playback.deviations.length > 0) {
-      this.playback.popDeviation();
-      this.updateFacts();
-    } else if (this.playback.index > 0) {
-      this.playback.index--;
-      this.updateFacts();
-    } else if (fromInterval) {
-      this.clearPlayInterval();
-    }
-  }
-
-  private applySelectedFact(
-    assignment: {loc: number; num: number},
-    keepSelection = false,
-  ) {
-    if (!this.playback) return;
-    this.clearPlayInterval();
-
-    const gameLoc = Loc.of(assignment.loc);
-    if (!gameLoc) return;
-
-    const cmd = new SetNum(gameLoc, assignment.num);
-    this.playback.addDeviation(cmd);
-
-    if (!keepSelection) {
-      this.selectedLoc = null;
-      this.selectedFact = null;
-      this.selectedLocFacts = [];
-    }
-
-    this.updateFacts(keepSelection);
-  }
-
-  private exitDigression() {
-    if (this.playback) {
-      this.playback.clearDeviations();
-      this.updateFacts();
-    }
-  }
-
-  private skipForward() {
-    this.clearPlayInterval();
-    if (!this.playback) return;
-    const nextIdx = this.interestingIndices.find(
-      idx => idx > this.playback!.index,
-    );
-    if (nextIdx !== undefined) {
-      this.playback.index = nextIdx;
-      this.updateFacts();
-    }
-  }
-
-  private skipBackward() {
-    this.clearPlayInterval();
-    if (!this.playback) return;
-    const reversed = [...this.interestingIndices].reverse();
-    const prevIdx = reversed.find(idx => idx < this.playback!.index);
-    if (prevIdx !== undefined) {
-      this.playback.index = prevIdx;
-      this.updateFacts();
-    }
-  }
-
-  private pause() {
-    this.clearPlayInterval();
-  }
-
-  private onScrub(e: Event) {
-    this.clearPlayInterval();
-    const input = e.target as HTMLInputElement;
-    if (this.playback) {
-      this.playback.index = parseInt(input.value, 10);
-      this.updateFacts();
-    }
-  }
-
-  private goBack() {
+  private goBack = () => {
     if (this.game) {
       navigateToPuzzle(this.game.sudoku);
     }
-  }
-
-  private onCellSelected(e: CustomEvent<Loc | null>) {
-    this.selectedLoc = e.detail;
-    if (this.selectedLoc) {
-      const relevantFacts = this.computeRelevantFacts(this.selectedLoc);
-      this.selectedLocFacts = relevantFacts;
-
-      const isOnAlternatePath =
-        this.playback && this.playback.deviations.length > 0;
-      if (isOnAlternatePath) {
-        const assignments = relevantFacts
-          .map(getFactAssignment)
-          .filter((a): a is {loc: number; num: number} => a !== null);
-        const uniqueNums = Array.from(new Set(assignments.map(a => a.num)));
-        if (uniqueNums.length === 1) {
-          const firstAssignmentFact =
-            relevantFacts.find(f => getFactAssignment(f) !== null) ??
-            relevantFacts[0] ??
-            null;
-          this.selectedFact = firstAssignmentFact;
-          this.applySelectedFact(
-            {
-              loc: this.selectedLoc.index,
-              num: uniqueNums[0],
-            },
-            true,
-          );
-          return;
-        }
-      }
-
-      this.selectedFact = relevantFacts.length > 0 ? relevantFacts[0] : null;
-    } else {
-      this.selectedFact = null;
-      this.selectedLocFacts = [];
-    }
-  }
-
-  private computeRelevantFacts(loc: Loc): (Fact | DisproofMetadata)[] {
-    const locIndex = loc.index;
-    const localFacts = this.facts.filter(fact => {
-      const base = nub(fact);
-      switch (base.type) {
-        case 'SingleLoc':
-        case 'SingleNum':
-        case 'SpeculativeAssignment':
-        case 'NoNum':
-          return base.loc === locIndex;
-        case 'NoLoc':
-          return unitContains(base.unit, loc);
-        case 'Conflict':
-          return base.locs.includes(locIndex);
-        case 'Overlap':
-          return (
-            unitContains(base.unit, loc) && unitContains(base.cross_unit, loc)
-          );
-        case 'Subset':
-          return base.locs.includes(locIndex);
-        case 'Implication':
-          return false;
-        default:
-          ensureExhaustiveSwitch(base);
-      }
-    });
-
-    const assignsAndErrors: Fact[] = [];
-    const eliminations: Fact[] = [];
-    for (const fact of localFacts) {
-      const base = nub(fact);
-      if (base.type === 'Subset' || base.type === 'Overlap') {
-        eliminations.push(fact);
-      } else {
-        assignsAndErrors.push(fact);
-      }
-    }
-
-    const relevantDisproofs = this.disproofs.filter(fact => {
-      return fact.rootLoc === locIndex;
-    });
-
-    const sortedDisproofs = relevantDisproofs.sort((a, b) => {
-      const getProd = (f: DisproofMetadata) => {
-        const score = this.productivityScores.get(f.shorthand);
-        return typeof score === 'number' ? score : -1;
-      };
-      const getLength = (f: DisproofMetadata) => f.totalAntecedents;
-
-      const prodA = getProd(a);
-      const prodB = getProd(b);
-      if (prodA !== prodB) {
-        return prodB - prodA;
-      }
-      return getLength(a) - getLength(b);
-    });
-
-    return [...assignsAndErrors, ...sortedDisproofs, ...eliminations];
-  }
+  };
 
   private readonly keydownHandler = (event: KeyboardEvent) => {
-    if (!this.playback) return;
+    if (!this.controller.playback) return;
     if (event.target instanceof HTMLInputElement) return;
 
-    if (this.previewedDisproof) {
-      const steps = this.getPreviewTrailSteps();
+    if (this.controller.previewedDisproof) {
+      const steps = this.controller.getPreviewTrailSteps();
       if (event.key === 'ArrowLeft') {
         event.preventDefault();
-        this.previewStepIndex = Math.max(0, this.previewStepIndex - 1);
+        this.controller.setPreviewStepIndex(
+          Math.max(0, this.controller.previewStepIndex - 1),
+        );
       } else if (event.key === 'ArrowRight') {
         event.preventDefault();
-        this.previewStepIndex = Math.min(
-          steps.length - 1,
-          this.previewStepIndex + 1,
+        this.controller.setPreviewStepIndex(
+          Math.min(steps.length - 1, this.controller.previewStepIndex + 1),
         );
       } else if (event.key === 'Escape') {
         event.preventDefault();
-        this.exitPreviewMode();
+        this.controller.exitPreviewMode();
       }
       return;
     }
 
     if (event.key === 'ArrowLeft') {
-      this.stepBackward();
+      this.controller.stepBackward();
     } else if (event.key === 'ArrowRight') {
-      this.stepForward();
+      this.controller.stepForward();
     } else if (event.key === ' ') {
       event.preventDefault();
-      if (this.isPlayingForward) {
-        this.pause();
+      if (this.controller.isPlayingForward) {
+        this.controller.pause();
       } else {
-        this.playForward();
+        this.controller.playForward();
       }
     } else if (event.key === 'Backspace') {
       event.preventDefault();
-      if (this.isPlayingBackward) {
-        this.pause();
+      if (this.controller.isPlayingBackward) {
+        this.controller.pause();
       } else {
-        this.playBackward();
+        this.controller.playBackward();
       }
     }
   };
@@ -993,29 +158,17 @@ export class ReviewPage extends LitElement {
   override disconnectedCallback(): void {
     super.disconnectedCallback();
     window.removeEventListener('keydown', this.keydownHandler);
-    this.clearPlayInterval();
-  }
-
-  protected override updated(changedProperties: Map<string, any>) {
-    super.updated(changedProperties);
-    if (changedProperties.has('selectedFact') && this.selectedFact) {
-      const checkedRadio = this.shadowRoot?.querySelector(
-        'input[name="selectedFact"]:checked',
-      );
-      if (checkedRadio) {
-        checkedRadio.parentElement?.scrollIntoView({
-          block: 'nearest',
-        });
-      }
-    }
   }
 
   override render() {
-    if (!this.playback) return html`<div>Loading...</div>`;
+    if (!this.controller.playback) return html`<div>Loading...</div>`;
 
     const combinedHistory = [
-      ...this.playback.history.slice(0, this.playback.index),
-      ...this.playback.deviations,
+      ...this.controller.playback.history.slice(
+        0,
+        this.controller.playback.index,
+      ),
+      ...this.controller.playback.deviations,
     ];
     const command =
       combinedHistory.length > 0 ?
@@ -1027,15 +180,15 @@ export class ReviewPage extends LitElement {
       : undefined;
     const nextCommand =
       (
-        this.playback.deviations.length === 0 &&
-        this.playback.index < this.playback.history.length
+        this.controller.playback.deviations.length === 0 &&
+        this.controller.playback.index < this.controller.playback.history.length
       ) ?
-        this.playback.history[this.playback.index]
+        this.controller.playback.history[this.controller.playback.index]
       : undefined;
 
-    let effectiveSelectedFact = this.selectedFact;
+    let effectiveSelectedFact = this.controller.selectedFact;
     if (
-      this.isPlayingForward &&
+      this.controller.isPlayingForward &&
       nextCommand &&
       nextCommand.command.tag() === CommandTag.SET_NUM
     ) {
@@ -1043,7 +196,7 @@ export class ReviewPage extends LitElement {
       const locIndex = setNumCmd.loc.index;
       const num = setNumCmd.num;
 
-      const matchingFact = this.facts.find(f => {
+      const matchingFact = this.controller.facts.find(f => {
         const base = nub(f);
         return (
           (base.type === 'SingleLoc' || base.type === 'SingleNum') &&
@@ -1074,124 +227,72 @@ export class ReviewPage extends LitElement {
         <div style="flex: 1"></div>
       </div>
       <replay-view
-        .gameWrapper=${this.playback.wrapper}
-        .facts=${this.facts}
-        .disproofs=${this.disproofs}
-        .productivityScores=${this.productivityScores}
-        .selectedLoc=${this.selectedLoc}
-        .selectedFact=${this.previewedDisproof || effectiveSelectedFact}
+        .gameWrapper=${this.controller.playback.wrapper}
+        .facts=${this.controller.facts}
+        .disproofs=${this.controller.disproofs}
+        .productivityScores=${this.controller.productivityScores}
+        .selectedLoc=${this.controller.selectedLoc}
+        .selectedFact=${this.controller.previewedDisproof ||
+        effectiveSelectedFact}
         .actionLoc=${command && 'loc' in command.command ?
           (command.command as any).loc
         : null}
-        .previewStepIndex=${this.previewStepIndex}
-        .previewHighlights=${this.getPreviewHighlights()}
-        .appliedDisproofs=${this.playback.getAppliedDisproofs()}
-        @cell-selected=${this.onCellSelected}
+        .previewStepIndex=${this.controller.previewStepIndex}
+        .previewHighlights=${this.controller.getPreviewHighlights()}
+        .previewVisibleFacts=${this.controller.getPreviewVisibleFacts()}
+        .appliedDisproofs=${this.controller.playback.getAppliedDisproofs()}
+        @cell-selected=${(e: CustomEvent<Loc | null>) =>
+          this.controller.onCellSelected(e.detail)}
       ></replay-view>
 
       <div id="middle-controls">
-        ${this.previewedDisproof ?
-          this.renderPreviewScrubber()
+        ${this.controller.previewedDisproof ?
+          html`
+            <review-trail-preview
+              .previewedDisproof=${this.controller.previewedDisproof}
+              .previewStepIndex=${this.controller.previewStepIndex}
+              .trailSteps=${this.controller.getPreviewTrailSteps()}
+              @exit-preview=${() => this.controller.exitPreviewMode()}
+              @scrub-preview=${(e: CustomEvent<number>) =>
+                this.controller.setPreviewStepIndex(e.detail)}
+              @step-backward-preview=${() =>
+                this.controller.setPreviewStepIndex(
+                  Math.max(0, this.controller.previewStepIndex - 1),
+                )}
+              @step-forward-preview=${() => {
+                const steps = this.controller.getPreviewTrailSteps();
+                this.controller.setPreviewStepIndex(
+                  Math.min(
+                    steps.length - 1,
+                    this.controller.previewStepIndex + 1,
+                  ),
+                );
+              }}
+            ></review-trail-preview>
+          `
         : html`
-            <input
-              class="scrubber"
-              type="range"
-              min="0"
-              max=${this.playback.history.length}
-              .value=${this.playback.index.toString()}
-              @input=${this.onScrub}
-            />
-            <div
-              class="move-counter ${this.playback.deviations.length > 0 ?
-                'digression-active'
-              : ''}"
-            >
-              ${this.playback.deviations.length > 0 ?
-                html`Move ${this.playback.index}
-                  <span class="deviation-count"
-                    >+${this.playback.deviations.length}</span
-                  >
-                  / ${this.playback.history.length}`
-              : html`Move ${this.playback.index} /
-                ${this.playback.history.length}`}
-            </div>
-            ${this.playback.deviations.length > 0 ?
-              html`
-                <button
-                  class="reset-digression-button"
-                  @click=${this.exitDigression}
-                >
-                  Exit Alternate Path
-                </button>
-              `
-            : ''}
-            <div class="playback-controls">
-              <icon-button
-                @click=${() => this.stepBackward()}
-                iconName="navigate_before"
-                iconSize="large"
-                title="Step backward"
-                ?disabled=${this.playback.index === 0 &&
-                this.playback.deviations.length === 0}
-              ></icon-button>
-              <icon-button
-                @click=${this.skipBackward}
-                iconName="skip_previous"
-                iconSize="large"
-                title="Skip backward"
-                ?disabled=${this.playback.index === 0 ||
-                this.playback.deviations.length > 0}
-              ></icon-button>
-              <icon-button
-                @click=${this.playBackward}
-                iconName="play_arrow"
-                ?flip=${true}
-                iconSize="large"
-                title="Play backward"
-                ?disabled=${this.isPlayingBackward ||
-                this.playback.index === 0 ||
-                this.playback.deviations.length > 0}
-              ></icon-button>
-              <icon-button
-                @click=${this.pause}
-                iconName="pause"
-                iconSize="large"
-                title="Pause"
-                ?disabled=${!this.isPlayingForward && !this.isPlayingBackward}
-              ></icon-button>
-              <icon-button
-                @click=${this.playForward}
-                iconName="play_arrow"
-                iconSize="large"
-                title="Play forward"
-                ?disabled=${this.isPlayingForward ||
-                this.playback.index === this.playback.history.length ||
-                this.playback.deviations.length > 0}
-              ></icon-button>
-              <icon-button
-                @click=${this.skipForward}
-                iconName="skip_next"
-                iconSize="large"
-                title="Skip forward"
-                ?disabled=${this.playback.index ===
-                  this.playback.history.length ||
-                this.playback.deviations.length > 0}
-              ></icon-button>
-              <icon-button
-                @click=${() => this.stepForward()}
-                iconName="navigate_next"
-                iconSize="large"
-                title="Step forward"
-                ?disabled=${this.playback.index ===
-                  this.playback.history.length ||
-                this.playback.deviations.length > 0}
-              ></icon-button>
-            </div>
+            <review-playback-controls
+              .historyLength=${this.controller.playback.history.length}
+              .index=${this.controller.playback.index}
+              .deviationsLength=${this.controller.playback.deviations.length}
+              .isPlayingForward=${this.controller.isPlayingForward}
+              .isPlayingBackward=${this.controller.isPlayingBackward}
+              @scrub=${(e: CustomEvent<number>) =>
+                this.controller.setPlaybackIndex(e.detail)}
+              @exit-digression=${() => this.controller.exitDigression()}
+              @step-backward=${() => this.controller.stepBackward()}
+              @skip-backward=${() => this.controller.skipBackward()}
+              @play-backward=${() => this.controller.playBackward()}
+              @pause=${() => this.controller.pause()}
+              @play-forward=${() => this.controller.playForward()}
+              @skip-forward=${() => this.controller.skipForward()}
+              @step-forward=${() => this.controller.stepForward()}
+            ></review-playback-controls>
           `}
       </div>
 
-      ${this.previewedDisproof ? this.renderLogicalTrails()
-      : this.playback.deviations.length === 0 ?
+      ${this.controller.previewedDisproof ? ''
+      : this.controller.playback.deviations.length === 0 ?
         html`
           <div class="action-section">
             ${command ?
@@ -1225,205 +326,39 @@ export class ReviewPage extends LitElement {
           </div>
         `
       : ''}
-      ${this.renderSelectedFacts()}
+
+      <review-fact-panel
+        .selectedLoc=${this.controller.selectedLoc}
+        .selectedLocFacts=${this.controller.selectedLocFacts}
+        .selectedFact=${this.controller.selectedFact}
+        .isSearching=${this.controller.isSearching}
+        .searchStatus=${this.controller.searchStatus}
+        .productivityScores=${this.controller.productivityScores}
+        @fact-selected=${(e: CustomEvent<Fact | DisproofMetadata>) =>
+          this.controller.setSelectedFact(e.detail)}
+        @apply-fact=${(e: CustomEvent<{loc: number; num: number}>) =>
+          this.controller.applySelectedFact(e.detail)}
+        @apply-disproof=${(e: CustomEvent<DisproofMetadata>) =>
+          this.controller.applyDisproof(e.detail)}
+        @preview-disproof=${(e: CustomEvent<DisproofMetadata>) =>
+          this.controller.enterPreview(e.detail)}
+      ></review-fact-panel>
+
       <div id="bottom-info">
         <h2>
-          Review ${renderPuzzleTitle(this.playback.wrapper.game.sudoku, true)}
+          Review
+          ${renderPuzzleTitle(
+            this.controller.playback.wrapper.game.sudoku,
+            true,
+          )}
         </h2>
         <puzzle-rating .game=${this.game ?? undefined}></puzzle-rating>
         <game-clock
-          .game=${this.playback.wrapper.game}
+          .game=${this.controller.playback.wrapper.game}
           .overrideElapsedMs=${command?.elapsedTimestamp}
         ></game-clock>
       </div>
     `;
-  }
-
-  private renderSelectedFacts() {
-    if (!this.selectedLoc) {
-      return html`
-        <div class="fact-panel">
-          Select a cell to see facts
-          ${this.isSearching ?
-            html`<div class="search-status" style="margin-top: 4px;">
-              ${this.searchStatus}
-            </div>`
-          : ''}
-        </div>
-      `;
-    }
-
-    const relevantFacts = this.selectedLocFacts;
-
-    if (relevantFacts.length === 0) {
-      return html`
-        <div class="fact-panel">
-          No deduced facts for this cell
-          ${this.isSearching ?
-            html`<div class="search-status" style="margin-top: 4px;">
-              ${this.searchStatus}
-            </div>`
-          : ''}
-        </div>
-      `;
-    }
-
-    const assignment =
-      this.selectedFact ? getFactAssignment(this.selectedFact) : null;
-    const isMetadata =
-      this.selectedFact &&
-      'type' in this.selectedFact &&
-      this.selectedFact.type === 'DisproofMetadata';
-    const disproof =
-      isMetadata ? (this.selectedFact as DisproofMetadata) : null;
-    const showDisproofActions = disproof !== null;
-
-    return html`
-      <div class="fact-panel">
-        <h3>
-          <span>Facts for Cell ${this.selectedLoc}</span>
-          ${this.isSearching ?
-            html`<span class="search-status" style="margin-left: 8px;"
-              >${this.searchStatus}</span
-            >`
-          : ''}
-          ${assignment ?
-            html`
-              <button
-                class="apply-fact-button"
-                @click=${() => this.applySelectedFact(assignment)}
-              >
-                Apply Fact to Grid
-              </button>
-            `
-          : ''}
-          ${showDisproofActions ?
-            html`
-              <div style="display: flex; gap: 6px;">
-                <button
-                  class="apply-fact-button"
-                  @click=${() => this.enterPreview(disproof!)}
-                >
-                  Detail View
-                </button>
-                <button
-                  class="apply-fact-button"
-                  style="background-color: var(--multi-value-default); color: #000;"
-                  @click=${() => this.applyDisproof(disproof!)}
-                >
-                  Apply
-                </button>
-              </div>
-            `
-          : ''}
-        </h3>
-        <div style="display: flex; flex-direction: column; gap: 6px;">
-          ${relevantFacts.map(fact => {
-            let label = getFactLabel(fact);
-            const isFactDisproof = isDisproof(fact as Fact);
-            const isMetadata =
-              'type' in fact && fact.type === 'DisproofMetadata';
-            if (isFactDisproof || isMetadata) {
-              const shorthand =
-                isMetadata ?
-                  (fact as DisproofMetadata).shorthand
-                : shorthandFact(fact as Fact);
-              const steps =
-                isMetadata ?
-                  (fact as DisproofMetadata).totalAntecedents
-                : getTotalAntecedents(fact as Fact);
-              const score = this.productivityScores.get(shorthand);
-              const stepsText = steps === 1 ? '1 step' : `${steps} steps`;
-              if (typeof score === 'number') {
-                label = `[Productivity +${score}, ${stepsText}] ${label}`;
-              } else if (score === 'loading') {
-                label = `[Productivity calculating..., ${stepsText}] ${label}`;
-              }
-            }
-            return html`
-              <label
-                style="display: flex; gap: 8px; align-items: flex-start; cursor: pointer;"
-              >
-                <input
-                  type="radio"
-                  name="selectedFact"
-                  .checked=${this.selectedFact === fact}
-                  @change=${() => {
-                    this.selectedFact = fact;
-                  }}
-                  style="margin-top: 2px;"
-                />
-                <span>${label}</span>
-              </label>
-            `;
-          })}
-        </div>
-      </div>
-    `;
-  }
-
-  private renderPreviewScrubber() {
-    const steps = this.getPreviewTrailSteps();
-    return html`
-      <input
-        class="scrubber"
-        type="range"
-        min="0"
-        max=${steps.length - 1}
-        .value=${this.previewStepIndex.toString()}
-        @input=${this.onPreviewScrub}
-      />
-      <div class="move-counter">
-        Trail Step ${this.previewStepIndex + 1} / ${steps.length}
-      </div>
-      <div class="playback-controls">
-        <icon-button
-          @click=${() =>
-            (this.previewStepIndex = Math.max(0, this.previewStepIndex - 1))}
-          iconName="navigate_before"
-          iconSize="large"
-          title="Step backward"
-          ?disabled=${this.previewStepIndex === 0}
-        ></icon-button>
-        <icon-button
-          @click=${() =>
-            (this.previewStepIndex = Math.min(
-              steps.length - 1,
-              this.previewStepIndex + 1,
-            ))}
-          iconName="navigate_next"
-          iconSize="large"
-          title="Step forward"
-          ?disabled=${this.previewStepIndex === steps.length - 1}
-        ></icon-button>
-      </div>
-    `;
-  }
-
-  private renderLogicalTrails() {
-    if (this.previewedDisproof) {
-      const steps = this.getPreviewTrailSteps();
-      const currentFact =
-        steps[Math.min(steps.length - 1, this.previewStepIndex)];
-      return html`
-        <div class="disproof-panel">
-          <h3>
-            <span>Active Trail Preview</span>
-            <button class="apply-fact-button" @click=${this.exitPreviewMode}>
-              Exit
-            </button>
-          </h3>
-          <div
-            style="padding: 10px; border: 1px dashed var(--gc); border-radius: 4px; background: var(--gd);"
-          >
-            <strong>Step ${this.previewStepIndex + 1}:</strong> ${describeFact(
-              currentFact,
-            )}
-          </div>
-        </div>
-      `;
-    }
-    return '';
   }
 }
 

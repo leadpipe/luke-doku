@@ -302,7 +302,7 @@ function disproveErroneousAssignment(
         }
       }
     }
-    const disproofObj = wasm.disproveErroneousAssignment(
+    const disproofJsonStr = wasm.disproveErroneousAssignment(
       grid,
       m.target,
       solutions,
@@ -313,8 +313,11 @@ function disproveErroneousAssignment(
     solutions = undefined;
 
     let disproofMetadata: DisproofMetadata | undefined = undefined;
-    if (disproofObj) {
-      const disproof = disproofObj as Disproof;
+    if (disproofJsonStr) {
+      const disproof = JSON.parse(disproofJsonStr) as any;
+      if (disproof.error) {
+        throw new Error(disproof.error);
+      }
       disproofMetadata = {
         type: 'DisproofMetadata',
         shorthand: shorthandFact(disproof),
@@ -322,7 +325,7 @@ function disproveErroneousAssignment(
         totalAntecedents: getTotalAntecedents(disproof),
         rootLoc: disproof.antecedents[0].loc,
         rootNum: disproof.antecedents[0].num,
-        json: JSON.stringify(disproof),
+        json: m.includeJson ? disproofJsonStr : '',
       };
     }
 
@@ -336,10 +339,18 @@ function disproveErroneousAssignment(
   } catch (e: unknown) {
     return toErrorCaught(m, 'disproveErroneousAssignment', e);
   } finally {
-    grid.free();
+    try {
+      grid.free();
+    } catch (e) {
+      console.error('Failed to free grid:', e);
+    }
     if (solutions) {
       for (const sg of solutions) {
-        sg.free();
+        try {
+          sg.free();
+        } catch (e) {
+          console.error('Failed to free solution grid:', e);
+        }
       }
     }
   }

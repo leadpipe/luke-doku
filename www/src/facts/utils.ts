@@ -132,53 +132,57 @@ function getFactRank(fact: Fact): number {
   }
 }
 
+export interface DisproofPathNode {
+  disproof: Disproof;
+  parent: DisproofPathNode | null;
+}
+
 export interface StepWithContext {
   fact: Fact;
-  path: Disproof[];
+  pathNode: DisproofPathNode | null;
 }
 
 export function collectStepsWithContext(
   fact: Fact,
-  path: Disproof[] = [],
+  pathNode: DisproofPathNode | null = null,
   seen = new Set<string>()
 ): StepWithContext[] {
   if (isDisproof(fact)) {
-    const newPath = [...path, fact];
+    const newPathNode: DisproofPathNode = {disproof: fact, parent: pathNode};
     const steps: StepWithContext[] = [];
 
     const key = JSON.stringify(fact.antecedents[0]);
     if (!seen.has(key)) {
       seen.add(key);
-      steps.push({fact: fact.antecedents[0], path: newPath});
+      steps.push({fact: fact.antecedents[0], pathNode: newPathNode});
     }
 
     for (let i = 1; i < fact.antecedents.length; i++) {
-      steps.push(...collectStepsWithContext(fact.antecedents[i], newPath, seen));
+      steps.push(...collectStepsWithContext(fact.antecedents[i], newPathNode, seen));
     }
-    steps.push(...collectStepsWithContext(fact.consequent, newPath, seen));
+    steps.push(...collectStepsWithContext(fact.consequent, newPathNode, seen));
     return steps;
   } else if (fact.type === 'Implication') {
     const steps: StepWithContext[] = [];
     for (const ant of fact.antecedents) {
-      steps.push(...collectStepsWithContext(ant, path, seen));
+      steps.push(...collectStepsWithContext(ant, pathNode, seen));
     }
-    steps.push(...collectStepsWithContext(fact.consequent, path, seen));
+    steps.push(...collectStepsWithContext(fact.consequent, pathNode, seen));
     return steps;
   } else {
     const key = JSON.stringify(fact);
     if (!seen.has(key)) {
       seen.add(key);
-      return [{fact, path}];
+      return [{fact, pathNode}];
     }
     return [];
   }
 }
 
 export function getVisibleFactsAtStep(
-  rootDisproof: Disproof,
+  stepsWithContext: StepWithContext[],
   previewStepIndex: number
 ): Fact[] {
-  const stepsWithContext = collectStepsWithContext(rootDisproof);
 
   const nestedDisproofsInfo = new Map<
     Disproof,
@@ -186,14 +190,15 @@ export function getVisibleFactsAtStep(
   >();
 
   for (let i = 0; i < stepsWithContext.length; i++) {
-    const {path} = stepsWithContext[i];
-    for (let j = 1; j < path.length; j++) {
-      const d = path[j];
+    let node = stepsWithContext[i].pathNode;
+    while (node !== null) {
+      const d = node.disproof;
       if (!nestedDisproofsInfo.has(d)) {
         nestedDisproofsInfo.set(d, {startIndex: i, endIndex: i});
       } else {
         nestedDisproofsInfo.get(d)!.endIndex = i;
       }
+      node = node.parent;
     }
   }
 
@@ -207,13 +212,15 @@ export function getVisibleFactsAtStep(
   const visibleFacts: Fact[] = [];
   const limit = Math.min(stepsWithContext.length - 1, previewStepIndex);
   for (let i = 0; i <= limit; i++) {
-    const {fact, path} = stepsWithContext[i];
+    const {fact, pathNode} = stepsWithContext[i];
     let isHidden = false;
-    for (const d of path) {
-      if (completedDisproofs.has(d)) {
+    let node = pathNode;
+    while (node !== null) {
+      if (completedDisproofs.has(node.disproof)) {
         isHidden = true;
         break;
       }
+      node = node.parent;
     }
     if (!isHidden) {
       visibleFacts.push(fact);
@@ -223,15 +230,22 @@ export function getVisibleFactsAtStep(
     for (const [d, info] of nestedDisproofsInfo.entries()) {
       if (info.endIndex === i && completedDisproofs.has(d)) {
         // Only insert if all parents of d are not completed
-        const pathAtStart = stepsWithContext[info.startIndex].path;
-        const dIndex = pathAtStart.indexOf(d);
         let parentCompleted = false;
-        for (let j = 1; j < dIndex; j++) {
-          if (completedDisproofs.has(pathAtStart[j])) {
-            parentCompleted = true;
-            break;
+        let dNode = stepsWithContext[info.startIndex].pathNode;
+        while (dNode !== null && dNode.disproof !== d) {
+          dNode = dNode.parent;
+        }
+        if (dNode !== null && dNode.parent !== null) {
+          let pNode: DisproofPathNode | null = dNode.parent;
+          while (pNode !== null) {
+            if (completedDisproofs.has(pNode.disproof)) {
+              parentCompleted = true;
+              break;
+            }
+            pNode = pNode.parent;
           }
         }
+        
         if (!parentCompleted) {
           visibleFacts.push(d);
         }

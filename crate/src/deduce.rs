@@ -508,7 +508,7 @@ pub fn disprove_erroneous_assignment_wasm(
   eliminations: wasm_bindgen::JsValue,
   max_time_ms: Option<f64>,
   max_depth: Option<usize>,
-) -> wasm_bindgen::JsValue {
+) -> Option<String> {
   let target: WasmAsgmt = serde_wasm_bindgen::from_value(target).unwrap();
   let target_asgmt = Asgmt::new(Num::new(target.num).unwrap(), Loc::new(target.loc).unwrap());
 
@@ -526,6 +526,7 @@ pub fn disprove_erroneous_assignment_wasm(
 
   let solutions = solutions.unwrap_or_default();
   let max_depth = max_depth.unwrap_or(5);
+  
   let fact_opt = disprove_erroneous_assignment(
     &base_finder,
     target_asgmt,
@@ -533,7 +534,13 @@ pub fn disprove_erroneous_assignment_wasm(
     max_time_ms,
     max_depth,
   );
-  serde_wasm_bindgen::to_value(&fact_opt).unwrap()
+  
+  fact_opt.map(|f| {
+    match serde_json::to_string(&f) {
+      Ok(s) => s,
+      Err(e) => format!(r#"{{"error": "Failed to serialize disproof: {}"}}"#, e),
+    }
+  })
 }
 
 pub fn disprove_erroneous_assignment(
@@ -607,14 +614,7 @@ fn disprove_recursive(
   // 2. Check for contradictions
   for fact in &deduced_facts {
     if fact.is_error() {
-      if accumulated_nested_disproofs.is_empty() {
-        return Some(fact.clone());
-      } else {
-        return Some(Fact::Implication {
-          antecedents: accumulated_nested_disproofs.clone(),
-          consequent: Box::new(fact.clone()),
-        });
-      }
+      return Some(fact.clone());
     }
   }
 
@@ -741,7 +741,7 @@ fn disprove_recursive(
           base_finder,
           nested_finder,
           &next_active,
-          accumulated_for_target.clone(),
+          vec![],
           solutions,
           depth + 1,
           max_depth,
@@ -798,7 +798,7 @@ fn disprove_recursive(
       base_finder,
       nested_finder,
       &next_active,
-      accumulated_nested_disproofs.clone(),
+      vec![],
       solutions,
       depth + 1,
       max_depth,
@@ -836,14 +836,7 @@ fn disprove_recursive(
 
       for fact in &deduced_facts {
         if fact.is_error() {
-          if accumulated_nested_disproofs.is_empty() {
-            return Some(fact.clone());
-          } else {
-            return Some(Fact::Implication {
-              antecedents: accumulated_nested_disproofs.clone(),
-              consequent: Box::new(fact.clone()),
-            });
-          }
+          return Some(fact.clone());
         }
       }
 
