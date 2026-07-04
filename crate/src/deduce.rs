@@ -166,33 +166,6 @@ impl Fact {
       _ => self,
     }
   }
-
-  /// Removes all occurrences of the given antecedent from the implication tree.
-  /// This prevents exponential duplication of root assumptions in nested disproofs.
-  pub fn strip_antecedent(&self, target: &Fact) -> Fact {
-    match self {
-      Fact::Implication {
-        antecedents,
-        consequent,
-      } => {
-        let mut new_antecedents = Vec::new();
-        for ant in antecedents {
-          if ant != target {
-            new_antecedents.push(ant.strip_antecedent(target));
-          }
-        }
-        if new_antecedents.is_empty() {
-          consequent.strip_antecedent(target)
-        } else {
-          Fact::Implication {
-            antecedents: new_antecedents,
-            consequent: Box::new(consequent.strip_antecedent(target)),
-          }
-        }
-      }
-      _ => self.clone(),
-    }
-  }
 }
 
 /// A stateful object that can deduce facts about a Sudoku grid.
@@ -312,20 +285,6 @@ impl FactFinder {
       internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
     collector
       .collect_with_speculative(speculative_facts, base_remaining_asgmts, base_sukaku_map)
-      .unwrap();
-    collector.facts
-  }
-
-  pub fn deduce_with_speculative_rich(
-    &self,
-    speculative_facts: Vec<Fact>,
-    base_remaining_asgmts: AsgmtSet,
-    base_sukaku_map: internals::SukakuMap,
-  ) -> Vec<Fact> {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
-    collector
-      .collect_with_speculative_rich(speculative_facts, base_remaining_asgmts, base_sukaku_map)
       .unwrap();
     collector.facts
   }
@@ -526,7 +485,7 @@ pub fn disprove_erroneous_assignment_wasm(
 
   let solutions = solutions.unwrap_or_default();
   let max_depth = max_depth.unwrap_or(5);
-  
+
   let fact_opt = disprove_erroneous_assignment(
     &base_finder,
     target_asgmt,
@@ -534,12 +493,10 @@ pub fn disprove_erroneous_assignment_wasm(
     max_time_ms,
     max_depth,
   );
-  
-  fact_opt.map(|f| {
-    match serde_json::to_string(&f) {
-      Ok(s) => s,
-      Err(e) => format!(r#"{{"error": "Failed to serialize disproof: {}"}}"#, e),
-    }
+
+  fact_opt.map(|f| match serde_json::to_string(&f) {
+    Ok(s) => s,
+    Err(e) => format!(r#"{{"error": "Failed to serialize disproof: {}"}}"#, e),
   })
 }
 
@@ -556,14 +513,9 @@ pub fn disprove_erroneous_assignment(
     num: target.num,
   };
 
-  let mut current_finder = base_finder.clone();
-  current_finder.apply(target);
-
   let err_fact = disprove_recursive(
     base_finder,
-    current_finder,
-    &[target_fact.clone()],
-    Vec::new(),
+    vec![target_fact.clone()],
     solutions,
     1,
     max_depth,
@@ -571,19 +523,12 @@ pub fn disprove_erroneous_assignment(
     max_time_ms,
   )?;
 
-  let stripped_err_fact = err_fact.strip_antecedent(&target_fact);
-
-  Some(Fact::Implication {
-    antecedents: vec![target_fact],
-    consequent: Box::new(stripped_err_fact),
-  })
+  Some(err_fact)
 }
 
 fn disprove_recursive(
   base_finder: &FactFinder,
-  mut current_finder: FactFinder,
-  active_speculations: &[Fact],
-  mut accumulated_nested_disproofs: Vec<Fact>,
+  initial_level: Vec<Fact>,
   solutions: &[SolvedGrid],
   depth: usize,
   max_depth: usize,
@@ -599,35 +544,65 @@ fn disprove_recursive(
     return None;
   }
 
-  // 1. Run rich deductions in current_finder
-  let mut spec_facts = Vec::new();
-  if let Some(last_spec) = active_speculations.last() {
-    spec_facts.push(last_spec.clone());
-  }
-
-  let deduced_facts = current_finder.deduce_with_speculative_rich(
-    spec_facts,
+  let mut collector = internals::TreeCollector::new(
     base_finder.remaining_asgmts,
+    base_finder.actual_asgmts,
     base_finder.sukaku_map,
   );
 
-  // 2. Check for contradictions
-  for fact in &deduced_facts {
-    if fact.is_error() {
-      return Some(fact.clone());
+  collector.max_time_ms = max_time_ms.map(|limit| {
+    let elapsed = time::now() - start_time;
+    (limit - elapsed).max(0.0)
+  });
+
+  collector.add_level(initial_level.clone());
+
+  loop {
+    if collector.collect_next_level() {
+      if collector.error_found.is_some() {
+        return collector.backward_reduce();
+      }
+    } else {
+      if depth >= max_depth {
+        return None;
+      }
+
+      // We stalled. Evaluate nested disproofs against the state with ONLY
+      // the initial target applied.
+      let mut initial_target_finder = base_finder.clone();
+      for fact in &initial_level {
+        initial_target_finder.apply_fact(fact);
+      }
+
+      let nested_disproof_fact = find_nested_disproofs(
+        &initial_target_finder,
+        solutions,
+        depth,
+        max_depth,
+        start_time,
+        max_time_ms,
+      );
+
+      if let Some(err_fact) = nested_disproof_fact {
+        return Some(Fact::Implication {
+          antecedents: initial_level,
+          consequent: Box::new(err_fact),
+        });
+      } else {
+        return None;
+      }
     }
   }
+}
 
-  if depth >= max_depth {
-    return None;
-  }
-
-  // 3. Apply deductions
-  for fact in &deduced_facts {
-    current_finder.apply_fact(fact);
-  }
-
-  // 4. Find erroneous candidates in the current hypothetical state
+fn find_nested_disproofs(
+  current_finder: &FactFinder,
+  solutions: &[SolvedGrid],
+  depth: usize,
+  max_depth: usize,
+  start_time: f64,
+  max_time_ms: Option<f64>,
+) -> Option<Fact> {
   let mut err_candidates =
     calculate_erroneous_productivity_native(&current_finder.to_grid(), solutions, None);
 
@@ -650,30 +625,21 @@ fn disprove_recursive(
     }
 
     enum Target {
-      NoNum(Loc, Vec<Num>),
-      NoLoc(Unit, Num, Vec<Loc>),
+      NoNum(Loc, NumSet),
+      NoLoc(Unit, Num, LocSet),
     }
 
     let mut best_target: Option<Target> = None;
 
-    // Search for NoNum targets
-    for id in 0..81 {
-      let loc = Loc::new(id).unwrap();
-
-      let remaining_nums: Vec<Num> = (0..9)
-        .map(|n| Num::new(n + 1).unwrap())
-        .filter(|&num| {
-          current_finder
-            .remaining_asgmts
-            .contains(Asgmt::new(num, loc))
-        })
-        .collect();
+    for loc in Loc::all() {
+      let remaining_nums = current_finder.sukaku_map[loc];
       if remaining_nums.is_empty() {
         continue;
       }
+
       if remaining_nums
         .iter()
-        .all(|&num| err_set.contains(Asgmt::new(num, loc)))
+        .all(|num| err_set.contains(Asgmt::new(num, loc)))
       {
         let is_better = match &best_target {
           None => true,
@@ -686,27 +652,14 @@ fn disprove_recursive(
       }
     }
 
-    // Search for NoLoc targets
     for unit in Unit::all() {
-      for n_id in 0..9 {
-        let num = Num::new(n_id + 1).unwrap();
-
-        let remaining_locs: Vec<Loc> = unit
-          .locs()
-          .iter()
-          .filter(|&loc| {
-            current_finder
-              .remaining_asgmts
-              .contains(Asgmt::new(num, loc))
-          })
-          .collect();
+      for num in Num::all() {
+        let remaining_locs = unit.locs() & current_finder.remaining_asgmts.num_locs(num);
         if remaining_locs.is_empty() {
           continue;
         }
-        if remaining_locs
-          .iter()
-          .all(|&loc| err_set.contains(Asgmt::new(num, loc)))
-        {
+
+        if remaining_locs & err_set.num_locs(num) == remaining_locs {
           let is_better = match &best_target {
             None => true,
             Some(Target::NoNum(_, best_nums)) => remaining_locs.len() < best_nums.len(),
@@ -720,41 +673,32 @@ fn disprove_recursive(
     }
 
     if let Some(target) = best_target {
-      let mut accumulated_for_target = accumulated_nested_disproofs.clone();
+      let mut accumulated_disproofs = Vec::new();
       let cands: Vec<Asgmt> = match target {
-        Target::NoNum(loc, ref nums) => nums.iter().map(|&n| Asgmt::new(n, loc)).collect(),
-        Target::NoLoc(_, num, ref locs) => locs.iter().map(|&l| Asgmt::new(num, l)).collect(),
+        Target::NoNum(loc, ref nums) => nums.iter().map(|n| Asgmt::new(n, loc)).collect(),
+        Target::NoLoc(_, num, ref locs) => locs.iter().map(|l| Asgmt::new(num, l)).collect(),
       };
 
       let mut success = true;
+      let mut temp_finder = current_finder.clone();
+
       for cand_asgmt in cands {
         let cand_fact = Fact::SpeculativeAssignment {
           loc: cand_asgmt.loc,
           num: cand_asgmt.num,
         };
-        let mut nested_finder = current_finder.clone();
-        nested_finder.apply(cand_asgmt);
-        let mut next_active = active_speculations.to_vec();
-        next_active.push(cand_fact.clone());
 
         if let Some(err_fact) = disprove_recursive(
-          base_finder,
-          nested_finder,
-          &next_active,
-          vec![],
+          &temp_finder,
+          vec![cand_fact.clone()],
           solutions,
           depth + 1,
           max_depth,
           start_time,
           max_time_ms,
         ) {
-          let stripped = err_fact.strip_antecedent(&cand_fact);
-          let f_cand = Fact::Implication {
-            antecedents: vec![cand_fact],
-            consequent: Box::new(stripped),
-          };
-          accumulated_for_target.push(f_cand.clone());
-          current_finder.apply_fact(&f_cand);
+          accumulated_disproofs.push(err_fact.clone());
+          temp_finder.apply_fact(&err_fact);
         } else {
           success = false;
           break;
@@ -767,12 +711,15 @@ fn disprove_recursive(
           Target::NoLoc(unit, num, _) => Fact::NoLoc { num, unit },
         };
         return Some(Fact::Implication {
-          antecedents: accumulated_for_target,
+          antecedents: accumulated_disproofs,
           consequent: Box::new(consequent),
         });
       }
     }
   }
+
+  let mut temp_finder = current_finder.clone();
+  let mut accumulated_disproofs = Vec::new();
 
   for cand in err_candidates {
     if let Some(limit) = max_time_ms {
@@ -781,67 +728,50 @@ fn disprove_recursive(
       }
     }
 
-    let cand_asgmt = Asgmt::new(cand.num, cand.loc);
     let cand_fact = Fact::SpeculativeAssignment {
       loc: cand.loc,
       num: cand.num,
     };
 
-    // Assume cand under current state
-    let mut nested_finder = current_finder.clone();
-    nested_finder.apply(cand_asgmt);
-
-    let mut next_active = active_speculations.to_vec();
-    next_active.push(cand_fact.clone());
-
     if let Some(err_fact) = disprove_recursive(
-      base_finder,
-      nested_finder,
-      &next_active,
-      vec![],
+      &temp_finder,
+      vec![cand_fact.clone()],
       solutions,
       depth + 1,
       max_depth,
       start_time,
       max_time_ms,
     ) {
-      // We found a contradiction!
-      // Check if the contradiction actually depends on cand_fact
       if !err_fact.depends_on_speculative_assignment(cand.loc, cand.num) {
-        // Contradiction does not depend on cand_fact! Bubble it up.
-        return Some(err_fact);
+        if accumulated_disproofs.is_empty() {
+          return Some(err_fact);
+        }
+        return Some(Fact::Implication {
+          antecedents: accumulated_disproofs,
+          consequent: Box::new(err_fact),
+        });
       }
 
-      // Construct nested disproof for cand
-      let stripped_err_fact = err_fact.strip_antecedent(&cand_fact);
-      let f_cand = Fact::Implication {
-        antecedents: vec![cand_fact.clone()],
-        consequent: Box::new(stripped_err_fact),
-      };
+      accumulated_disproofs.push(err_fact.clone());
+      temp_finder.apply_fact(&err_fact);
 
-      // Apply f_cand to current_finder
-      current_finder.apply_fact(&f_cand);
-      accumulated_nested_disproofs.push(f_cand);
-
-      let mut spec_facts = Vec::new();
-      if let Some(last_spec) = active_speculations.last() {
-        spec_facts.push(last_spec.clone());
-      }
-
-      let deduced_facts = current_finder.deduce_with_speculative_rich(
-        spec_facts,
-        base_finder.remaining_asgmts,
-        base_finder.sukaku_map,
+      let mut check_collector = internals::TreeCollector::new(
+        temp_finder.remaining_asgmts,
+        temp_finder.actual_asgmts,
+        temp_finder.sukaku_map,
       );
 
-      for fact in &deduced_facts {
-        if fact.is_error() {
-          return Some(fact.clone());
+      loop {
+        if check_collector.collect_next_level() {
+          if let Some(err) = check_collector.error_found {
+            return Some(Fact::Implication {
+              antecedents: accumulated_disproofs,
+              consequent: Box::new(err),
+            });
+          }
+        } else {
+          break;
         }
-      }
-
-      for fact in &deduced_facts {
-        current_finder.apply_fact(fact);
       }
     }
   }
