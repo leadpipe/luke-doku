@@ -24,6 +24,7 @@ pub struct Collector {
   pub max_time_ms: Option<f64>,
   pub start_time_ms: f64,
   pub timed_out: bool,
+  pub min_overlap_size: i32,
 }
 
 /// The ways that the collector can handle errors during deduction.
@@ -48,6 +49,7 @@ impl Collector {
       max_time_ms: None,
       start_time_ms: time::now(),
       timed_out: false,
+      min_overlap_size: 1,
     }
   }
 
@@ -159,6 +161,7 @@ pub struct TreeCollector {
   pub max_time_ms: Option<f64>,
   pub start_time_ms: f64,
   pub timed_out: bool,
+  pub min_overlap_size: i32,
 }
 
 impl TreeCollector {
@@ -173,6 +176,7 @@ impl TreeCollector {
       max_time_ms: None,
       start_time_ms: time::now(),
       timed_out: false,
+      min_overlap_size: 1,
     }
   }
 
@@ -224,6 +228,7 @@ impl TreeCollector {
     let mut temp_collector =
       Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
     temp_collector.found = self.found.clone();
+    temp_collector.min_overlap_size = self.min_overlap_size;
 
     let _ = find_errors(&mut temp_collector, false);
     for fact in &temp_collector.facts {
@@ -474,8 +479,8 @@ fn find_overlaps(collector: &mut Collector) {
         let band_locs = num_locs.band_locs(band);
         let blk_row_bits = band_locs_to_blk_rows(band_locs);
         let blk_col_bits = locs_to_blk_cols(num_locs, band);
-        blk_row_bits_to_overlaps(blk_row_bits, num, band, collector);
-        blk_col_bits_to_overlaps(blk_col_bits, num, band, collector);
+        blk_row_bits_to_overlaps(blk_row_bits, num, band, collector, &remaining_asgmts);
+        blk_col_bits_to_overlaps(blk_col_bits, num, band, collector, &remaining_asgmts);
       }
       let eliminations: Vec<AsgmtSet> = collector.facts[start..]
         .iter()
@@ -603,9 +608,27 @@ fn blk_col_bit(locs: LocSet, row_band: Band, col_band: Band, blk_line: BlkLine) 
 /// in the given vector.  The bitmap represents the block-rows of the given
 /// row-band; the ones mean that at least one of the locations in the
 /// corresponding block-row is assignable to the given numeral.
-fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, collector: &mut Collector) {
+fn blk_row_bits_to_overlaps(
+  blk_row_bits: Bits9,
+  num: Num,
+  band: Band,
+  collector: &mut Collector,
+  remaining_asgmts: &AsgmtSet,
+) {
   for spec in blk_line_bits_to_overlap_specs(blk_row_bits).iter() {
-    collector.add_fact(spec.to_row_band_overlap(num, band));
+    let fact = spec.to_row_band_overlap(num, band);
+    if collector.min_overlap_size > 1 {
+      if let Fact::Overlap {
+        unit, cross_unit, ..
+      } = fact
+      {
+        let available = remaining_asgmts.num_locs(num) & unit.locs() & cross_unit.locs();
+        if available.len() < collector.min_overlap_size {
+          continue;
+        }
+      }
+    }
+    collector.add_fact(fact);
   }
 }
 
@@ -613,9 +636,27 @@ fn blk_row_bits_to_overlaps(blk_row_bits: Bits9, num: Num, band: Band, collector
 /// facts in the given vector.  The bitmap represents the block-columns of the
 /// given column-band; the ones mean that at least one of the locations in the
 /// corresponding block-column is assignable to the given numeral.
-fn blk_col_bits_to_overlaps(blk_col_bits: Bits9, num: Num, band: Band, collector: &mut Collector) {
+fn blk_col_bits_to_overlaps(
+  blk_col_bits: Bits9,
+  num: Num,
+  band: Band,
+  collector: &mut Collector,
+  remaining_asgmts: &AsgmtSet,
+) {
   for spec in blk_line_bits_to_overlap_specs(blk_col_bits).iter() {
-    collector.add_fact(spec.to_col_band_overlap(num, band));
+    let fact = spec.to_col_band_overlap(num, band);
+    if collector.min_overlap_size > 1 {
+      if let Fact::Overlap {
+        unit, cross_unit, ..
+      } = fact
+      {
+        let available = remaining_asgmts.num_locs(num) & unit.locs() & cross_unit.locs();
+        if available.len() < collector.min_overlap_size {
+          continue;
+        }
+      }
+    }
+    collector.add_fact(fact);
   }
 }
 
@@ -1403,6 +1444,32 @@ mod tests {
     let o4 = make_implication(vec![o2.clone()], make_overlap(N1, C2, B7));
     let o5 = make_implication(vec![o3.clone()], make_overlap(N1, B7, R8));
     assert_eq!(collector.facts, vec![o1, o2, o3, o4, o5,]);
+  }
+
+  #[test]
+  fn test_find_overlaps_min_overlap_size_2() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
+            - - - + - - - + - - -
+            . 3 . | 2 . 6 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 4 | . . .
+            - - - + - - - + - - -
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
+    )
+    .unwrap();
+    let mut collector = make_collector(&grid);
+    collector.min_overlap_size = 2;
+    find_overlaps(&mut collector);
+    let o1 = make_overlap(N1, B2, C5);
+    let o2 = make_implication(vec![o1.clone()], make_overlap(N1, B5, R5));
+    let o3 = make_implication(vec![o2.clone()], make_overlap(N1, B4, C3));
+    assert_eq!(collector.facts, vec![o1, o2, o3]);
   }
 
   fn make_subset(
