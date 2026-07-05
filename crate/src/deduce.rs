@@ -274,20 +274,6 @@ impl FactFinder {
     self.actual_asgmts.insert(asgmt);
     self.sukaku_map.apply(asgmt);
   }
-
-  pub fn deduce_with_speculative(
-    &self,
-    speculative_facts: Vec<Fact>,
-    base_remaining_asgmts: AsgmtSet,
-    base_sukaku_map: internals::SukakuMap,
-  ) -> Vec<Fact> {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
-    collector
-      .collect_with_speculative(speculative_facts, base_remaining_asgmts, base_sukaku_map)
-      .unwrap();
-    collector.facts
-  }
 }
 
 #[derive(Serialize, ts_rs::TS)]
