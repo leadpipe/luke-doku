@@ -553,216 +553,118 @@ fn disprove_recursive(
         return None;
       }
 
-      // We stalled. Evaluate nested disproofs against the state with ONLY
-      // the initial target applied.
-      let mut initial_target_finder = base_finder.clone();
-      for fact in &initial_level {
-        initial_target_finder.apply_fact(fact);
+      // We stalled. Evaluate nested disproofs against the current stalled state.
+      let mut current_finder = base_finder.clone();
+      current_finder.remaining_asgmts = collector.remaining_asgmts;
+      current_finder.actual_asgmts = collector.actual_asgmts;
+      current_finder.sukaku_map = collector.sukaku_map;
+
+      let base_grid = current_finder.to_grid();
+      let base_ledger = Ledger::new(&base_grid).ok()?;
+
+      enum Target {
+        NoNum(Loc, NumSet),
+        NoLoc(Unit, Num, LocSet),
       }
 
-      let nested_disproof_fact = find_nested_disproofs(
-        &initial_target_finder,
-        solutions,
-        depth,
-        max_depth,
-        start_time,
-        max_time_ms,
-      );
+      let mut targets = Vec::new();
+      let mut min_size = 10;
 
-      if let Some(err_fact) = nested_disproof_fact {
-        return Some(Fact::Implication {
-          antecedents: initial_level,
-          consequent: Box::new(err_fact),
-        });
-      } else {
-        return None;
-      }
-    }
-  }
-}
-
-fn find_nested_disproofs(
-  current_finder: &FactFinder,
-  solutions: &[SolvedGrid],
-  depth: usize,
-  max_depth: usize,
-  start_time: f64,
-  max_time_ms: Option<f64>,
-) -> Option<Fact> {
-  let mut err_candidates =
-    calculate_erroneous_productivity_native(&current_finder.to_grid(), solutions, None);
-
-  if let Ok(base_ledger) = Ledger::new(&current_finder.to_grid()) {
-    err_candidates.sort_by_key(|cand| {
-      let mut test_ledger = base_ledger;
-      test_ledger.assign_blindly(cand.num, cand.loc);
-      if test_ledger.apply_implications().is_err() {
-        0
-      } else {
-        test_ledger.unset().len()
-      }
-    });
-  }
-
-  if depth == 1 {
-    let mut err_set = AsgmtSet::new();
-    for cand in &err_candidates {
-      err_set.insert(Asgmt::new(cand.num, cand.loc));
-    }
-
-    enum Target {
-      NoNum(Loc, NumSet),
-      NoLoc(Unit, Num, LocSet),
-    }
-
-    let mut best_target: Option<Target> = None;
-
-    for loc in Loc::all() {
-      let remaining_nums = current_finder.sukaku_map[loc];
-      if remaining_nums.is_empty() {
-        continue;
-      }
-
-      if remaining_nums
-        .iter()
-        .all(|num| err_set.contains(Asgmt::new(num, loc)))
-      {
-        let is_better = match &best_target {
-          None => true,
-          Some(Target::NoNum(_, best_nums)) => remaining_nums.len() < best_nums.len(),
-          Some(Target::NoLoc(_, _, best_locs)) => remaining_nums.len() < best_locs.len(),
-        };
-        if is_better {
-          best_target = Some(Target::NoNum(loc, remaining_nums));
-        }
-      }
-    }
-
-    for unit in Unit::all() {
-      for num in Num::all() {
-        let remaining_locs = unit.locs() & current_finder.remaining_asgmts.num_locs(num);
-        if remaining_locs.is_empty() {
-          continue;
-        }
-
-        if remaining_locs & err_set.num_locs(num) == remaining_locs {
-          let is_better = match &best_target {
-            None => true,
-            Some(Target::NoNum(_, best_nums)) => remaining_locs.len() < best_nums.len(),
-            Some(Target::NoLoc(_, _, best_locs)) => remaining_locs.len() < best_locs.len(),
-          };
-          if is_better {
-            best_target = Some(Target::NoLoc(unit, num, remaining_locs));
+      for loc in Loc::all() {
+        let nums = current_finder.sukaku_map[loc];
+        let len = nums.len();
+        if len > 0 {
+          targets.push(Target::NoNum(loc, nums));
+          if len < min_size {
+            min_size = len;
           }
         }
       }
-    }
 
-    if let Some(target) = best_target {
-      let mut accumulated_disproofs = Vec::new();
-      let cands: Vec<Asgmt> = match target {
-        Target::NoNum(loc, ref nums) => nums.iter().map(|n| Asgmt::new(n, loc)).collect(),
-        Target::NoLoc(_, num, ref locs) => locs.iter().map(|l| Asgmt::new(num, l)).collect(),
-      };
+      for unit in Unit::all() {
+        for num in Num::all() {
+          let locs = unit.locs() & current_finder.remaining_asgmts.num_locs(num);
+          let len = locs.len();
+          if len > 0 {
+            targets.push(Target::NoLoc(unit, num, locs));
+            if len < min_size {
+              min_size = len;
+            }
+          }
+        }
+      }
 
-      let mut success = true;
-      let mut temp_finder = current_finder.clone();
+      targets.retain(|t| match t {
+        Target::NoNum(_, nums) => nums.len() == min_size,
+        Target::NoLoc(_, _, locs) => locs.len() == min_size,
+      });
 
-      for cand_asgmt in cands {
-        let cand_fact = Fact::SpeculativeAssignment {
-          loc: cand_asgmt.loc,
-          num: cand_asgmt.num,
+      let mut scored_targets = Vec::new();
+      for target in targets {
+        let asgmts: Vec<Asgmt> = match target {
+          Target::NoNum(loc, nums) => nums.iter().map(|n| Asgmt::new(n, loc)).collect(),
+          Target::NoLoc(_, num, locs) => locs.iter().map(|l| Asgmt::new(num, l)).collect(),
         };
+        let mut score_sum = 0;
+        for asgmt in &asgmts {
+          let mut test_ledger = base_ledger;
+          test_ledger.assign_blindly(asgmt.num, asgmt.loc);
+          if test_ledger.apply_implications().is_ok() {
+            score_sum += test_ledger.unset().len();
+          }
+        }
+        scored_targets.push((score_sum, target, asgmts));
+      }
+      scored_targets.sort_by_key(|&(score, _, _)| score);
 
-        if let Some(err_fact) = disprove_recursive(
-          &temp_finder,
-          vec![cand_fact.clone()],
-          solutions,
-          depth + 1,
-          max_depth,
-          start_time,
-          max_time_ms,
-        ) {
-          accumulated_disproofs.push(err_fact.clone());
-          temp_finder.apply_fact(&err_fact);
-        } else {
-          success = false;
+      let mut success = false;
+      for (_, target, asgmts) in scored_targets {
+        let mut branch_disproofs = Vec::new();
+        let mut all_branches_failed = true;
+
+        for cand_asgmt in asgmts {
+          let cand_fact = Fact::SpeculativeAssignment {
+            loc: cand_asgmt.loc,
+            num: cand_asgmt.num,
+          };
+
+          if let Some(err_fact) = disprove_recursive(
+            &current_finder,
+            vec![cand_fact],
+            solutions,
+            depth + 1,
+            max_depth,
+            start_time,
+            max_time_ms,
+          ) {
+            branch_disproofs.push(err_fact);
+          } else {
+            all_branches_failed = false;
+            break;
+          }
+        }
+
+        if all_branches_failed {
+          let consequent = match target {
+            Target::NoNum(loc, _) => Fact::NoNum { loc },
+            Target::NoLoc(unit, num, _) => Fact::NoLoc { num, unit },
+          };
+          collector.error_found = Some(Fact::Implication {
+            antecedents: branch_disproofs,
+            consequent: Box::new(consequent),
+          });
+          success = true;
           break;
         }
       }
 
       if success {
-        let consequent = match target {
-          Target::NoNum(loc, _) => Fact::NoNum { loc },
-          Target::NoLoc(unit, num, _) => Fact::NoLoc { num, unit },
-        };
-        return Some(Fact::Implication {
-          antecedents: accumulated_disproofs,
-          consequent: Box::new(consequent),
-        });
-      }
-    }
-  }
-
-  let mut temp_finder = current_finder.clone();
-  let mut accumulated_disproofs = Vec::new();
-
-  for cand in err_candidates {
-    if let Some(limit) = max_time_ms {
-      if time::now() - start_time > limit {
+        return collector.backward_reduce();
+      } else {
         return None;
       }
     }
-
-    let cand_fact = Fact::SpeculativeAssignment {
-      loc: cand.loc,
-      num: cand.num,
-    };
-
-    if let Some(err_fact) = disprove_recursive(
-      &temp_finder,
-      vec![cand_fact.clone()],
-      solutions,
-      depth + 1,
-      max_depth,
-      start_time,
-      max_time_ms,
-    ) {
-      if !err_fact.depends_on_speculative_assignment(cand.loc, cand.num) {
-        if accumulated_disproofs.is_empty() {
-          return Some(err_fact);
-        }
-        return Some(Fact::Implication {
-          antecedents: accumulated_disproofs,
-          consequent: Box::new(err_fact),
-        });
-      }
-
-      accumulated_disproofs.push(err_fact.clone());
-      temp_finder.apply_fact(&err_fact);
-
-      let mut check_collector = internals::TreeCollector::new(
-        temp_finder.remaining_asgmts,
-        temp_finder.actual_asgmts,
-        temp_finder.sukaku_map,
-      );
-
-      loop {
-        if check_collector.collect_next_level() {
-          if let Some(err) = check_collector.error_found {
-            return Some(Fact::Implication {
-              antecedents: accumulated_disproofs,
-              consequent: Box::new(err),
-            });
-          }
-        } else {
-          break;
-        }
-      }
-    }
   }
-
-  None
 }
 
 #[cfg(test)]
