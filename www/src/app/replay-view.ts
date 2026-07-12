@@ -232,7 +232,7 @@ export class ReplayView extends SudokuView {
       const parts = this.renderSingleFactDetails(fact, occupiedLocs);
 
       if (parts.length > 0) {
-        const delayMs = i * 100;
+        const delayMs = this.previewStepIndex >= 0 ? 0 : i * 100;
         const isGhosted = i < facts.length - 1;
         const classes = isGhosted ? 'animated-fade ghosted' : 'animated-fade';
         groups.push(

@@ -209,6 +209,17 @@ export function getVisibleFactsAtStep(
     }
   }
 
+  const completedDisproofsByEndIndex = new Map<number, Disproof[]>();
+  for (const d of completedDisproofs) {
+    const info = nestedDisproofsInfo.get(d)!;
+    let list = completedDisproofsByEndIndex.get(info.endIndex);
+    if (!list) {
+      list = [];
+      completedDisproofsByEndIndex.set(info.endIndex, list);
+    }
+    list.push(d);
+  }
+
   const visibleFacts: Fact[] = [];
   const limit = Math.min(stepsWithContext.length - 1, previewStepIndex);
   for (let i = 0; i <= limit; i++) {
@@ -227,8 +238,10 @@ export function getVisibleFactsAtStep(
     }
 
     // Check if any completed disproof ended at index i, and insert its elimination fact
-    for (const [d, info] of nestedDisproofsInfo.entries()) {
-      if (info.endIndex === i && completedDisproofs.has(d)) {
+    const disproofsEndingHere = completedDisproofsByEndIndex.get(i);
+    if (disproofsEndingHere) {
+      for (const d of disproofsEndingHere) {
+        const info = nestedDisproofsInfo.get(d)!;
         // Only insert if all parents of d are not completed
         let parentCompleted = false;
         let dNode = stepsWithContext[info.startIndex].pathNode;
