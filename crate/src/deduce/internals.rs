@@ -176,7 +176,7 @@ impl TreeCollector {
       max_time_ms: None,
       start_time_ms: time::now(),
       timed_out: false,
-      min_overlap_size: 1,
+      min_overlap_size: 2,
     }
   }
 
@@ -239,14 +239,11 @@ impl TreeCollector {
       }
     }
 
+    find_overlaps(&mut temp_collector);
     find_hidden_singles(&mut temp_collector);
+    let mut set_state = SetState::new();
+    find_subsets(&mut temp_collector, &mut set_state);
     find_naked_singles(&mut temp_collector);
-
-    if temp_collector.facts.is_empty() {
-      let mut set_state = SetState::new();
-      find_overlaps(&mut temp_collector);
-      find_subsets(&mut temp_collector, &mut set_state);
-    }
 
     if temp_collector.facts.is_empty() {
       return false;
@@ -351,7 +348,10 @@ impl Fact {
           }
         }
       }
-      Fact::Implication { antecedents, consequent } => {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
         // An implication might be revealed if any of the antecedents are
         // revealed, or if the consequent is revealed.
         for antecedent in antecedents.iter() {
@@ -375,9 +375,10 @@ impl Fact {
     match self {
       Fact::SingleNum { .. } | Fact::NoNum { .. } => true,
       Fact::Subset { is_naked, .. } => *is_naked,
-      Fact::Implication { antecedents, consequent } => {
-        antecedents.iter().any(|a| a.uses_sukaku_map()) || consequent.uses_sukaku_map()
-      }
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => antecedents.iter().any(|a| a.uses_sukaku_map()) || consequent.uses_sukaku_map(),
       _ => false,
     }
   }
@@ -422,7 +423,10 @@ impl Fact {
         }
         true
       }
-      Fact::Implication { antecedents, consequent } => {
+      Fact::Implication {
+        antecedents,
+        consequent,
+      } => {
         // An implication is implied if all of its antecedents are implied
         // and its consequent is also implied in the given state.
         for antecedent in antecedents.iter() {
@@ -1769,16 +1773,16 @@ mod tests {
   #[test]
   fn test_narrow_antecedents_implication_bug() {
     use crate::core::{AsgmtSet, NumSet, L11, L12, L92, N1, N2};
-    
+
     let base_asgmts = AsgmtSet::new();
     let mut base_sukaku_map = SukakuMap([NumSet::new(); 81]);
-    
+
     // Base state requires both N1 and N2 to be eliminated from L12 to trigger NoNum
     base_sukaku_map[L12] = N1.as_set() | N2.as_set();
 
     // inner_ant assigns N1 to L11 (R1C1). This eliminates N1 from L12 (R1C2).
     let inner_ant = Fact::SingleNum { loc: L11, num: N1 };
-    
+
     // outer_ant assigns N2 to L92 (R9C2). This eliminates N2 from L12 (R1C2).
     let outer_ant = Fact::SingleNum { loc: L92, num: N2 };
 
