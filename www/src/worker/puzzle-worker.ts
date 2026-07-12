@@ -1,6 +1,6 @@
 import type {Disproof} from '../facts/disproof';
 import {formatDisproofDescription, shorthandFact} from '../facts/format';
-import {getTotalAntecedents} from '../facts/utils';
+import {getTotalAntecedents, nub} from '../facts/utils';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import * as wasm from '../wasm';
 import type {DisproofMetadata} from './worker-types';
@@ -325,6 +325,7 @@ function disproveErroneousAssignment(
         totalAntecedents: getTotalAntecedents(disproof),
         rootLoc: disproof.antecedents[0].loc,
         rootNum: disproof.antecedents[0].num,
+        errorFact: nub(disproof),
         json: m.includeJson ? disproofJsonStr : '',
       };
     }

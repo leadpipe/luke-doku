@@ -194,7 +194,17 @@ export class ReplayView extends SudokuView {
     const selectedFact = this.selectedFact;
     if (!selectedFact) return [];
     if ('type' in selectedFact && selectedFact.type === 'DisproofMetadata') {
-      return [];
+      const facts: Fact[] = [
+        {
+          type: 'SpeculativeAssignment',
+          loc: selectedFact.rootLoc,
+          num: selectedFact.rootNum,
+        },
+      ];
+      if (selectedFact.errorFact) {
+        facts.push(selectedFact.errorFact);
+      }
+      return facts;
     }
     if (this.previewStepIndex >= 0 && isDisproof(selectedFact)) {
       return this.previewVisibleFacts;

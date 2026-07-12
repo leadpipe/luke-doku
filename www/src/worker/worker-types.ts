@@ -243,6 +243,7 @@ export interface DisproofMetadata {
   readonly totalAntecedents: number;
   readonly rootLoc: number;
   readonly rootNum: number;
+  readonly errorFact?: Fact;
   readonly json: string;
 }
 

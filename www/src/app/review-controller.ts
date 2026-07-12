@@ -412,18 +412,49 @@ export class ReviewController implements ReactiveController {
       return this.cachedPreviewHighlights;
     }
     const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
+    
+    const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
+      const existing = highlights.get(loc);
+      if (existing === 'green') return;
+      if (existing === 'red' && color === 'yellow') return;
+      highlights.set(loc, color);
+    };
+
+    const applyErrorHighlights = (err: Fact) => {
+      if (err.type === 'Conflict') {
+        for (const l of err.locs) {
+          setHighlight(l, 'red');
+        }
+      } else if (err.type === 'NoNum') {
+        setHighlight(err.loc, 'red');
+      } else if (err.type === 'NoLoc') {
+        for (const loc of Loc.ALL) {
+          if (
+            unitContains(err.unit, loc) &&
+            this.playback?.wrapper?.game?.isBlank(loc)
+          ) {
+            setHighlight(loc.index, 'red');
+          }
+        }
+      }
+    };
+
     if (
       this.selectedFact &&
       'type' in this.selectedFact &&
       this.selectedFact.type === 'DisproofMetadata'
     ) {
-      highlights.set(this.selectedFact.rootLoc, 'yellow');
+      setHighlight(this.selectedFact.rootLoc, 'green');
+      if (this.selectedFact.errorFact) {
+        applyErrorHighlights(this.selectedFact.errorFact);
+      }
     } else if (this.selectedFact && isDisproof(this.selectedFact)) {
-      highlights.set(this.selectedFact.antecedents[0].loc, 'yellow');
+      setHighlight(this.selectedFact.antecedents[0].loc, 'green');
+      applyErrorHighlights(nub(this.selectedFact));
     } else if (this.selectedFact) {
       const base = nub(this.selectedFact as Fact);
       if (base.type === 'SpeculativeAssignment') {
-        highlights.set(base.loc, 'green');
+        setHighlight(base.loc, 'green');
       }
     }
     return highlights;
