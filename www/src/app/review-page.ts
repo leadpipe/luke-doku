@@ -187,32 +187,37 @@ export class ReviewPage extends LitElement {
       : undefined;
 
     let effectiveSelectedFact = this.controller.selectedFact;
-    if (
-      this.controller.isPlayingForward &&
-      nextCommand &&
-      nextCommand.command.tag() === CommandTag.SET_NUM
-    ) {
-      const setNumCmd = nextCommand.command as SetNum;
-      const locIndex = setNumCmd.loc.index;
-      const num = setNumCmd.num;
+    let effectiveFacts = this.controller.facts;
+    let effectiveDisproofs = this.controller.disproofs;
+    if (this.controller.isPlayingForward) {
+      effectiveFacts = [];
+      effectiveDisproofs = [];
+      if (
+        nextCommand &&
+        nextCommand.command.tag() === CommandTag.SET_NUM
+      ) {
+        const setNumCmd = nextCommand.command as SetNum;
+        const locIndex = setNumCmd.loc.index;
+        const num = setNumCmd.num;
 
-      const matchingFact = this.controller.facts.find(f => {
-        const base = nub(f);
-        return (
-          (base.type === 'SingleLoc' || base.type === 'SingleNum') &&
-          base.loc === locIndex &&
-          base.num === num
-        );
-      });
+        const matchingFact = this.controller.facts.find(f => {
+          const base = nub(f);
+          return (
+            (base.type === 'SingleLoc' || base.type === 'SingleNum') &&
+            base.loc === locIndex &&
+            base.num === num
+          );
+        });
 
-      if (matchingFact) {
-        effectiveSelectedFact = matchingFact;
-      } else {
-        effectiveSelectedFact = {
-          type: 'SpeculativeAssignment',
-          loc: locIndex,
-          num: num,
-        };
+        if (matchingFact) {
+          effectiveSelectedFact = matchingFact;
+        } else {
+          effectiveSelectedFact = {
+            type: 'SpeculativeAssignment',
+            loc: locIndex,
+            num: num,
+          };
+        }
       }
     }
 
@@ -228,8 +233,8 @@ export class ReviewPage extends LitElement {
       </div>
       <replay-view
         .gameWrapper=${this.controller.playback.wrapper}
-        .facts=${this.controller.facts}
-        .disproofs=${this.controller.disproofs}
+        .facts=${effectiveFacts}
+        .disproofs=${effectiveDisproofs}
         .productivityScores=${this.controller.productivityScores}
         .selectedLoc=${this.controller.selectedLoc}
         .selectedFact=${this.controller.previewedDisproof ||
