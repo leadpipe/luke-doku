@@ -26,3 +26,38 @@ export const INTERACTIVE_SUDOKU_VIEW_SIZES = css`
     );
   }
 `;
+
+export const BLUE_BUTTON_STYLE = css`
+  .blue-button {
+    font-family: 'Prompt', sans-serif;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 8px 16px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #ffffff;
+    background-color: light-dark(#1a73e8, #3b82f6);
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    text-decoration: none;
+    transition: background-color 0.15s ease-in-out, transform 0.1s ease-in-out, box-shadow 0.15s ease-in-out;
+    box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05);
+  }
+
+  .blue-button:hover {
+    background-color: light-dark(#1557b0, #60a5fa);
+  }
+
+  .blue-button:active {
+    transform: scale(0.97);
+  }
+
+  .blue-button:focus-visible {
+    outline: 2px solid light-dark(#1a73e8, #3b82f6);
+    outline-offset: 2px;
+  }
+`;
+

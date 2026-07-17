@@ -137,6 +137,15 @@ export class PuzzlesPage extends LitElement {
             <div class="description">
               ${this.renderPuzzleDescription(game, assumeToday)}
             </div>
+            ${game.playState === PlayState.COMPLETED ? html`
+              <div style="margin-top: 8px;">
+                <icon-button
+                  iconName="history"
+                  label="Review"
+                  @click=${(e: Event) => this.reviewPuzzle(e, game)}
+                ></icon-button>
+              </div>
+            ` : ''}
           </div>
         `,
       )}
@@ -303,6 +312,14 @@ export class PuzzlesPage extends LitElement {
     if (game) {
       navigateToPuzzle(game.sudoku);
     }
+  }
+
+  private reviewPuzzle(event: Event, game: Game) {
+    event.stopPropagation();
+    navigateToPath(
+      game.sudoku.id?.toString() ?? game.sudoku.cluesString(),
+      'review',
+    );
   }
 
   private showEnterPuzzlePage() {

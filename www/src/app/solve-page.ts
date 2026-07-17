@@ -23,6 +23,7 @@ import {
   setPreferredTheme,
 } from './prefs';
 import {
+  BLUE_BUTTON_STYLE,
   CORRECT_COLOR,
   ERROR_COLOR,
   HIGHLIGHT_COLOR,
@@ -56,6 +57,7 @@ const BOARD_PADDING_PIXELS = 10;
 export class SolvePage extends LitElement {
   static override styles = [
     INTERACTIVE_SUDOKU_VIEW_SIZES,
+    BLUE_BUTTON_STYLE,
     css`
       :host {
         height: 100vh;
@@ -443,7 +445,7 @@ export class SolvePage extends LitElement {
             html`
               ${renderCompletedGameDescription(game)}
               <div style="margin-top: 15px">
-                <button class="menu-button" @click=${this.reviewGame}>
+                <button class="blue-button" @click=${this.reviewGame}>
                   Review Game
                 </button>
               </div>
