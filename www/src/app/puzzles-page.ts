@@ -27,6 +27,8 @@ import {
   todayString,
 } from './utils';
 
+let globalRecentlyCompletedGames: Game[] = [];
+
 @customElement('puzzles-page')
 export class PuzzlesPage extends LitElement {
   static override styles = css`
@@ -174,7 +176,7 @@ export class PuzzlesPage extends LitElement {
   @state() private ongoingGames: Game[] = [];
   @state() private todaysGames: Game[] = [];
   private topCounter = 0;
-  @state() private recentlyCompletedGames: Game[] = [];
+  @state() private recentlyCompletedGames: Game[] = [...globalRecentlyCompletedGames];
   @state() private moreCompletedGames = false;
   @queryAll('#completed sudoku-view')
   private completedSudokuViews?: NodeListOf<SudokuView>;
@@ -252,36 +254,49 @@ export class PuzzlesPage extends LitElement {
 
   private async loadRecentlyCompletedPuzzles(
     db: IDBPDatabase<LukeDokuDb>,
-    maxCount = 10,
+    maxCount = Math.max(10, globalRecentlyCompletedGames.length),
   ) {
+    const targetGames: Game[] = [];
     this.moreCompletedGames = false;
-    const firstSudokuView = this.completedSudokuViews?.[0];
-    const a = this.recentlyCompletedGames;
-    const b = [...a];
-    let i = 0;
     for await (const cursor of iterateCompletedPuzzlesDesc(db)) {
-      if (a.length >= maxCount) {
+      if (targetGames.length >= maxCount) {
         this.moreCompletedGames = true;
         break;
       }
-      if (i < a.length) {
-        if (a[i++].sudoku.cluesString() === cursor.value.clues) {
-          continue;
+      targetGames.push(Game.forDbRecord(db, cursor.value));
+    }
+
+    const firstSudokuView = this.completedSudokuViews?.[0];
+    const currentArray = [...this.recentlyCompletedGames];
+
+    for (let k = 0; k < targetGames.length; ++k) {
+      if (k < currentArray.length) {
+        if (currentArray[k] !== targetGames[k]) {
+          currentArray.splice(k, 0, targetGames[k]);
+          this.recentlyCompletedGames = [...currentArray];
+          await this.syncAnimationTime(k, firstSudokuView);
         }
-        a.splice(i);
-        b.splice(i);
+      } else {
+        currentArray.push(targetGames[k]);
+        this.recentlyCompletedGames = [...currentArray];
+        await this.syncAnimationTime(k, firstSudokuView);
       }
-      const game = Game.forDbRecord(db, cursor.value);
-      a.push(game);
-      b.push(game);
-      this.recentlyCompletedGames = this.recentlyCompletedGames === a ? b : a;
-      if (firstSudokuView) {
-        await this.updateComplete;
-        const newSudokuView = this.completedSudokuViews?.[a.length - 1];
-        if (newSudokuView) {
-          newSudokuView.animationTime = firstSudokuView.animationTime;
-        }
-      }
+    }
+
+    if (currentArray.length > targetGames.length) {
+      currentArray.splice(targetGames.length);
+      this.recentlyCompletedGames = [...currentArray];
+    }
+
+    globalRecentlyCompletedGames = [...this.recentlyCompletedGames];
+  }
+
+  private async syncAnimationTime(index: number, firstSudokuView?: SudokuView) {
+    if (!firstSudokuView) return;
+    await this.updateComplete;
+    const newSudokuView = this.completedSudokuViews?.[index];
+    if (newSudokuView) {
+      newSudokuView.animationTime = firstSudokuView.animationTime;
     }
   }
 
