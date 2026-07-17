@@ -51,6 +51,7 @@ export function renderCount(count: number, countingWhat: string): string {
 
 export function renderCompletedGameDescription(
   game: Game,
+  includePreviousAttempts = true,
 ): Array<string | HTMLTemplateResult> {
   const parts: Array<string | HTMLTemplateResult> = [];
   let showSolutionsCount = true;
@@ -91,7 +92,7 @@ export function renderCompletedGameDescription(
     );
   }
   const {previousAttemptCount} = game;
-  if (previousAttemptCount) {
+  if (includePreviousAttempts && previousAttemptCount) {
     parts.push(
       html`<div>${renderCount(previousAttemptCount, 'previous attempt')}</div>`,
     );

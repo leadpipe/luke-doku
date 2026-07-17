@@ -545,6 +545,27 @@ export class Game extends BaseGame {
     return this.record.complexity;
   }
 
+  /**
+   * Returns Game objects for all previous attempts of this puzzle.
+   */
+  get previousAttempts(): Game[] {
+    return (this.record.previousAttempts ?? []).map(history => {
+      const historicalRecord = {
+        ...this.record,
+        history,
+        previousAttempts: undefined,
+      };
+      return new Game(this.db, historicalRecord);
+    });
+  }
+
+  /**
+   * When this game was completed, if it has been completed.
+   */
+  get completedAt(): Date | undefined {
+    return this.playState === PlayState.COMPLETED ? this.record.lastUpdated : undefined;
+  }
+
   /** An object containing this game that is recreated on every command. */
   get wrapper(): GameWrapper {
     return this.#wrapper;

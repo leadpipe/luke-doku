@@ -15,7 +15,7 @@ import {ReadonlyTrail} from '../game/trail';
 import {ReadonlyTrails} from '../game/trails';
 import {ensureExhaustiveSwitch} from '../game/utils';
 import {addTypeSafeListener, removeTypeSafeListener} from './events';
-import {navigateHome, navigateToPath} from './nav';
+import {navigateHome, navigateToHashState, navigateToPath} from './nav';
 import {
   getCurrentSystemTheme,
   getCurrentTheme,
@@ -37,6 +37,7 @@ import {SudokuView} from './sudoku-view';
 import {TrailColors} from './trail-colors';
 import {Theme, ThemeOrAuto, cssPixels} from './types';
 import {
+  elapsedTimeString,
   findDataString,
   renderCompletedGameDescription,
   renderCount,
@@ -266,6 +267,34 @@ export class SolvePage extends LitElement {
       game-clock {
         flex-grow: 1;
       }
+
+      #previous-attempts {
+        width: var(--board-size);
+        max-width: 100vw;
+        margin-top: 16px;
+        text-align: left;
+        box-sizing: border-box;
+        padding: 0 16px;
+      }
+      #previous-attempts h4 {
+        margin-block: 8px 4px;
+        font-weight: normal;
+        text-transform: uppercase;
+        font-size: 0.9em;
+        opacity: 0.8;
+      }
+      #previous-attempts ul {
+        margin: 0;
+        padding-left: 20px;
+      }
+      #previous-attempts li {
+        margin-bottom: 4px;
+      }
+      .previous-attempt {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+      }
     `,
   ];
 
@@ -443,7 +472,10 @@ export class SolvePage extends LitElement {
           <puzzle-rating .game=${game}></puzzle-rating>
           ${playState === PlayState.COMPLETED ?
             html`
-              ${renderCompletedGameDescription(game)}
+              ${renderCompletedGameDescription(
+                game,
+                /*includePreviousAttempts=*/ false,
+              )}
               <div style="margin-top: 15px">
                 <button class="blue-button" @click=${this.reviewGame}>
                   Review Game
@@ -451,7 +483,7 @@ export class SolvePage extends LitElement {
               </div>
             `
           : ''}
-          ${game.sudoku.id?.toString()}
+          ${game.sudoku.id?.toString()} ${this.renderPreviousAttempts(game)}
         `
       )}
       <div id="bottom-panel">
@@ -542,6 +574,52 @@ export class SolvePage extends LitElement {
         'review',
       );
     }
+  }
+
+  private reviewPreviousAttempt(index: number) {
+    if (this.game) {
+      const path = [
+        this.game.sudoku.id?.toString() ??
+          this.game.sudoku.clues.toFlatString(),
+        'review',
+      ];
+      const params = new URLSearchParams();
+      params.set('attempt', index.toString());
+      navigateToHashState({path, params});
+    }
+  }
+
+  private renderPreviousAttempts(game: Game) {
+    const attempts = game.previousAttempts;
+    if (attempts.length === 0) return '';
+    return html`
+      <div id="previous-attempts">
+        <h4>Previously</h4>
+        <ul>
+          ${attempts.map((attemptGame, index) => {
+            const completedDate =
+              attemptGame.completedAt ?
+                attemptGame.completedAt.toLocaleString()
+              : 'Unknown Date';
+            return html`
+              <li>
+                <div class="previous-attempt">
+                  <span
+                    >Solved in ${elapsedTimeString(attemptGame.elapsedMs)} at
+                    ${completedDate}</span
+                  >
+                  <icon-button
+                    iconName="history"
+                    label="Review"
+                    @click=${() => this.reviewPreviousAttempt(index)}
+                  ></icon-button>
+                </div>
+              </li>
+            `;
+          })}
+        </ul>
+      </div>
+    `;
   }
 
   private renderPauseResume(playState: PlayState) {

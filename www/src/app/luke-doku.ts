@@ -194,7 +194,16 @@ export class LukeDoku extends LitElement {
     }
     if (hashState.path.length === 2 && hashState.path[1] === 'review') {
       const game = await this.tryToLoadGameFromCluesOrId(hashState.path[0]);
-      if (game && game.playState === PlayState.COMPLETED) {
+      if (game && (game.playState === PlayState.COMPLETED || hashState.params.has('attempt'))) {
+        if (hashState.params.has('attempt')) {
+          const attemptIndex = parseInt(hashState.params.get('attempt')!, 10);
+          const pastGame = game.previousAttempts[attemptIndex];
+          if (pastGame) {
+            this.game = pastGame;
+            await this.showPage('review', 'right');
+            return true;
+          }
+        }
         this.game = game;
         await this.showPage('review', 'right');
         return true;

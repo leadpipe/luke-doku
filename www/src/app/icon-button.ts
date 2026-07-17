@@ -7,13 +7,14 @@ import {customElement, property} from 'lit/decorators.js';
 export class IconButton extends LitElement {
   static override styles = css`
     :host {
-      display: inline flex;
+      display: inline-flex;
       flex-direction: column;
       font-size: x-small;
       align-items: center;
       cursor: pointer;
       user-select: none;
       -webkit-user-select: none;
+      text-align: center;
     }
 
     :host([disabled]) {
@@ -34,7 +35,11 @@ export class IconButton extends LitElement {
   override render() {
     return html`
       <button ?disabled=${this.disabled} title=${this.title}>
-        <mat-icon name=${this.iconName} size=${this.iconSize} ?flip=${this.flip}></mat-icon>
+        <mat-icon
+          name=${this.iconName}
+          size=${this.iconSize}
+          ?flip=${this.flip}
+        ></mat-icon>
       </button>
       ${this.label}
     `;
