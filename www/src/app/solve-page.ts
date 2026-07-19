@@ -605,7 +605,10 @@ export class SolvePage extends LitElement {
               <li>
                 <div class="previous-attempt">
                   <span
-                    >Solved in ${elapsedTimeString(attemptGame.elapsedMs)} at
+                    >${attemptGame.completionState === CompletionState.SOLVED ?
+                      'Solved in'
+                    : 'Quit after'}
+                    ${elapsedTimeString(attemptGame.elapsedMs)} on
                     ${completedDate}</span
                   >
                   <icon-button
