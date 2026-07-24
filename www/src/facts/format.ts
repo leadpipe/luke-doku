@@ -62,6 +62,9 @@ export function shorthandFact(fact: Fact): string {
     case 'Conflict':
       return `⚡ ${formatNum(fact.num)} ∈ ${formatUnitShorthand(fact.unit)}`;
 
+    case 'ConflictLoc':
+      return `⚡ ${formatNums(fact.nums)} ➔ ${GameLoc.of(fact.loc).toString()}`;
+
     case 'Overlap':
       return `${formatNum(fact.num)} ∈ ${formatUnitShorthand(fact.unit)} x ${formatUnitShorthand(fact.cross_unit)}`;
 
@@ -104,6 +107,9 @@ export function describeFact(fact: Fact): string {
     case 'Conflict':
       return `${shorthand}: Conflict! ${formatNum(fact.num)} appears in ${formatUnit(fact.unit)} at multiple locations: ${formatLocs(fact.locs)}`;
 
+    case 'ConflictLoc':
+      return `${shorthand}: Conflict! Multiple numbers assigned to ${GameLoc.of(fact.loc).toString()}: ${formatNums(fact.nums)}`;
+
     case 'Overlap':
       return `${shorthand}: ${formatNum(fact.num)} in ${formatUnit(fact.unit)} is restricted to ${formatUnit(fact.cross_unit)}`;
 
@@ -138,6 +144,9 @@ export function formatDisproofDescription(fact: Disproof): string {
   switch (finalNub.type) {
     case 'Conflict':
       consequentStr = `leads to a conflict for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;
+      break;
+    case 'ConflictLoc':
+      consequentStr = `leads to multiple numbers assigned to ${GameLoc.of(finalNub.loc)}`;
       break;
     case 'NoLoc':
       consequentStr = `leads to no location for ${finalNub.num} in ${formatUnit(finalNub.unit)}`;

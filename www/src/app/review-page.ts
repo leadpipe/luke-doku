@@ -192,10 +192,7 @@ export class ReviewPage extends LitElement {
     if (this.controller.isPlayingForward) {
       effectiveFacts = [];
       effectiveDisproofs = [];
-      if (
-        nextCommand &&
-        nextCommand.command.tag() === CommandTag.SET_NUM
-      ) {
+      if (nextCommand && nextCommand.command.tag() === CommandTag.SET_NUM) {
         const setNumCmd = nextCommand.command as SetNum;
         const locIndex = setNumCmd.loc.index;
         const num = setNumCmd.num;
@@ -256,7 +253,7 @@ export class ReviewPage extends LitElement {
             <review-trail-preview
               .previewedDisproof=${this.controller.previewedDisproof}
               .previewStepIndex=${this.controller.previewStepIndex}
-              .trailSteps=${this.controller.getPreviewTrailSteps()}
+              .trailSteps=${this.controller.getPreviewStepsWithContext()}
               @exit-preview=${() => this.controller.exitPreviewMode()}
               @scrub-preview=${(e: CustomEvent<number>) =>
                 this.controller.setPreviewStepIndex(e.detail)}

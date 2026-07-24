@@ -1,8 +1,8 @@
 import {css, html, LitElement} from 'lit';
 import {customElement, property} from 'lit/decorators.js';
 import type {Disproof} from '../facts/disproof';
-import type {Fact} from '../facts/Fact';
 import {describeFact} from '../facts/format';
+import type {StepWithContext} from '../facts/utils';
 import './icon-button';
 
 @customElement('review-trail-preview')
@@ -66,11 +66,32 @@ export class ReviewTrailPreview extends LitElement {
       width: 100%;
       margin-bottom: 16px;
     }
+    .fact-list {
+      display: flex;
+      flex-direction: column;
+      gap: 4px;
+      margin-top: 10px;
+    }
+    .fact-item {
+      padding: 6px 8px;
+      border: 1px solid transparent;
+      border-radius: 4px;
+      cursor: pointer;
+    }
+    .fact-item:hover {
+      background: var(--hover-loc, #bdd4f9);
+    }
+    .fact-item.active {
+      background: var(--gd, #fff);
+      border-color: var(--gc, #ccc);
+      font-weight: 500;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    }
   `;
 
   @property({attribute: false}) previewedDisproof: Disproof | null = null;
   @property({type: Number}) previewStepIndex = -1;
-  @property({attribute: false}) trailSteps: Fact[] = [];
+  @property({attribute: false}) trailSteps: StepWithContext[] = [];
 
   private dispatchEventName(name: string, detail?: any) {
     this.dispatchEvent(
@@ -86,7 +107,6 @@ export class ReviewTrailPreview extends LitElement {
     if (!this.previewedDisproof) return html``;
 
     const steps = this.trailSteps;
-    const currentFact = steps[Math.min(steps.length - 1, this.previewStepIndex)];
 
     return html`
       <input
@@ -131,14 +151,38 @@ export class ReviewTrailPreview extends LitElement {
             Exit
           </button>
         </h3>
-        <div
-          style="padding: 10px; border: 1px dashed var(--gc); border-radius: 4px; background: var(--gd);"
-        >
-          <strong>Step ${this.previewStepIndex + 1}:</strong>
-          ${currentFact ? describeFact(currentFact) : ''}
+        <div class="fact-list">
+          ${steps.map(
+            (step, index) => html`
+              <div
+                class="fact-item ${index === this.previewStepIndex ?
+                  'active'
+                : ''}"
+                style="margin-left: ${step.depth * 16}px;"
+                @click=${() => this.dispatchEventName('scrub-preview', index)}
+              >
+                <span style="opacity: 0.6; font-size: 0.9em; margin-right: 4px;"
+                  >Step ${index + 1}:</span
+                >
+                ${describeFact(step.fact)}
+              </div>
+            `,
+          )}
         </div>
       </div>
     `;
+  }
+
+  protected override updated(
+    changedProperties: Map<string | number | symbol, unknown>,
+  ) {
+    super.updated(changedProperties);
+    if (changedProperties.has('previewStepIndex')) {
+      const activeEl = this.shadowRoot?.querySelector('.fact-item.active');
+      if (activeEl) {
+        activeEl.scrollIntoView({behavior: 'smooth', block: 'nearest'});
+      }
+    }
   }
 }
 

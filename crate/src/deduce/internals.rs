@@ -77,6 +77,7 @@ impl Collector {
   /// given error mode to determine how to handle errors.
   pub fn collect(&mut self, error_mode: ErrorMode) -> Result<(), Invalid> {
     let base_remaining_asgmts = self.remaining_asgmts;
+    let base_actual_asgmts = self.actual_asgmts;
     let base_sukaku_map = self.sukaku_map;
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
@@ -109,6 +110,7 @@ impl Collector {
             antecedents.as_slice(),
             &antecedent_eliminations,
             base_remaining_asgmts,
+            base_actual_asgmts,
             base_sukaku_map,
             0,
           );
@@ -148,6 +150,7 @@ pub struct LevelData {
   pub facts: Vec<Fact>,
   pub eliminations: Vec<AsgmtSet>,
   pub remaining_asgmts_before: AsgmtSet,
+  pub actual_asgmts_before: AsgmtSet,
   pub sukaku_map_before: SukakuMap,
 }
 
@@ -202,6 +205,7 @@ impl TreeCollector {
       facts: facts.clone(),
       eliminations: elims,
       remaining_asgmts_before: self.remaining_asgmts,
+      actual_asgmts_before: self.actual_asgmts,
       sukaku_map_before: self.sukaku_map,
     });
     for f in &facts {
@@ -283,6 +287,7 @@ impl TreeCollector {
         &level.facts,
         &level.eliminations,
         level.remaining_asgmts_before,
+        level.actual_asgmts_before,
         level.sukaku_map_before,
         level.facts.len(), // Force checking all facts
       );
@@ -297,12 +302,39 @@ impl TreeCollector {
   }
 }
 
-fn fact_is_implied(fact: &Fact, remaining_asgmts: &AsgmtSet, sukaku_map: &SukakuMap) -> bool {
+fn fact_is_implied(
+  fact: &Fact,
+  remaining_asgmts: &AsgmtSet,
+  actual_asgmts: &AsgmtSet,
+  sukaku_map: &SukakuMap,
+) -> bool {
   match fact {
-    Fact::Implication { antecedents, .. } => antecedents
-      .iter()
-      .all(|ant| fact_is_implied(ant, remaining_asgmts, sukaku_map)),
-    other => other.is_implied_by(remaining_asgmts, sukaku_map),
+    Fact::Implication {
+      antecedents,
+      consequent,
+    } => {
+      if !antecedents
+        .iter()
+        .all(|ant| fact_is_implied(ant, remaining_asgmts, actual_asgmts, sukaku_map))
+      {
+        return false;
+      }
+      let mut implied_elims = AsgmtSet::new();
+      let mut implied_actual = *actual_asgmts;
+      for ant in antecedents {
+        implied_elims |= ant.as_eliminations();
+        if let Some(asgmt) = ant.as_asgmt() {
+          implied_actual.insert(asgmt);
+        }
+      }
+      let state_remaining = *remaining_asgmts - implied_elims;
+      let mut state_sukaku = *sukaku_map;
+      if consequent.uses_sukaku_map() {
+        state_sukaku.eliminate(&implied_elims);
+      }
+      fact_is_implied(consequent, &state_remaining, &implied_actual, &state_sukaku)
+    }
+    other => other.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map),
   }
 }
 
@@ -311,6 +343,7 @@ fn narrow_antecedents(
   antecedents: &[Fact],
   antecedent_eliminations: &[AsgmtSet],
   remaining_asgmts: AsgmtSet,
+  actual_asgmts: AsgmtSet,
   sukaku_map: SukakuMap,
   _num_speculative_facts: usize,
 ) -> Vec<Fact> {
@@ -322,15 +355,19 @@ fn narrow_antecedents(
 
   let implies_consequent = |indices: &[usize]| -> bool {
     let mut elims = AsgmtSet::new();
+    let mut state_actual = actual_asgmts;
     for &idx in indices {
       elims |= antecedent_eliminations[idx];
+      if let Some(asgmt) = antecedents[idx].as_asgmt() {
+        state_actual.insert(asgmt);
+      }
     }
     let state_remaining = remaining_asgmts - elims;
     let mut state_sukaku = sukaku_map;
     if uses_sukaku {
       state_sukaku.eliminate(&elims);
     }
-    fact_is_implied(consequent, &state_remaining, &state_sukaku)
+    fact_is_implied(consequent, &state_remaining, &state_actual, &state_sukaku)
   };
 
   let mut kept_indices: Vec<usize> = (0..antecedents.len()).collect();
@@ -368,7 +405,12 @@ impl Fact {
     }
   }
 
-  fn is_implied_by(&self, remaining_asgmts: &AsgmtSet, sukaku_map: &SukakuMap) -> bool {
+  fn is_implied_by(
+    &self,
+    remaining_asgmts: &AsgmtSet,
+    actual_asgmts: &AsgmtSet,
+    sukaku_map: &SukakuMap,
+  ) -> bool {
     match self {
       Fact::SingleLoc { num, unit, loc } => {
         (remaining_asgmts.num_locs(*num) & unit.locs()) == loc.as_set()
@@ -377,9 +419,18 @@ impl Fact {
       Fact::SpeculativeAssignment { .. } => false,
       Fact::NoLoc { num, unit } => (remaining_asgmts.num_locs(*num) & unit.locs()).is_empty(),
       Fact::NoNum { loc } => sukaku_map[*loc].is_empty(),
-      Fact::Conflict { .. } => {
-        // Conflicts are only implied by actual assignments.
-        false
+      Fact::Conflict { num, unit, locs } => {
+        let actual = actual_asgmts.num_locs(*num) & unit.locs();
+        *locs <= actual
+      }
+      Fact::ConflictLoc { loc, nums } => {
+        let mut actual_nums = NumSet::new();
+        for num in Num::all() {
+          if actual_asgmts.num_locs(num).contains(*loc) {
+            actual_nums.insert(num);
+          }
+        }
+        *nums <= actual_nums
       }
       Fact::Overlap {
         num,
@@ -415,11 +466,11 @@ impl Fact {
         // An implication is implied if all of its antecedents are implied
         // and its consequent is also implied in the given state.
         for antecedent in antecedents.iter() {
-          if !antecedent.is_implied_by(remaining_asgmts, sukaku_map) {
+          if !antecedent.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map) {
             return false;
           }
         }
-        consequent.is_implied_by(remaining_asgmts, sukaku_map)
+        consequent.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map)
       }
     }
   }
@@ -427,6 +478,20 @@ impl Fact {
 
 fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Invalid> {
   let possible_asgmts = collector.remaining_asgmts | collector.actual_asgmts;
+  for loc in Loc::all() {
+    let mut nums = NumSet::new();
+    for num in Num::all() {
+      if collector.actual_asgmts.num_locs(num).contains(loc) {
+        nums.insert(num);
+      }
+    }
+    if nums.len() > 1 {
+      if short_circuit {
+        return Err(Invalid);
+      }
+      collector.add_fact(Fact::ConflictLoc { loc, nums });
+    }
+  }
   for unit in Unit::all() {
     let unit_locs = unit.locs();
     for num in Num::all() {
@@ -489,6 +554,7 @@ fn find_overlaps(collector: &mut Collector) {
             antecedents.as_slice(),
             &antecedent_eliminations,
             prev_remaining_asgmts,
+            collector.actual_asgmts,
             collector.sukaku_map,
             0,
           );
@@ -1708,6 +1774,7 @@ mod tests {
         Fact::NoLoc { .. } => "NoLoc",
         Fact::NoNum { .. } => "NoNum",
         Fact::Conflict { .. } => "Conflict",
+        Fact::ConflictLoc { .. } => "ConflictLoc",
         Fact::Overlap { .. } => "Overlap",
         Fact::Subset { .. } => "Subset",
         Fact::Implication { .. } => "Implication",
@@ -1784,6 +1851,7 @@ mod tests {
       &antecedents,
       &antecedent_eliminations,
       base_asgmts,
+      AsgmtSet::new(),
       base_sukaku_map,
       0,
     );

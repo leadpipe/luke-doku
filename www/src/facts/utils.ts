@@ -106,6 +106,7 @@ function getFactRank(fact: Fact): number {
   const base = nub(fact);
   switch (base.type) {
     case 'Conflict':
+    case 'ConflictLoc':
       return 10;
     case 'NoLoc':
       return 20;
@@ -140,12 +141,14 @@ export interface DisproofPathNode {
 export interface StepWithContext {
   fact: Fact;
   pathNode: DisproofPathNode | null;
+  depth: number;
 }
 
 export function collectStepsWithContext(
   fact: Fact,
   pathNode: DisproofPathNode | null = null,
-  seen = new Set<string>()
+  seen = new Set<string>(),
+  depth = 0,
 ): StepWithContext[] {
   if (isDisproof(fact)) {
     const newPathNode: DisproofPathNode = {disproof: fact, parent: pathNode};
@@ -154,26 +157,41 @@ export function collectStepsWithContext(
     const key = JSON.stringify(fact.antecedents[0]);
     if (!seen.has(key)) {
       seen.add(key);
-      steps.push({fact: fact.antecedents[0], pathNode: newPathNode});
+      steps.push({
+        fact: fact.antecedents[0],
+        pathNode: newPathNode,
+        depth: depth + 1,
+      });
     }
 
     for (let i = 1; i < fact.antecedents.length; i++) {
-      steps.push(...collectStepsWithContext(fact.antecedents[i], newPathNode, seen));
+      steps.push(
+        ...collectStepsWithContext(
+          fact.antecedents[i],
+          newPathNode,
+          seen,
+          depth + 1,
+        ),
+      );
     }
-    steps.push(...collectStepsWithContext(fact.consequent, newPathNode, seen));
+    steps.push(
+      ...collectStepsWithContext(fact.consequent, newPathNode, seen, depth),
+    );
     return steps;
   } else if (fact.type === 'Implication') {
     const steps: StepWithContext[] = [];
     for (const ant of fact.antecedents) {
-      steps.push(...collectStepsWithContext(ant, pathNode, seen));
+      steps.push(...collectStepsWithContext(ant, pathNode, seen, depth + 1));
     }
-    steps.push(...collectStepsWithContext(fact.consequent, pathNode, seen));
+    steps.push(
+      ...collectStepsWithContext(fact.consequent, pathNode, seen, depth),
+    );
     return steps;
   } else {
     const key = JSON.stringify(fact);
     if (!seen.has(key)) {
       seen.add(key);
-      return [{fact, pathNode}];
+      return [{fact, pathNode, depth}];
     }
     return [];
   }
@@ -181,9 +199,8 @@ export function collectStepsWithContext(
 
 export function getVisibleFactsAtStep(
   stepsWithContext: StepWithContext[],
-  previewStepIndex: number
+  previewStepIndex: number,
 ): Fact[] {
-
   const nestedDisproofsInfo = new Map<
     Disproof,
     {startIndex: number; endIndex: number}
@@ -258,7 +275,7 @@ export function getVisibleFactsAtStep(
             pNode = pNode.parent;
           }
         }
-        
+
         if (!parentCompleted) {
           visibleFacts.push(d);
         }

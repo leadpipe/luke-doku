@@ -7,10 +7,11 @@ mod internals;
 
 use crate::solve::ledger::Ledger;
 use serde::{Deserialize, Serialize};
+use ts_rs::TS;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 /// A fact that can be deduced from a Sudoku grid.
-#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize, ts_rs::TS)]
+#[derive(Clone, Debug, Eq, Hash, PartialEq, PartialOrd, Serialize, TS)]
 #[ts(export, export_to = "../../www/src/facts/")]
 #[serde(tag = "type")]
 pub enum Fact {
@@ -31,6 +32,8 @@ pub enum Fact {
   /// Error: the given numeral is assigned to all the given locations (more than
   /// one) within the unit.
   Conflict { num: Num, unit: Unit, locs: LocSet },
+  /// Error: the given location has multiple numerals assigned to it.
+  ConflictLoc { loc: Loc, nums: NumSet },
   /// Elimination: the given numeral can only be within the intersection of the
   /// two given units, one of which must be a block and the other a line, so all
   /// other locations in the `unit` can be eliminated.
@@ -152,7 +155,10 @@ impl Fact {
   /// Tells whether this fact is an error.
   pub fn is_error(&self) -> bool {
     match self {
-      Fact::NoLoc { .. } | Fact::NoNum { .. } | Fact::Conflict { .. } => true,
+      Fact::NoLoc { .. }
+      | Fact::NoNum { .. }
+      | Fact::Conflict { .. }
+      | Fact::ConflictLoc { .. } => true,
       Fact::Implication { consequent, .. } => consequent.is_error(),
       _ => false,
     }
@@ -276,7 +282,7 @@ impl FactFinder {
   }
 }
 
-#[derive(Serialize, ts_rs::TS)]
+#[derive(Serialize, TS)]
 #[ts(export, export_to = "../../www/src/facts/")]
 #[serde(rename_all = "camelCase")]
 pub struct DeduceResult {
@@ -352,7 +358,7 @@ pub fn deduce_facts(
   serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
 
-#[derive(Serialize, ts_rs::TS)]
+#[derive(Serialize, TS)]
 #[ts(export, export_to = "../../www/src/facts/")]
 #[serde(rename_all = "camelCase")]
 pub struct ErroneousAssignmentProductivity {

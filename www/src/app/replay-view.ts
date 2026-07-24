@@ -6,7 +6,6 @@ import type {Unit} from '../facts/Unit';
 import {
   flattenImplication,
   getTotalAntecedents,
-  getVisibleFactsAtStep,
   nub,
   unitContains,
 } from '../facts/utils';
@@ -342,6 +341,24 @@ export class ReplayView extends SudokuView {
             svg`<text x=${numX} y=${numY} class="solution clock-text broken">x</text>`,
           );
         }
+      }
+    } else if (fact.type === 'ConflictLoc') {
+      const loc = Loc.of(fact.loc)!;
+      if (!occupiedLocs.has(loc.index)) {
+        occupiedLocs.add(loc.index);
+        const [x, y] = cellCenter(loc);
+        const nums = fact.nums.join(', ');
+
+        // Error border around the cell
+        const size = this.cellSize;
+        answer.push(
+          svg`<rect class="error-border" x=${x - size / 2} y=${y - size / 2} width=${size} height=${size} />`,
+        );
+
+        // Display multiple numbers stacked or smaller
+        answer.push(
+          svg`<text x=${x} y=${y} class="solution fact-detail-text" style="font-size: 0.5em" fill="red">${nums}</text>`,
+        );
       }
     } else if (fact.type === 'NoLoc') {
       for (const loc of Loc.ALL) {

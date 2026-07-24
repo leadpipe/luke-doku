@@ -331,10 +331,13 @@ export class ReviewController implements ReactiveController {
 
   private cachedPreviewTrailSteps: Fact[] = [];
   private cachedStepsWithContext: StepWithContext[] = [];
-  private cachedPreviewHighlights: Map<number, 'green' | 'yellow' | 'red'> = new Map();
+  private cachedPreviewHighlights: Map<number, 'green' | 'yellow' | 'red'> =
+    new Map();
   private cachedPreviewVisibleFacts: Fact[] = [];
 
-  private async fetchDisproofJson(metadata: DisproofMetadata): Promise<string | undefined> {
+  private async fetchDisproofJson(
+    metadata: DisproofMetadata,
+  ): Promise<string | undefined> {
     if (metadata.json) return metadata.json;
     if (!this.playback) return undefined;
 
@@ -378,7 +381,9 @@ export class ReviewController implements ReactiveController {
 
     const disproof = JSON.parse(jsonStr) as Disproof;
     this.previewedDisproof = disproof;
-    this.cachedStepsWithContext = collectStepsWithContext(this.previewedDisproof);
+    this.cachedStepsWithContext = collectStepsWithContext(
+      this.previewedDisproof,
+    );
     this.cachedPreviewTrailSteps = this.cachedStepsWithContext.map(s => s.fact);
     this.previewStepIndex = 0;
     this.updatePreviewHighlights();
@@ -403,6 +408,11 @@ export class ReviewController implements ReactiveController {
     return this.cachedPreviewTrailSteps;
   }
 
+  getPreviewStepsWithContext(): StepWithContext[] {
+    if (!this.previewedDisproof) return [];
+    return this.cachedStepsWithContext;
+  }
+
   getPreviewVisibleFacts(): Fact[] {
     return this.cachedPreviewVisibleFacts;
   }
@@ -412,7 +422,7 @@ export class ReviewController implements ReactiveController {
       return this.cachedPreviewHighlights;
     }
     const highlights = new Map<number, 'green' | 'yellow' | 'red'>();
-    
+
     const setHighlight = (loc: number, color: 'green' | 'yellow' | 'red') => {
       const existing = highlights.get(loc);
       if (existing === 'green') return;
@@ -559,8 +569,19 @@ export class ReviewController implements ReactiveController {
 
     const fakeDisproof: Disproof = {
       type: 'Implication',
-      antecedents: [{ type: 'SpeculativeAssignment', loc: metadata.rootLoc, num: metadata.rootNum }],
-      consequent: { type: 'Conflict', num: metadata.rootNum, unit: { type: 'Row', id: 0 }, locs: [] }
+      antecedents: [
+        {
+          type: 'SpeculativeAssignment',
+          loc: metadata.rootLoc,
+          num: metadata.rootNum,
+        },
+      ],
+      consequent: {
+        type: 'Conflict',
+        num: metadata.rootNum,
+        unit: {type: 'Row', id: 0},
+        locs: [],
+      },
     };
     this.playback.applyDisproof(fakeDisproof);
 
@@ -749,6 +770,8 @@ export class ReviewController implements ReactiveController {
           return unitContains(base.unit, this.selectedLoc!);
         case 'Conflict':
           return base.locs.includes(locIndex);
+        case 'ConflictLoc':
+          return base.loc === locIndex;
         case 'Overlap':
           return (
             unitContains(base.unit, this.selectedLoc!) &&
