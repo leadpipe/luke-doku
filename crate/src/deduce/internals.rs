@@ -245,12 +245,33 @@ impl TreeCollector {
     find_subsets(&mut temp_collector, &mut set_state);
     find_naked_singles(&mut temp_collector);
 
-    if temp_collector.facts.is_empty() {
+    let mut filtered_facts = Vec::new();
+    let mut level_asgmts = AsgmtSet::new();
+    let mut level_eliminations = AsgmtSet::new();
+
+    for fact in temp_collector.facts {
+      if fact.is_error() {
+        filtered_facts.push(fact);
+      } else if let Some(asgmt) = fact.as_asgmt() {
+        if !self.actual_asgmts.contains(asgmt) && !level_asgmts.contains(asgmt) {
+          level_asgmts.insert(asgmt);
+          filtered_facts.push(fact);
+        }
+      } else {
+        let elims = fact.as_eliminations() & (self.remaining_asgmts - level_eliminations);
+        if !elims.is_empty() {
+          level_eliminations |= elims;
+          filtered_facts.push(fact);
+        }
+      }
+    }
+
+    if filtered_facts.is_empty() {
       return false;
     }
 
     self.found = temp_collector.found;
-    self.add_level(temp_collector.facts);
+    self.add_level(filtered_facts);
     true
   }
 
@@ -276,101 +297,65 @@ impl TreeCollector {
   }
 }
 
+fn fact_is_implied(fact: &Fact, remaining_asgmts: &AsgmtSet, sukaku_map: &SukakuMap) -> bool {
+  match fact {
+    Fact::Implication { antecedents, .. } => antecedents
+      .iter()
+      .all(|ant| fact_is_implied(ant, remaining_asgmts, sukaku_map)),
+    other => other.is_implied_by(remaining_asgmts, sukaku_map),
+  }
+}
+
 fn narrow_antecedents(
   consequent: &Fact,
   antecedents: &[Fact],
   antecedent_eliminations: &[AsgmtSet],
   remaining_asgmts: AsgmtSet,
   sukaku_map: SukakuMap,
-  num_speculative_facts: usize,
+  _num_speculative_facts: usize,
 ) -> Vec<Fact> {
-  let mut result = Vec::new();
-  let mut result_eliminations = AsgmtSet::new();
-  let uses_sukaku_map = consequent.uses_sukaku_map();
-  for index in (0..antecedents.len()).rev() {
-    let antecedent = &antecedents[index];
-    let is_speculative = index < num_speculative_facts;
-    if is_speculative
-      || consequent.might_be_revealed_by_eliminations(&antecedent_eliminations[index])
-    {
-      let prior_antecedents_eliminations = antecedent_eliminations[0..index]
-        .iter()
-        .fold(result_eliminations, |acc, x| acc | *x);
-      let remaining_asgmts = remaining_asgmts - prior_antecedents_eliminations;
-      let mut sukaku_map = sukaku_map;
-      if uses_sukaku_map {
-        sukaku_map.eliminate(&prior_antecedents_eliminations);
-      }
-      if !consequent.is_implied_by(&remaining_asgmts, &sukaku_map) {
-        // The consequent requires this antecedent.
-        result.push(antecedent.clone());
-        result_eliminations |= antecedent_eliminations[index];
-      }
+  if antecedents.is_empty() {
+    return Vec::new();
+  }
+
+  let uses_sukaku = consequent.uses_sukaku_map();
+
+  let implies_consequent = |indices: &[usize]| -> bool {
+    let mut elims = AsgmtSet::new();
+    for &idx in indices {
+      elims |= antecedent_eliminations[idx];
+    }
+    let state_remaining = remaining_asgmts - elims;
+    let mut state_sukaku = sukaku_map;
+    if uses_sukaku {
+      state_sukaku.eliminate(&elims);
+    }
+    fact_is_implied(consequent, &state_remaining, &state_sukaku)
+  };
+
+  let mut kept_indices: Vec<usize> = (0..antecedents.len()).collect();
+
+  if !implies_consequent(&kept_indices) {
+    return antecedents.to_vec();
+  }
+
+  let mut idx = kept_indices.len();
+  while idx > 0 {
+    idx -= 1;
+    let mut test_indices = kept_indices.clone();
+    test_indices.remove(idx);
+    if implies_consequent(&test_indices) {
+      kept_indices = test_indices;
     }
   }
-  result.reverse();
-  result
+
+  kept_indices
+    .into_iter()
+    .map(|i| antecedents[i].clone())
+    .collect()
 }
 
 impl Fact {
-  fn might_be_revealed_by_eliminations(&self, eliminations: &AsgmtSet) -> bool {
-    match self {
-      Fact::SingleLoc { num, unit, .. }
-      | Fact::NoLoc { num, unit }
-      | Fact::Overlap { num, unit, .. } => {
-        return !(eliminations.num_locs(*num) & unit.locs()).is_empty();
-      }
-      Fact::SingleNum { loc, .. } | Fact::NoNum { loc } => {
-        for num in Num::all() {
-          if eliminations.num_locs(num).contains(*loc) {
-            return true;
-          }
-        }
-      }
-      Fact::Subset {
-        nums,
-        unit,
-        locs,
-        is_naked,
-        ..
-      } => {
-        // For naked sets, we check if the _other_ numerals are eliminated from _these_ locations.
-        // For hidden sets, we check if _these_ numerals are eliminated from the _other_ locations.
-        let nums_to_check = if *is_naked { !*nums } else { *nums };
-        let locs_to_check = if *is_naked {
-          *locs
-        } else {
-          unit.locs() - *locs
-        };
-        for num in nums_to_check.iter() {
-          if !(eliminations.num_locs(num) & locs_to_check).is_empty() {
-            return true;
-          }
-        }
-      }
-      Fact::Implication {
-        antecedents,
-        consequent,
-      } => {
-        // An implication might be revealed if any of the antecedents are
-        // revealed, or if the consequent is revealed.
-        for antecedent in antecedents.iter() {
-          if antecedent.might_be_revealed_by_eliminations(eliminations) {
-            return true;
-          }
-        }
-        if consequent.might_be_revealed_by_eliminations(eliminations) {
-          return true;
-        }
-      }
-      Fact::Conflict { num, locs, .. } => {
-        return !(eliminations.num_locs(*num) & *locs).is_empty();
-      }
-      Fact::SpeculativeAssignment { .. } => (),
-    }
-    false
-  }
-
   fn uses_sukaku_map(&self) -> bool {
     match self {
       Fact::SingleNum { .. } | Fact::NoNum { .. } => true,
@@ -1808,5 +1793,66 @@ mod tests {
     // false and skips outer_ant! But outer_ant is strictly required to prove
     // NoNum at L12 (R1C2).
     assert_eq!(required, vec![outer_ant]);
+  }
+
+  #[test]
+  fn test_disproof_no_redundant_cross_unit_subsets() {
+    use super::super::{disprove_erroneous_assignment, FactFinder};
+
+    let grid = Grid::from_str(
+      r"
+      . . . | 7 8 . | . . 6
+      . . 3 | . 1 . | . 7 .
+      . . . | . 3 2 | . 4 .
+      ------+------+------
+      8 . . | 1 . 3 | . 2 .
+      1 9 . | . . . | 8 5 3
+      . 3 . | . . 8 | . . 7
+      ------+------+------
+      . 5 . | 8 6 . | 7 . .
+      . . . | . 4 . | 9 6 5
+      6 . . | . . 7 | . 8 .
+      ",
+    )
+    .unwrap();
+
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&grid, 10, &mut helper);
+    let solutions = summary.solutions;
+    let base_finder = FactFinder::new(&grid);
+
+    let target = Asgmt::new(N4, Loc::at(R4, C9));
+    let fact = disprove_erroneous_assignment(&base_finder, target, &solutions, Some(10000.0), 5)
+      .expect("Should find disproof");
+
+    let mut subset_units = Vec::new();
+    fn collect_subsets(f: &Fact, acc: &mut Vec<Unit>) {
+      match f {
+        Fact::Subset { nums, unit, .. } => {
+          if *nums == (N8.as_set() | N9.as_set()) {
+            acc.push(*unit);
+          }
+        }
+        Fact::Implication {
+          antecedents,
+          consequent,
+        } => {
+          for a in antecedents {
+            collect_subsets(a, acc);
+          }
+          collect_subsets(consequent, acc);
+        }
+        _ => {}
+      }
+    }
+    collect_subsets(&fact, &mut subset_units);
+
+    // There should be at most 1 subset fact for [8, 9] in C9/B3, not both C9 and B3!
+    assert!(
+      subset_units.len() <= 1,
+      "Expected at most 1 subset fact for [8, 9] in C9/B3 intersection, found {}: {:?}",
+      subset_units.len(),
+      subset_units
+    );
   }
 }
