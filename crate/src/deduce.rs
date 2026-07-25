@@ -518,6 +518,16 @@ pub fn disprove_erroneous_assignment(
   Some(err_fact)
 }
 
+/// A recursive helper that performs a nested disproof search to find logical contradictions.
+/// 
+/// This implements the Nested Disproofs logic for Lunatic-complexity puzzles.
+/// If direct deductions (via `TreeCollector`) exhaust without finding a contradiction, this function 
+/// identifies new erroneous assignments within the current hypothetical state, and recursively 
+/// attempts to disprove them. Disproving a nested assignment allows it to be eliminated 
+/// in the current state, potentially unlocking further deductions to reach a contradiction 
+/// for the root speculative assignment.
+///
+/// It bounds the search depth via `max_depth` and overall execution time via `max_time_ms`.
 fn disprove_recursive(
   base_finder: &FactFinder,
   initial_level: Vec<Fact>,
@@ -600,23 +610,22 @@ fn disprove_recursive(
         }
       }
 
-      targets.retain(|t| match t {
-        Target::NoNum(_, nums) => nums.len() == min_size,
-        Target::NoLoc(_, _, locs) => locs.len() == min_size,
-      });
-
       let mut scored_targets = Vec::new();
       for target in targets {
         let asgmts: Vec<Asgmt> = match target {
           Target::NoNum(loc, nums) => nums.iter().map(|n| Asgmt::new(n, loc)).collect(),
           Target::NoLoc(_, num, locs) => locs.iter().map(|l| Asgmt::new(num, l)).collect(),
         };
-        let mut score_sum = 0;
+        let mut score_sum: i32 = 0;
         for asgmt in &asgmts {
           let mut test_ledger = base_ledger;
           test_ledger.assign_blindly(asgmt.num, asgmt.loc);
-          if test_ledger.apply_implications().is_ok() {
-            score_sum += test_ledger.unset().len();
+          let is_ok = test_ledger.apply_implications().is_ok();
+          let unset_len = test_ledger.unset().len() as i32;
+          if is_ok {
+            score_sum += 10000 - unset_len;
+          } else {
+            score_sum += 100 - unset_len;
           }
         }
         scored_targets.push((score_sum, target, asgmts));
