@@ -245,6 +245,7 @@ export interface DisproofMetadata {
   readonly rootNum: number;
   readonly errorFact?: Fact;
   readonly json: string;
+  readonly maxDepth: number;
 }
 
 export interface ErroneousAssignmentDisprovedMessage extends FromWorkerMessageBase {

@@ -361,7 +361,7 @@ export class ReviewController implements ReactiveController {
         constraints,
         5000, // maxTimeMs
         true, // useLongQueue so it doesn't block quick requests
-        5, // maxDepth: Use 5 since that's the max we search to
+        metadata.maxDepth, // maxDepth: Use exactly what we found it at
         true,
       );
       if (!response.metadata?.json) {

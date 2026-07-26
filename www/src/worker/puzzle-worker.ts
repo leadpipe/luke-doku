@@ -327,6 +327,7 @@ function disproveErroneousAssignment(
         rootNum: disproof.antecedents[0].num,
         errorFact: nub(disproof),
         json: m.includeJson ? disproofJsonStr : '',
+        maxDepth: m.maxDepth ?? 1,
       };
     }
 
