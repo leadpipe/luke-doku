@@ -381,8 +381,23 @@ impl IntoWasmAbi for BlkLine {
 }
 
 /// A set of units.
-#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq)]
-pub struct UnitSet(Bits27);
+#[derive(Clone, Copy, Debug, Default, Eq, Hash, PartialEq, ts_rs::TS)]
+#[ts(export, export_to = "../../www/src/facts/")]
+pub struct UnitSet(#[ts(type = "Array<number>")] pub Bits27);
+
+impl serde::Serialize for UnitSet {
+  fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+  where
+    S: serde::Serializer,
+  {
+    use serde::ser::SerializeSeq;
+    let mut seq = serializer.serialize_seq(Some(self.len() as usize))?;
+    for e in self.iter() {
+      seq.serialize_element(&e)?;
+    }
+    seq.end()
+  }
+}
 
 impl<'a> Set<'a> for UnitSet {
   type Item = Unit;

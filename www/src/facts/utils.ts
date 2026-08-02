@@ -128,6 +128,12 @@ function getFactRank(fact: Fact): number {
     case 'Implication':
       return 1000; // Can't happen, nub never returns an Implication.
 
+    case 'Fish':
+      return 150;
+    case 'EmptyRectangle':
+    case 'Skyscraper':
+    case 'TwoStringKite':
+      return 160;
     default:
       ensureExhaustiveSwitch(base);
   }

@@ -3,4 +3,7 @@ import type { Blk } from "./Blk";
 import type { Col } from "./Col";
 import type { Row } from "./Row";
 
+/**
+ * One of a row, column, or block.
+ */
 export type Unit = { "type": "Blk", "id": Blk } | { "type": "Row", "id": Row } | { "type": "Col", "id": Col };

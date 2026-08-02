@@ -79,6 +79,14 @@ export function shorthandFact(fact: Fact): string {
       return `${antecedents} ➔ ${shorthandFact(fact.consequent)}`;
     }
 
+    case 'Fish':
+      return `${formatNum(fact.num)} Fish`;
+    case 'EmptyRectangle':
+      return `${formatNum(fact.num)} ER`;
+    case 'Skyscraper':
+      return `${formatNum(fact.num)} Skyscraper`;
+    case 'TwoStringKite':
+      return `${formatNum(fact.num)} Kite`;
     default:
       ensureExhaustiveSwitch(fact);
   }
@@ -130,6 +138,14 @@ export function describeFact(fact: Fact): string {
       return `${consequentDesc}, because ${antecedentsDesc}`;
     }
 
+    case 'Fish':
+      return `${shorthand}: Fish pattern for ${formatNum(fact.num)}`;
+    case 'EmptyRectangle':
+      return `${shorthand}: Empty Rectangle for ${formatNum(fact.num)}`;
+    case 'Skyscraper':
+      return `${shorthand}: Skyscraper for ${formatNum(fact.num)}`;
+    case 'TwoStringKite':
+      return `${shorthand}: 2-String Kite for ${formatNum(fact.num)}`;
     default:
       ensureExhaustiveSwitch(fact);
   }

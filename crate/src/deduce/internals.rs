@@ -99,6 +99,11 @@ impl Collector {
       if self.check_timeout() {
         break;
       }
+      crate::deduce::advanced::find_fish(self);
+      crate::deduce::advanced::find_empty_rectangles(self);
+      crate::deduce::advanced::find_skyscrapers(self);
+      crate::deduce::advanced::find_two_string_kites(self);
+
       let eliminations_end = self.facts.len();
       find_hidden_singles(self);
       find_naked_singles(self);
@@ -472,6 +477,26 @@ impl Fact {
         }
         consequent.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map)
       }
+      Fact::Fish {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::EmptyRectangle {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::Skyscraper {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::TwoStringKite {
+        num,
+        elimination_locs,
+        ..
+      } => (remaining_asgmts.num_locs(*num) & *elimination_locs).is_empty(),
     }
   }
 }
@@ -1778,6 +1803,10 @@ mod tests {
         Fact::Overlap { .. } => "Overlap",
         Fact::Subset { .. } => "Subset",
         Fact::Implication { .. } => "Implication",
+        Fact::Fish { .. } => "Fish",
+        Fact::EmptyRectangle { .. } => "EmptyRectangle",
+        Fact::Skyscraper { .. } => "Skyscraper",
+        Fact::TwoStringKite { .. } => "TwoStringKite",
       };
       *nub_counts.entry(name.to_string()).or_insert(0) += 1;
     }

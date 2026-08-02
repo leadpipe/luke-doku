@@ -4,5 +4,9 @@ import type { LocSet } from "./LocSet";
 import type { Num } from "./Num";
 import type { NumSet } from "./NumSet";
 import type { Unit } from "./Unit";
+import type { UnitSet } from "./UnitSet";
 
-export type Fact = { "type": "SingleLoc", num: Num, unit: Unit, loc: Loc, } | { "type": "SingleNum", loc: Loc, num: Num, } | { "type": "SpeculativeAssignment", loc: Loc, num: Num, } | { "type": "NoLoc", num: Num, unit: Unit, } | { "type": "NoNum", loc: Loc, } | { "type": "Conflict", num: Num, unit: Unit, locs: LocSet, } | { "type": "ConflictLoc", loc: Loc, nums: NumSet, } | { "type": "Overlap", num: Num, unit: Unit, cross_unit: Unit, } | { "type": "Subset", nums: NumSet, unit: Unit, locs: LocSet, cross_unit: Unit | null, is_naked: boolean, } | { "type": "Implication", antecedents: Array<Fact>, consequent: Fact, };
+/**
+ * A fact that can be deduced from a Sudoku grid.
+ */
+export type Fact = { "type": "SingleLoc", num: Num, unit: Unit, loc: Loc, } | { "type": "SingleNum", loc: Loc, num: Num, } | { "type": "SpeculativeAssignment", loc: Loc, num: Num, } | { "type": "NoLoc", num: Num, unit: Unit, } | { "type": "NoNum", loc: Loc, } | { "type": "Conflict", num: Num, unit: Unit, locs: LocSet, } | { "type": "ConflictLoc", loc: Loc, nums: NumSet, } | { "type": "Overlap", num: Num, unit: Unit, cross_unit: Unit, } | { "type": "Subset", nums: NumSet, unit: Unit, locs: LocSet, cross_unit: Unit | null, is_naked: boolean, } | { "type": "Implication", antecedents: Array<Fact>, consequent: Fact, } | { "type": "Fish", num: Num, base_units: UnitSet, cover_units: UnitSet, finned_locs: LocSet, elimination_locs: LocSet, } | { "type": "EmptyRectangle", num: Num, block: Unit, row: Unit, col: Unit, conjugate_pair: LocSet, elimination_locs: LocSet, } | { "type": "Skyscraper", num: Num, base_units: UnitSet, roof_locs: LocSet, elimination_locs: LocSet, } | { "type": "TwoStringKite", num: Num, block: Unit, row: Unit, col: Unit, string_ends: LocSet, elimination_locs: LocSet, };

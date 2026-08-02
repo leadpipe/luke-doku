@@ -147,6 +147,19 @@ impl Fact {
         }
         Complexity::Complex
       }
+      Fact::Fish {
+        base_units,
+        finned_locs,
+        ..
+      } => {
+        if finned_locs.is_empty() && base_units.len() == 2 {
+          Complexity::Moderate
+        } else {
+          Complexity::Complex
+        }
+      }
+      Fact::TwoStringKite { .. } => Complexity::Moderate,
+      Fact::EmptyRectangle { .. } | Fact::Skyscraper { .. } => Complexity::Complex,
       _ => Complexity::Complex,
     }
   }
@@ -168,6 +181,10 @@ impl Fact {
         }
         nums
       }
+      Fact::Fish { num, .. }
+      | Fact::EmptyRectangle { num, .. }
+      | Fact::Skyscraper { num, .. }
+      | Fact::TwoStringKite { num, .. } => NumSet::singleton(*num),
       _ => NumSet::new(),
     }
   }

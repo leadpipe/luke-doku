@@ -781,6 +781,11 @@ export class ReviewController implements ReactiveController {
           return base.locs.includes(locIndex);
         case 'Implication':
           return false;
+        case 'Fish':
+        case 'EmptyRectangle':
+        case 'Skyscraper':
+        case 'TwoStringKite':
+          return base.elimination_locs.includes(locIndex);
         default:
           ensureExhaustiveSwitch(base);
       }

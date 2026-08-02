@@ -3,6 +3,7 @@
 use crate::core::*;
 use crate::time;
 
+pub mod advanced;
 mod internals;
 
 use crate::solve::ledger::Ledger;
@@ -56,6 +57,39 @@ pub enum Fact {
   Implication {
     antecedents: Vec<Fact>,
     consequent: Box<Fact>,
+  },
+  /// Fish (X-Wing, Swordfish, Jellyfish, and their finned/sashimi variants)
+  Fish {
+    num: Num,
+    base_units: UnitSet,
+    cover_units: UnitSet,
+    finned_locs: LocSet,
+    elimination_locs: LocSet,
+  },
+  /// Empty Rectangle
+  EmptyRectangle {
+    num: Num,
+    block: Unit,
+    row: Unit,
+    col: Unit,
+    conjugate_pair: LocSet,
+    elimination_locs: LocSet,
+  },
+  /// Skyscraper
+  Skyscraper {
+    num: Num,
+    base_units: UnitSet,
+    roof_locs: LocSet,
+    elimination_locs: LocSet,
+  },
+  /// 2-String Kite
+  TwoStringKite {
+    num: Num,
+    block: Unit,
+    row: Unit,
+    col: Unit,
+    string_ends: LocSet,
+    elimination_locs: LocSet,
   },
 }
 
@@ -137,6 +171,30 @@ impl Fact {
         for antecedent in antecedents {
           answer |= antecedent.as_eliminations();
         }
+        answer
+      }
+      Fact::Fish {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::EmptyRectangle {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::Skyscraper {
+        num,
+        elimination_locs,
+        ..
+      }
+      | Fact::TwoStringKite {
+        num,
+        elimination_locs,
+        ..
+      } => {
+        let mut answer = AsgmtSet::new();
+        answer.union_in_place(*num, *elimination_locs);
         answer
       }
       _ => AsgmtSet::new(),
@@ -519,12 +577,12 @@ pub fn disprove_erroneous_assignment(
 }
 
 /// A recursive helper that performs a nested disproof search to find logical contradictions.
-/// 
+///
 /// This implements the Nested Disproofs logic for Lunatic-complexity puzzles.
-/// If direct deductions (via `TreeCollector`) exhaust without finding a contradiction, this function 
-/// identifies new erroneous assignments within the current hypothetical state, and recursively 
-/// attempts to disprove them. Disproving a nested assignment allows it to be eliminated 
-/// in the current state, potentially unlocking further deductions to reach a contradiction 
+/// If direct deductions (via `TreeCollector`) exhaust without finding a contradiction, this function
+/// identifies new erroneous assignments within the current hypothetical state, and recursively
+/// attempts to disprove them. Disproving a nested assignment allows it to be eliminated
+/// in the current state, potentially unlocking further deductions to reach a contradiction
 /// for the root speculative assignment.
 ///
 /// It bounds the search depth via `max_depth` and overall execution time via `max_time_ms`.
