@@ -4,6 +4,7 @@ use num_derive::FromPrimitive;
 use wasm_bindgen::prelude::wasm_bindgen;
 
 use crate::gen::Puzzle;
+use crate::deduce::Fact;
 
 mod internals;
 
@@ -51,7 +52,16 @@ pub fn evaluator_version() -> u32 {
 /// solve.
 #[wasm_bindgen]
 pub fn evaluate(puzzle: &Puzzle) -> Rating {
-  let complexity = internals::evaluate_complexity(puzzle);
+  evaluate_with_observer(puzzle, |_| {})
+}
+
+/// Evaluates a puzzle's complexity and also notifies an observer whenever a 
+/// deduction (Fact) is successfully applied during the evaluation.
+pub fn evaluate_with_observer<F>(puzzle: &Puzzle, observer: F) -> Rating
+where
+  F: FnMut(&Fact),
+{
+  let complexity = internals::evaluate_complexity(puzzle, observer);
   let estimated_time_ms = 0.0; // TODO: implement this
   Rating {
     complexity,

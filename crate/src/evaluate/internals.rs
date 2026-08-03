@@ -6,7 +6,10 @@ use crate::{
   deduce::{Fact, FactFinder},
 };
 
-pub fn evaluate_complexity(puzzle: &Puzzle) -> Complexity {
+pub fn evaluate_complexity<F>(puzzle: &Puzzle, mut observer: F) -> Complexity
+where
+  F: FnMut(&Fact),
+{
   let solution = puzzle.solution_asgmts();
   let mut fact_finder = FactFinder::new(&puzzle.clues);
   let mut answer = Complexity::Simple;
@@ -31,6 +34,7 @@ pub fn evaluate_complexity(puzzle: &Puzzle) -> Complexity {
     answer = answer.max(min_complexity);
     for (fact, complexity) in asgmts {
       if complexity <= answer {
+        observer(fact);
         fact_finder.apply_fact(fact);
       }
     }
