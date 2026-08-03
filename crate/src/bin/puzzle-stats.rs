@@ -66,8 +66,8 @@ fn main() {
     
     let mut solutions_distribution: BTreeMap<i32, usize> = BTreeMap::new();
     let mut complexity_distribution: BTreeMap<Complexity, usize> = BTreeMap::new();
-    let mut fact_distribution_moderate: BTreeMap<&'static str, usize> = BTreeMap::new();
-    let mut fact_distribution_complex: BTreeMap<&'static str, usize> = BTreeMap::new();
+    let mut fact_histograms_moderate: BTreeMap<&'static str, BTreeMap<usize, usize>> = BTreeMap::new();
+    let mut fact_histograms_complex: BTreeMap<&'static str, BTreeMap<usize, usize>> = BTreeMap::new();
 
     let mut all_complexities: Vec<f64> = Vec::new();
     let mut day_means: Vec<f64> = Vec::new();
@@ -104,7 +104,7 @@ fn main() {
                     count_interesting_facts(fact, &mut fact_counts);
                 }
                 for (fact_type, count) in fact_counts {
-                    *fact_distribution_moderate.entry(fact_type).or_insert(0) += count;
+                    *fact_histograms_moderate.entry(fact_type).or_default().entry(count).or_insert(0) += 1;
                 }
             } else if rating.complexity == Complexity::Complex {
                 let mut fact_counts = HashMap::new();
@@ -112,7 +112,7 @@ fn main() {
                     count_interesting_facts(fact, &mut fact_counts);
                 }
                 for (fact_type, count) in fact_counts {
-                    *fact_distribution_complex.entry(fact_type).or_insert(0) += count;
+                    *fact_histograms_complex.entry(fact_type).or_default().entry(count).or_insert(0) += 1;
                 }
             }
         }
@@ -133,19 +133,33 @@ fn main() {
         println!("  {:?}: {} ({:.1}%)", comp, count, (*count as f64 / total_puzzles as f64) * 100.0);
     }
     
-    println!("\nFact Type Frequencies (Moderate Puzzles):");
-    let mut sorted_facts_mod: Vec<_> = fact_distribution_moderate.iter().collect();
-    sorted_facts_mod.sort_by(|a, b| b.1.cmp(a.1));
-    for (fact, count) in sorted_facts_mod {
-        println!("  {}: {}", fact, count);
-    }
+    let print_fact_histogram = |title: &str, total_puzzles_in_bucket: usize, histograms: &BTreeMap<&'static str, BTreeMap<usize, usize>>| {
+        println!("\n{}", title);
+        if total_puzzles_in_bucket == 0 {
+            println!("  (No puzzles in this category)");
+            return;
+        }
+        for (fact, counts) in histograms {
+            println!("  {}:", fact);
+            let mut total_with_fact = 0;
+            for &num_puzzles in counts.values() {
+                total_with_fact += num_puzzles;
+            }
+            let count_0 = total_puzzles_in_bucket - total_with_fact;
+            if count_0 > 0 {
+                println!("    0 appearances: {} puzzles", count_0);
+            }
+            for (appearances, num_puzzles) in counts {
+                println!("    {} appearances: {} puzzles", appearances, num_puzzles);
+            }
+        }
+    };
 
-    println!("\nFact Type Frequencies (Complex Puzzles):");
-    let mut sorted_facts_comp: Vec<_> = fact_distribution_complex.iter().collect();
-    sorted_facts_comp.sort_by(|a, b| b.1.cmp(a.1));
-    for (fact, count) in sorted_facts_comp {
-        println!("  {}: {}", fact, count);
-    }
+    let moderate_count = complexity_distribution.get(&Complexity::Moderate).copied().unwrap_or(0);
+    print_fact_histogram("Fact Type Histograms (Moderate Puzzles):", moderate_count, &fact_histograms_moderate);
+
+    let complex_count = complexity_distribution.get(&Complexity::Complex).copied().unwrap_or(0);
+    print_fact_histogram("Fact Type Histograms (Complex Puzzles):", complex_count, &fact_histograms_complex);
 
     // ANOVA calculation
     let overall_mean = all_complexities.iter().sum::<f64>() / all_complexities.len() as f64;
