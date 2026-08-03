@@ -176,16 +176,54 @@ fn main() {
       }
       for (fact, counts) in histograms {
         println!("  {}:", fact);
+        
         let mut total_with_fact = 0;
-        for &num_puzzles in counts.values() {
-          total_with_fact += num_puzzles;
+        let mut max_count = 0;
+        for (&appearances, &num_puzzles) in counts {
+            total_with_fact += num_puzzles;
+            if appearances > max_count {
+                max_count = appearances;
+            }
         }
+        
         let count_0 = total_puzzles_in_bucket - total_with_fact;
+        let bucket_size = if max_count <= 15 {
+            1
+        } else if max_count <= 50 {
+            5
+        } else if max_count <= 200 {
+            10
+        } else if max_count <= 1000 {
+            50
+        } else {
+            100
+        };
+
+        let mut bucketed = BTreeMap::new();
         if count_0 > 0 {
-          println!("    0 appearances: {} puzzles", count_0);
+            bucketed.insert(0, count_0);
         }
-        for (appearances, num_puzzles) in counts {
-          println!("    {} appearances: {} puzzles", appearances, num_puzzles);
+        for (&appearances, &num_puzzles) in counts {
+            let bucket = (appearances / bucket_size) * bucket_size;
+            *bucketed.entry(bucket).or_insert(0) += num_puzzles;
+        }
+
+        let max_puzzles = bucketed.values().copied().max().unwrap_or(0);
+        let max_bar_width = 30;
+
+        for (bucket, num_puzzles) in bucketed {
+            let bar_len = if max_puzzles > 0 {
+                (num_puzzles as f64 / max_puzzles as f64 * max_bar_width as f64).round() as usize
+            } else {
+                0
+            };
+            let bar = "∎".repeat(bar_len);
+            
+            if bucket_size == 1 {
+                println!("    {:>3} appearances: {:<30} ({} puzzles)", bucket, bar, num_puzzles);
+            } else {
+                println!("    {:>3}-{:<3} appearances: {:<30} ({} puzzles)", bucket, bucket + bucket_size - 1, bar, num_puzzles);
+            }
         }
       }
     };
