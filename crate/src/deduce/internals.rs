@@ -1755,8 +1755,13 @@ mod tests {
         true,
       ),
     );
+    let non_fish_facts: Vec<_> = collector
+      .facts
+      .into_iter()
+      .filter(|f| !matches!(f.nub(), Fact::Fish { .. }))
+      .collect();
     assert_eq!(
-      collector.facts,
+      non_fish_facts,
       vec![
         o1.clone(),
         o2.clone(),
@@ -1819,6 +1824,7 @@ mod tests {
       nub_counts,
       vec![
         "Conflict: 2",
+        "Fish: 4",
         "NoLoc: 3",
         "Overlap: 7",
         "SingleLoc: 1",
