@@ -1758,7 +1758,7 @@ mod tests {
     let non_fish_facts: Vec<_> = collector
       .facts
       .into_iter()
-      .filter(|f| !matches!(f.nub(), Fact::Fish { .. }))
+      .filter(|f| !matches!(f.nub(), Fact::Fish { .. } | Fact::EmptyRectangle { .. }))
       .collect();
     assert_eq!(
       non_fish_facts,
@@ -1824,6 +1824,7 @@ mod tests {
       nub_counts,
       vec![
         "Conflict: 2",
+        "EmptyRectangle: 1",
         "Fish: 4",
         "NoLoc: 3",
         "Overlap: 7",

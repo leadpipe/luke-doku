@@ -137,11 +137,56 @@ fn find_fish_in_direction(
 pub fn find_empty_rectangles(collector: &mut Collector) {
   for num in Num::all() {
     let locs = collector.remaining_asgmts.num_locs(num);
-    if locs.is_empty() {
+    if locs.len() < 4 {
       continue;
     }
 
-    // 1. Find ERs
+
+    // 1. Find Conjugate Pairs (Rows and Cols only)
+    let mut row_counts = [0u8; 9];
+    let mut col_counts = [0u8; 9];
+    for loc in locs.iter() {
+      row_counts[loc.row().index()] += 1;
+      col_counts[loc.col().index()] += 1;
+    }
+
+    let mut has_cp = false;
+    for &c in &row_counts {
+      if c == 2 {
+        has_cp = true;
+        break;
+      }
+    }
+    if !has_cp {
+      for &c in &col_counts {
+        if c == 2 {
+          has_cp = true;
+          break;
+        }
+      }
+    }
+    if !has_cp {
+      continue;
+    }
+    let mut conjugate_pairs = Vec::new();
+    for (r, &count) in row_counts.iter().enumerate() {
+      if count == 2 {
+        let u = Row::from_index(r).unwrap().to_unit();
+        let u_locs = locs & u.locs();
+        let mut iter = u_locs.iter();
+        conjugate_pairs.push((u, iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+    for (c, &count) in col_counts.iter().enumerate() {
+      if count == 2 {
+        let u = Col::from_index(c).unwrap().to_unit();
+        let u_locs = locs & u.locs();
+        let mut iter = u_locs.iter();
+        conjugate_pairs.push((u, iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    // 2. Find ERs
     let mut ers = Vec::new();
     for blk in Blk::all() {
       let block = blk.to_unit();
@@ -150,51 +195,61 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
         continue;
       }
 
-      for r in BlkLine::all() {
-        let er_row = blk.row(r).to_unit();
-        for c in BlkLine::all() {
-          let er_col = blk.col(c).to_unit();
+      let mut blk_locs = Vec::with_capacity(9);
+      for loc in b_locs.iter() {
+        blk_locs.push((loc.row().blk_row(), loc.col().blk_col()));
+      }
 
-          if b_locs <= (er_row.locs() | er_col.locs()) {
-            if !(b_locs <= er_row.locs()) && !(b_locs <= er_col.locs()) {
-              ers.push((block, er_row, er_col));
+      for r in BlkLine::all() {
+        for c in BlkLine::all() {
+          let mut is_er = true;
+          let mut in_r_only = true;
+          let mut in_c_only = true;
+          for &(loc_r, loc_c) in &blk_locs {
+            let matches_r = loc_r == r;
+            let matches_c = loc_c == c;
+            if !matches_r && !matches_c {
+              is_er = false;
+              break;
             }
+            if !matches_r {
+              in_r_only = false;
+            }
+            if !matches_c {
+              in_c_only = false;
+            }
+          }
+
+          if is_er && !in_r_only && !in_c_only {
+            let er_row = blk.row(r).to_unit();
+            let er_col = blk.col(c).to_unit();
+            ers.push((block, er_row, er_col));
           }
         }
       }
     }
 
-    // 2. Find Conjugate Pairs (Rows and Cols only)
-    let mut conjugate_pairs = Vec::new();
-    for u in Unit::all() {
-      if matches!(u, Unit::Blk(_)) {
-        continue;
-      }
-      let u_locs = locs & u.locs();
-      if u_locs.len() == 2 {
-        let mut iter = u_locs.iter();
-        conjugate_pairs.push((u, iter.next().unwrap(), iter.next().unwrap()));
-      }
-    }
+
 
     // 3. Match ERs and Conjugate Pairs
     for (block, er_row, er_col) in ers {
+      let blk = if let Unit::Blk(b) = block { b } else { unreachable!() };
+      let er_r = if let Unit::Row(r) = er_row { r } else { unreachable!() };
+      let er_c = if let Unit::Col(c) = er_col { c } else { unreachable!() };
+
       for (u, loc1, loc2) in &conjugate_pairs {
         // CP must be outside the ER block
-        if block.locs().contains(*loc1) || block.locs().contains(*loc2) {
+        if loc1.blk() == blk || loc2.blk() == blk {
           continue;
         }
 
         if let Unit::Row(_) = u {
           // If CP is a Row, it must intersect er_col
           for (end1, end2) in [(*loc1, *loc2), (*loc2, *loc1)] {
-            if er_col.locs().contains(end1) {
+            if end1.col() == er_c {
               // Target is at intersection of er_row and end2's col
-              let target = Loc::at(
-                if let Unit::Row(r) = er_row { r } else { unreachable!() },
-                end2.col(),
-              );
-              if target != end2 && !block.locs().contains(target) && locs.contains(target) {
+              let target = Loc::at(er_r, end2.col());
+              if target != end2 && target.blk() != blk && locs.contains(target) {
                 let mut cp_set = LocSet::new();
                 cp_set.insert(*loc1);
                 cp_set.insert(*loc2);
@@ -216,13 +271,10 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
         if let Unit::Col(_) = u {
           // If CP is a Col, it must intersect er_row
           for (end1, end2) in [(*loc1, *loc2), (*loc2, *loc1)] {
-            if er_row.locs().contains(end1) {
+            if end1.row() == er_r {
               // Target is at intersection of end2's row and er_col
-              let target = Loc::at(
-                end2.row(),
-                if let Unit::Col(c) = er_col { c } else { unreachable!() },
-              );
-              if target != end2 && !block.locs().contains(target) && locs.contains(target) {
+              let target = Loc::at(end2.row(), er_c);
+              if target != end2 && target.blk() != blk && locs.contains(target) {
                 let mut cp_set = LocSet::new();
                 cp_set.insert(*loc1);
                 cp_set.insert(*loc2);
