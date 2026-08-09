@@ -134,8 +134,115 @@ fn find_fish_in_direction(
   }
 }
 
-pub fn find_empty_rectangles(_collector: &mut Collector) {
-  // TODO: Implement Empty Rectangle
+pub fn find_empty_rectangles(collector: &mut Collector) {
+  for num in Num::all() {
+    let locs = collector.remaining_asgmts.num_locs(num);
+    if locs.is_empty() {
+      continue;
+    }
+
+    // 1. Find ERs
+    let mut ers = Vec::new();
+    for blk in Blk::all() {
+      let block = blk.to_unit();
+      let b_locs = locs & block.locs();
+      if b_locs.len() < 2 {
+        continue;
+      }
+
+      for r in BlkLine::all() {
+        let er_row = blk.row(r).to_unit();
+        for c in BlkLine::all() {
+          let er_col = blk.col(c).to_unit();
+
+          if b_locs <= (er_row.locs() | er_col.locs()) {
+            if !(b_locs <= er_row.locs()) && !(b_locs <= er_col.locs()) {
+              ers.push((block, er_row, er_col));
+            }
+          }
+        }
+      }
+    }
+
+    // 2. Find Conjugate Pairs (Rows and Cols only)
+    let mut conjugate_pairs = Vec::new();
+    for u in Unit::all() {
+      if matches!(u, Unit::Blk(_)) {
+        continue;
+      }
+      let u_locs = locs & u.locs();
+      if u_locs.len() == 2 {
+        let mut iter = u_locs.iter();
+        conjugate_pairs.push((u, iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    // 3. Match ERs and Conjugate Pairs
+    for (block, er_row, er_col) in ers {
+      for (u, loc1, loc2) in &conjugate_pairs {
+        // CP must be outside the ER block
+        if block.locs().contains(*loc1) || block.locs().contains(*loc2) {
+          continue;
+        }
+
+        if let Unit::Row(_) = u {
+          // If CP is a Row, it must intersect er_col
+          for (end1, end2) in [(*loc1, *loc2), (*loc2, *loc1)] {
+            if er_col.locs().contains(end1) {
+              // Target is at intersection of er_row and end2's col
+              let target = Loc::at(
+                if let Unit::Row(r) = er_row { r } else { unreachable!() },
+                end2.col(),
+              );
+              if target != end2 && !block.locs().contains(target) && locs.contains(target) {
+                let mut cp_set = LocSet::new();
+                cp_set.insert(*loc1);
+                cp_set.insert(*loc2);
+                let mut elims = LocSet::new();
+                elims.insert(target);
+                collector.add_fact(Fact::EmptyRectangle {
+                  num,
+                  block,
+                  row: er_row,
+                  col: er_col,
+                  conjugate_pair: cp_set,
+                  elimination_locs: elims,
+                });
+              }
+            }
+          }
+        }
+
+        if let Unit::Col(_) = u {
+          // If CP is a Col, it must intersect er_row
+          for (end1, end2) in [(*loc1, *loc2), (*loc2, *loc1)] {
+            if er_row.locs().contains(end1) {
+              // Target is at intersection of end2's row and er_col
+              let target = Loc::at(
+                end2.row(),
+                if let Unit::Col(c) = er_col { c } else { unreachable!() },
+              );
+              if target != end2 && !block.locs().contains(target) && locs.contains(target) {
+                let mut cp_set = LocSet::new();
+                cp_set.insert(*loc1);
+                cp_set.insert(*loc2);
+                let mut elims = LocSet::new();
+                elims.insert(target);
+                collector.add_fact(Fact::EmptyRectangle {
+                  num,
+                  block,
+                  row: er_row,
+                  col: er_col,
+                  conjugate_pair: cp_set,
+                  elimination_locs: elims,
+                });
+              }
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 pub fn find_skyscrapers(_collector: &mut Collector) {
@@ -144,4 +251,91 @@ pub fn find_skyscrapers(_collector: &mut Collector) {
 
 pub fn find_two_string_kites(_collector: &mut Collector) {
   // TODO: Implement 2-String Kite
+}
+
+#[cfg(test)]
+mod tests {
+  use super::*;
+  use crate::core::{Asgmt, AsgmtSet};
+  use crate::deduce::internals::SukakuMap;
+  use crate::deduce::Fact;
+
+  #[test]
+  fn test_empty_rectangle_row_cp() {
+    let mut remaining = AsgmtSet::new();
+    
+    // ER for N1 in B1. (ER row R1, ER col C1)
+    // Candidates in B1 at (R1, C2) and (R2, C1).
+    remaining.insert(Asgmt::new(N1, L12));
+    remaining.insert(Asgmt::new(N1, L21));
+    
+    // CP for N1 in R4. candidates at C1, C4.
+    remaining.insert(Asgmt::new(N1, L41));
+    remaining.insert(Asgmt::new(N1, L44));
+    
+    // Target cell: (R1, C4).
+    remaining.insert(Asgmt::new(N1, L14));
+    
+    // Need a few more candidates so that rows/cols don't accidentally become singletons
+    // that the solver might resolve if it were a full solve, though here we just call find_empty_rectangles directly.
+    remaining.insert(Asgmt::new(N1, L88));
+    remaining.insert(Asgmt::new(N1, L99));
+    
+    let mut collector = Collector::new(
+      remaining, 
+      AsgmtSet::new(), 
+      SukakuMap::from_grid(&Grid::new())
+    );
+    
+    find_empty_rectangles(&mut collector);
+    
+    let mut found = false;
+    for fact in &collector.facts {
+      if let Fact::EmptyRectangle { elimination_locs, .. } = fact {
+        if elimination_locs.contains(L14) {
+          found = true;
+          break;
+        }
+      }
+    }
+    assert!(found, "Empty Rectangle should eliminate L14");
+  }
+
+  #[test]
+  fn test_empty_rectangle_col_cp() {
+    let mut remaining = AsgmtSet::new();
+    
+    // ER for N1 in B1. (ER row R1, ER col C1)
+    remaining.insert(Asgmt::new(N1, L12));
+    remaining.insert(Asgmt::new(N1, L21));
+    
+    // CP for N1 in C4. candidates at R1, R4.
+    remaining.insert(Asgmt::new(N1, L14));
+    remaining.insert(Asgmt::new(N1, L44));
+    
+    // Target cell: (R4, C1).
+    remaining.insert(Asgmt::new(N1, L41));
+    
+    remaining.insert(Asgmt::new(N1, L88));
+    remaining.insert(Asgmt::new(N1, L99));
+    
+    let mut collector = Collector::new(
+      remaining, 
+      AsgmtSet::new(), 
+      SukakuMap::from_grid(&Grid::new())
+    );
+    
+    find_empty_rectangles(&mut collector);
+    
+    let mut found = false;
+    for fact in &collector.facts {
+      if let Fact::EmptyRectangle { elimination_locs, .. } = fact {
+        if elimination_locs.contains(L41) {
+          found = true;
+          break;
+        }
+      }
+    }
+    assert!(found, "Empty Rectangle should eliminate L41");
+  }
 }
