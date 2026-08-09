@@ -49,3 +49,24 @@ When working on solver logic or the review page, refer to the documentation in [
 
 * **Build Rust Crate / WASM:** `wasm-pack build` or standard cargo builds from the `crate/` directory.
 * **Run Web Dev Server:** Run `npm run dev` from the `www/` directory.
+
+---
+
+## 5. Core Domain Types & Iterators
+
+When writing logic in the `crate/` backend, prefer the built-in domain types and their idiomatic iterators rather than raw `0..9` or `0..81` loops. This keeps the code expressive and takes advantage of the highly optimized bitwise backend.
+
+### Grid Units
+* **`Row`**, **`Col`**, **`Blk`**: Represent the 9 rows, 9 columns, and 9 3x3 blocks. 
+* **`Unit`**: An enum abstracting over `Row`, `Col`, or `Blk`.
+* **Iterators:** Use `Row::all()`, `Col::all()`, `Blk::all()`, and `Unit::all()` to iterate over them safely.
+
+### Sub-Unit Coordinates
+* **`BlkLine`**: A structural index (0, 1, or 2) representing the relative row or column within a `Blk`. Use `BlkLine::all()` to iterate through the 3 rows or columns in a block.
+  * Example: `blk.row(r)` (where `r` is a `BlkLine`) gets the specific `Row` that intersects `blk` at that index.
+
+### Locations and Sets
+* **`Loc`**: A specific coordinate (0-80) on the grid.
+* **`LocSet`**: A highly optimized bitset (using a custom `Bits3x27` backend) representing a collection of locations. 
+  * Operations like `&`, `|`, `-`, and `<= ` (subset check) are implemented natively for `LocSet` and `Unit::locs()`.
+  * **Performance Note:** Avoid generating `LocSet` objects (like `unit.locs()`) dynamically inside hot, tight inner loops. In heavy recursive contexts (like Lunatic complexity evaluation), prefer O(1) checks (e.g. `loc.row() == r` or `loc.blk() == b`) over constructing masks and checking subset membership (`unit.locs().contains(loc)`).
