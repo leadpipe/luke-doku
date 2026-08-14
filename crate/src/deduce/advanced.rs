@@ -5,6 +5,9 @@ use itertools::Itertools;
 
 pub fn find_fish(collector: &mut Collector) {
   for num in Num::all() {
+    if collector.check_timeout() {
+      return;
+    }
     let locs = collector.remaining_asgmts.num_locs(num);
     if locs.is_empty() {
       continue;
@@ -13,6 +16,9 @@ pub fn find_fish(collector: &mut Collector) {
     let mut eliminated = LocSet::new();
     // Rows as base, Cols as cover
     find_fish_in_direction(collector, num, locs, true, &mut eliminated);
+    if collector.check_timeout() {
+      return;
+    }
     // Cols as base, Rows as cover
     find_fish_in_direction(collector, num, locs, false, &mut eliminated);
   }
@@ -39,78 +45,17 @@ fn find_fish_in_direction(
     (col_units, row_units)
   };
 
-  // Helper closure to process a combination
-  let mut process_combo = |base_combo: &[Unit], cover_combo: &[Unit]| {
-    let mut base_combo_locs = LocSet::new();
-    for u in base_combo {
-      base_combo_locs |= u.locs();
-    }
-    let cands_in_base = locs & base_combo_locs;
-    if cands_in_base.is_empty() {
-      return;
-    }
-
-    let mut cover_combo_locs = LocSet::new();
-    for u in cover_combo {
-      cover_combo_locs |= u.locs();
-    }
-
-    let fins = cands_in_base - cover_combo_locs;
-
-    let mut fin_block: Option<Blk> = None;
-    let mut valid_fins = true;
-
-    if !fins.is_empty() {
-      for fin_loc in fins.iter() {
-        if let Some(b) = fin_block {
-          if fin_loc.blk() != b {
-            valid_fins = false;
-            break;
-          }
-        } else {
-          fin_block = Some(fin_loc.blk());
-        }
-      }
-    }
-
-    if !valid_fins {
-      return;
-    }
-
-    let mut potential_eliminations = (locs & cover_combo_locs) - base_combo_locs;
-
-    if let Some(b) = fin_block {
-      potential_eliminations &= b.locs();
-    }
-
-    potential_eliminations -= *eliminated;
-
-    if !potential_eliminations.is_empty() {
-      *eliminated |= potential_eliminations;
-      let mut base_unit_set = UnitSet::default();
-      for u in base_combo {
-        base_unit_set.insert(*u);
-      }
-      let mut cover_unit_set = UnitSet::default();
-      for u in cover_combo {
-        cover_unit_set.insert(*u);
-      }
-
-      collector.add_fact(Fact::Fish {
-        num,
-        base_units: base_unit_set,
-        cover_units: cover_unit_set,
-        finned_locs: fins,
-        elimination_locs: potential_eliminations,
-      });
-    }
-  };
-
   for size in 2..=4 {
+    if collector.check_timeout() {
+      return;
+    }
     if base_units.len() < size {
       continue;
     }
     for base_combo in base_units.iter().cloned().combinations(size) {
+      if collector.check_timeout() {
+        return;
+      }
       let mut base_combo_locs = LocSet::new();
       for u in &base_combo {
         base_combo_locs |= u.locs();
@@ -128,14 +73,100 @@ fn find_fish_in_direction(
       }
 
       for cover_combo in active_cover_units.into_iter().combinations(size) {
-        process_combo(&base_combo, &cover_combo);
+        if collector.check_timeout() {
+          return;
+        }
+        process_fish_combo(
+          collector,
+          num,
+          locs,
+          &base_combo,
+          &cover_combo,
+          eliminated,
+        );
       }
     }
   }
 }
 
+fn process_fish_combo(
+  collector: &mut Collector,
+  num: Num,
+  locs: LocSet,
+  base_combo: &[Unit],
+  cover_combo: &[Unit],
+  eliminated: &mut LocSet,
+) {
+  let mut base_combo_locs = LocSet::new();
+  for u in base_combo {
+    base_combo_locs |= u.locs();
+  }
+  let cands_in_base = locs & base_combo_locs;
+  if cands_in_base.is_empty() {
+    return;
+  }
+
+  let mut cover_combo_locs = LocSet::new();
+  for u in cover_combo {
+    cover_combo_locs |= u.locs();
+  }
+
+  let fins = cands_in_base - cover_combo_locs;
+
+  let mut fin_block: Option<Blk> = None;
+  let mut valid_fins = true;
+
+  if !fins.is_empty() {
+    for fin_loc in fins.iter() {
+      if let Some(b) = fin_block {
+        if fin_loc.blk() != b {
+          valid_fins = false;
+          break;
+        }
+      } else {
+        fin_block = Some(fin_loc.blk());
+      }
+    }
+  }
+
+  if !valid_fins {
+    return;
+  }
+
+  let mut potential_eliminations = (locs & cover_combo_locs) - base_combo_locs;
+
+  if let Some(b) = fin_block {
+    potential_eliminations &= b.locs();
+  }
+
+  potential_eliminations -= *eliminated;
+
+  if !potential_eliminations.is_empty() {
+    *eliminated |= potential_eliminations;
+    let mut base_unit_set = UnitSet::default();
+    for u in base_combo {
+      base_unit_set.insert(*u);
+    }
+    let mut cover_unit_set = UnitSet::default();
+    for u in cover_combo {
+      cover_unit_set.insert(*u);
+    }
+
+    collector.add_fact(Fact::Fish {
+      num,
+      base_units: base_unit_set,
+      cover_units: cover_unit_set,
+      finned_locs: fins,
+      elimination_locs: potential_eliminations,
+    });
+  }
+}
+
 pub fn find_empty_rectangles(collector: &mut Collector) {
   for num in Num::all() {
+    if collector.check_timeout() {
+      return;
+    }
     let locs = collector.remaining_asgmts.num_locs(num);
     if locs.len() < 4 {
       continue;
@@ -188,6 +219,9 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
     // 2. Find ERs
     let mut ers = Vec::new();
     for blk in Blk::all() {
+      if collector.check_timeout() {
+        return;
+      }
       let block = blk.to_unit();
       let b_locs = locs & block.locs();
       if b_locs.len() < 2 {
@@ -230,6 +264,9 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
 
     // 3. Match ERs and Conjugate Pairs
     for (block, er_row, er_col) in ers {
+      if collector.check_timeout() {
+        return;
+      }
       let blk = if let Unit::Blk(b) = block {
         b
       } else {
@@ -308,6 +345,9 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
 
 pub fn find_skyscrapers(collector: &mut Collector) {
   for num in Num::all() {
+    if collector.check_timeout() {
+      return;
+    }
     let locs = collector.remaining_asgmts.num_locs(num);
     if locs.len() < 4 {
       continue;
@@ -333,6 +373,9 @@ pub fn find_skyscrapers(collector: &mut Collector) {
     }
 
     for i in 0..row_pairs.len() {
+      if collector.check_timeout() {
+        return;
+      }
       for j in (i + 1)..row_pairs.len() {
         let (u1, r1_c1, r1_c2) = row_pairs[i];
         let (u2, r2_c1, r2_c2) = row_pairs[j];
@@ -387,6 +430,9 @@ pub fn find_skyscrapers(collector: &mut Collector) {
     }
 
     for i in 0..col_pairs.len() {
+      if collector.check_timeout() {
+        return;
+      }
       for j in (i + 1)..col_pairs.len() {
         let (u1, c1_r1, c1_r2) = col_pairs[i];
         let (u2, c2_r1, c2_r2) = col_pairs[j];
@@ -444,6 +490,9 @@ pub fn find_skyscrapers(collector: &mut Collector) {
 
 pub fn find_two_string_kites(collector: &mut Collector) {
   for num in Num::all() {
+    if collector.check_timeout() {
+      return;
+    }
     let locs = collector.remaining_asgmts.num_locs(num);
     if locs.len() < 4 {
       continue;
@@ -469,6 +518,9 @@ pub fn find_two_string_kites(collector: &mut Collector) {
     }
 
     for &(r_unit, r_loc1, r_loc2) in &row_pairs {
+      if collector.check_timeout() {
+        return;
+      }
       for &(c_unit, c_loc1, c_loc2) in &col_pairs {
         let combinations = [
           (r_loc1, r_loc2, c_loc1, c_loc2),
@@ -591,5 +643,50 @@ mod tests {
       }
     }
     assert!(found, "Empty Rectangle should eliminate L41");
+  }
+
+  #[test]
+  fn test_advanced_search_timeout() {
+    let mut remaining = AsgmtSet::new();
+    remaining.insert(Asgmt::new(N1, L12));
+    remaining.insert(Asgmt::new(N1, L21));
+    remaining.insert(Asgmt::new(N1, L41));
+    remaining.insert(Asgmt::new(N1, L44));
+    remaining.insert(Asgmt::new(N1, L14));
+    remaining.insert(Asgmt::new(N1, L88));
+    remaining.insert(Asgmt::new(N1, L99));
+
+    let mut collector = Collector::new(
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
+    );
+    // Force timeout
+    collector.timed_out = true;
+
+    find_fish(&mut collector);
+    assert!(collector.facts.is_empty());
+
+    find_empty_rectangles(&mut collector);
+    assert!(collector.facts.is_empty());
+
+    find_skyscrapers(&mut collector);
+    assert!(collector.facts.is_empty());
+
+    find_two_string_kites(&mut collector);
+    assert!(collector.facts.is_empty());
+
+    // Test with max_time_ms = 0.0 (elapsed time check)
+    let mut timed_collector = Collector::new(
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
+    );
+    timed_collector.start_time_ms = 0.0; // long ago in the past
+    timed_collector.max_time_ms = Some(0.0);
+
+    find_empty_rectangles(&mut timed_collector);
+    assert!(timed_collector.facts.is_empty());
+    assert!(timed_collector.timed_out);
   }
 }

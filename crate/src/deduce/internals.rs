@@ -100,9 +100,21 @@ impl Collector {
         break;
       }
       crate::deduce::advanced::find_fish(self);
+      if self.check_timeout() {
+        break;
+      }
       crate::deduce::advanced::find_empty_rectangles(self);
+      if self.check_timeout() {
+        break;
+      }
       crate::deduce::advanced::find_skyscrapers(self);
+      if self.check_timeout() {
+        break;
+      }
       crate::deduce::advanced::find_two_string_kites(self);
+      if self.check_timeout() {
+        break;
+      }
 
       let eliminations_end = self.facts.len();
       find_hidden_singles(self);
@@ -1856,6 +1868,29 @@ mod tests {
     collector
       .collect(ErrorMode::ShortCircuit)
       .expect_err("Should have short-circuited");
+  }
+
+  #[test]
+  fn test_collector_timeout() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
+            - - - + - - - + - - -
+            . 3 . | 5 . 6 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 9 | . . .
+            - - - + - - - + - - -
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
+    )
+    .unwrap();
+    let mut collector = make_collector(&grid);
+    collector.timed_out = true;
+    collector.collect(ErrorMode::Ignore).unwrap();
+    assert!(collector.facts.is_empty());
   }
 
   #[test]
