@@ -141,7 +141,6 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
       continue;
     }
 
-
     // 1. Find Conjugate Pairs (Rows and Cols only)
     let mut row_counts = [0u8; 9];
     let mut col_counts = [0u8; 9];
@@ -229,13 +228,23 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
       }
     }
 
-
-
     // 3. Match ERs and Conjugate Pairs
     for (block, er_row, er_col) in ers {
-      let blk = if let Unit::Blk(b) = block { b } else { unreachable!() };
-      let er_r = if let Unit::Row(r) = er_row { r } else { unreachable!() };
-      let er_c = if let Unit::Col(c) = er_col { c } else { unreachable!() };
+      let blk = if let Unit::Blk(b) = block {
+        b
+      } else {
+        unreachable!()
+      };
+      let er_r = if let Unit::Row(r) = er_row {
+        r
+      } else {
+        unreachable!()
+      };
+      let er_c = if let Unit::Col(c) = er_col {
+        c
+      } else {
+        unreachable!()
+      };
 
       for (u, loc1, loc2) in &conjugate_pairs {
         // CP must be outside the ER block
@@ -297,12 +306,199 @@ pub fn find_empty_rectangles(collector: &mut Collector) {
   }
 }
 
-pub fn find_skyscrapers(_collector: &mut Collector) {
-  // TODO: Implement Skyscraper
+pub fn find_skyscrapers(collector: &mut Collector) {
+  for num in Num::all() {
+    let locs = collector.remaining_asgmts.num_locs(num);
+    if locs.len() < 4 {
+      continue;
+    }
+
+    let mut row_pairs = Vec::new();
+    let mut col_pairs = Vec::new();
+
+    for r in Row::all() {
+      let u_locs = locs & r.to_unit().locs();
+      if u_locs.len() == 2 {
+        let mut iter = u_locs.iter();
+        row_pairs.push((r.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    for c in Col::all() {
+      let u_locs = locs & c.to_unit().locs();
+      if u_locs.len() == 2 {
+        let mut iter = u_locs.iter();
+        col_pairs.push((c.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    for i in 0..row_pairs.len() {
+      for j in (i + 1)..row_pairs.len() {
+        let (u1, r1_c1, r1_c2) = row_pairs[i];
+        let (u2, r2_c1, r2_c2) = row_pairs[j];
+
+        let mut shared_cols = 0;
+        let mut roof1 = None;
+        let mut roof2 = None;
+
+        if r1_c1.col() == r2_c1.col() {
+          shared_cols += 1;
+          roof1 = Some(r1_c2);
+          roof2 = Some(r2_c2);
+        }
+        if r1_c1.col() == r2_c2.col() {
+          shared_cols += 1;
+          roof1 = Some(r1_c2);
+          roof2 = Some(r2_c1);
+        }
+        if r1_c2.col() == r2_c1.col() {
+          shared_cols += 1;
+          roof1 = Some(r1_c1);
+          roof2 = Some(r2_c2);
+        }
+        if r1_c2.col() == r2_c2.col() {
+          shared_cols += 1;
+          roof1 = Some(r1_c1);
+          roof2 = Some(r2_c1);
+        }
+
+        if shared_cols == 1 {
+          let roof1 = roof1.unwrap();
+          let roof2 = roof2.unwrap();
+          let mut elims = locs & roof1.peers() & roof2.peers();
+          elims -= u1.locs() | u2.locs();
+          if !elims.is_empty() {
+            let mut base_units = UnitSet::default();
+            base_units.insert(u1);
+            base_units.insert(u2);
+            let mut roof_locs = LocSet::new();
+            roof_locs.insert(roof1);
+            roof_locs.insert(roof2);
+
+            collector.add_fact(Fact::Skyscraper {
+              num,
+              base_units,
+              roof_locs,
+              elimination_locs: elims,
+            });
+          }
+        }
+      }
+    }
+
+    for i in 0..col_pairs.len() {
+      for j in (i + 1)..col_pairs.len() {
+        let (u1, c1_r1, c1_r2) = col_pairs[i];
+        let (u2, c2_r1, c2_r2) = col_pairs[j];
+
+        let mut shared_rows = 0;
+        let mut roof1 = None;
+        let mut roof2 = None;
+
+        if c1_r1.row() == c2_r1.row() {
+          shared_rows += 1;
+          roof1 = Some(c1_r2);
+          roof2 = Some(c2_r2);
+        }
+        if c1_r1.row() == c2_r2.row() {
+          shared_rows += 1;
+          roof1 = Some(c1_r2);
+          roof2 = Some(c2_r1);
+        }
+        if c1_r2.row() == c2_r1.row() {
+          shared_rows += 1;
+          roof1 = Some(c1_r1);
+          roof2 = Some(c2_r2);
+        }
+        if c1_r2.row() == c2_r2.row() {
+          shared_rows += 1;
+          roof1 = Some(c1_r1);
+          roof2 = Some(c2_r1);
+        }
+
+        if shared_rows == 1 {
+          let roof1 = roof1.unwrap();
+          let roof2 = roof2.unwrap();
+          let mut elims = locs & roof1.peers() & roof2.peers();
+          elims -= u1.locs() | u2.locs();
+          if !elims.is_empty() {
+            let mut base_units = UnitSet::default();
+            base_units.insert(u1);
+            base_units.insert(u2);
+            let mut roof_locs = LocSet::new();
+            roof_locs.insert(roof1);
+            roof_locs.insert(roof2);
+
+            collector.add_fact(Fact::Skyscraper {
+              num,
+              base_units,
+              roof_locs,
+              elimination_locs: elims,
+            });
+          }
+        }
+      }
+    }
+  }
 }
 
-pub fn find_two_string_kites(_collector: &mut Collector) {
-  // TODO: Implement 2-String Kite
+pub fn find_two_string_kites(collector: &mut Collector) {
+  for num in Num::all() {
+    let locs = collector.remaining_asgmts.num_locs(num);
+    if locs.len() < 4 {
+      continue;
+    }
+
+    let mut row_pairs = Vec::new();
+    let mut col_pairs = Vec::new();
+
+    for r in Row::all() {
+      let u_locs = locs & r.to_unit().locs();
+      if u_locs.len() == 2 {
+        let mut iter = u_locs.iter();
+        row_pairs.push((r.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    for c in Col::all() {
+      let u_locs = locs & c.to_unit().locs();
+      if u_locs.len() == 2 {
+        let mut iter = u_locs.iter();
+        col_pairs.push((c.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+      }
+    }
+
+    for &(r_unit, r_loc1, r_loc2) in &row_pairs {
+      for &(c_unit, c_loc1, c_loc2) in &col_pairs {
+        let combinations = [
+          (r_loc1, r_loc2, c_loc1, c_loc2),
+          (r_loc1, r_loc2, c_loc2, c_loc1),
+          (r_loc2, r_loc1, c_loc1, c_loc2),
+          (r_loc2, r_loc1, c_loc2, c_loc1),
+        ];
+
+        for (r_base, r_roof, c_base, c_roof) in combinations {
+          if r_base.blk() == c_base.blk() && r_base != c_base {
+            let mut elims = locs & r_roof.peers() & c_roof.peers();
+            elims -= r_unit.locs() | c_unit.locs();
+            if !elims.is_empty() {
+              let mut string_ends = LocSet::new();
+              string_ends.insert(r_roof);
+              string_ends.insert(c_roof);
+              collector.add_fact(Fact::TwoStringKite {
+                num,
+                block: r_base.blk().to_unit(),
+                row: r_unit,
+                col: c_unit,
+                string_ends,
+                elimination_locs: elims,
+              });
+            }
+          }
+        }
+      }
+    }
+  }
 }
 
 #[cfg(test)]
@@ -315,35 +511,38 @@ mod tests {
   #[test]
   fn test_empty_rectangle_row_cp() {
     let mut remaining = AsgmtSet::new();
-    
+
     // ER for N1 in B1. (ER row R1, ER col C1)
     // Candidates in B1 at (R1, C2) and (R2, C1).
     remaining.insert(Asgmt::new(N1, L12));
     remaining.insert(Asgmt::new(N1, L21));
-    
+
     // CP for N1 in R4. candidates at C1, C4.
     remaining.insert(Asgmt::new(N1, L41));
     remaining.insert(Asgmt::new(N1, L44));
-    
+
     // Target cell: (R1, C4).
     remaining.insert(Asgmt::new(N1, L14));
-    
+
     // Need a few more candidates so that rows/cols don't accidentally become singletons
     // that the solver might resolve if it were a full solve, though here we just call find_empty_rectangles directly.
     remaining.insert(Asgmt::new(N1, L88));
     remaining.insert(Asgmt::new(N1, L99));
-    
+
     let mut collector = Collector::new(
-      remaining, 
-      AsgmtSet::new(), 
-      SukakuMap::from_grid(&Grid::new())
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
     );
-    
+
     find_empty_rectangles(&mut collector);
-    
+
     let mut found = false;
     for fact in &collector.facts {
-      if let Fact::EmptyRectangle { elimination_locs, .. } = fact {
+      if let Fact::EmptyRectangle {
+        elimination_locs, ..
+      } = fact
+      {
         if elimination_locs.contains(L14) {
           found = true;
           break;
@@ -356,32 +555,35 @@ mod tests {
   #[test]
   fn test_empty_rectangle_col_cp() {
     let mut remaining = AsgmtSet::new();
-    
+
     // ER for N1 in B1. (ER row R1, ER col C1)
     remaining.insert(Asgmt::new(N1, L12));
     remaining.insert(Asgmt::new(N1, L21));
-    
+
     // CP for N1 in C4. candidates at R1, R4.
     remaining.insert(Asgmt::new(N1, L14));
     remaining.insert(Asgmt::new(N1, L44));
-    
+
     // Target cell: (R4, C1).
     remaining.insert(Asgmt::new(N1, L41));
-    
+
     remaining.insert(Asgmt::new(N1, L88));
     remaining.insert(Asgmt::new(N1, L99));
-    
+
     let mut collector = Collector::new(
-      remaining, 
-      AsgmtSet::new(), 
-      SukakuMap::from_grid(&Grid::new())
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
     );
-    
+
     find_empty_rectangles(&mut collector);
-    
+
     let mut found = false;
     for fact in &collector.facts {
-      if let Fact::EmptyRectangle { elimination_locs, .. } = fact {
+      if let Fact::EmptyRectangle {
+        elimination_locs, ..
+      } = fact
+      {
         if elimination_locs.contains(L41) {
           found = true;
           break;
