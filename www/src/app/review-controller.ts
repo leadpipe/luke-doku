@@ -782,10 +782,32 @@ export class ReviewController implements ReactiveController {
         case 'Implication':
           return false;
         case 'Fish':
+          return (
+            base.elimination_locs.includes(locIndex) ||
+            base.finned_locs.includes(locIndex) ||
+            (base.base_units.some(u => unitContains(u, this.selectedLoc!)) &&
+              base.cover_units.some(u => unitContains(u, this.selectedLoc!)))
+          );
         case 'EmptyRectangle':
+          return (
+            base.elimination_locs.includes(locIndex) ||
+            base.conjugate_pair.includes(locIndex) ||
+            (unitContains(base.block, this.selectedLoc!) &&
+              (unitContains(base.row, this.selectedLoc!) ||
+                unitContains(base.col, this.selectedLoc!)))
+          );
         case 'Skyscraper':
+          return (
+            base.elimination_locs.includes(locIndex) ||
+            base.roof_locs.includes(locIndex) ||
+            base.base_units.some(u => unitContains(u, this.selectedLoc!))
+          );
         case 'TwoStringKite':
-          return base.elimination_locs.includes(locIndex);
+          return (
+            base.elimination_locs.includes(locIndex) ||
+            base.string_ends.includes(locIndex) ||
+            unitContains(base.block, this.selectedLoc!)
+          );
         default:
           ensureExhaustiveSwitch(base);
       }
@@ -795,7 +817,14 @@ export class ReviewController implements ReactiveController {
     const eliminations: Fact[] = [];
     for (const fact of localFacts) {
       const base = nub(fact);
-      if (base.type === 'Subset' || base.type === 'Overlap') {
+      if (
+        base.type === 'Subset' ||
+        base.type === 'Overlap' ||
+        base.type === 'Fish' ||
+        base.type === 'EmptyRectangle' ||
+        base.type === 'Skyscraper' ||
+        base.type === 'TwoStringKite'
+      ) {
         eliminations.push(fact);
       } else {
         assignsAndErrors.push(fact);

@@ -129,4 +129,80 @@ describe('Fact formatting utilities', () => {
       '⚡ 5 ∈ R1: Conflict! 5 appears in Row 1 at multiple locations: {R1C3, R1C5}, because 5 ➔ R1C3: Only one possible number for R1C3 (5) and 3 ➔ R2C1: Only one location for 3 in Column 1 (R2C1)',
     );
   });
+
+  it('formats basic Fish (X-Wing) correctly', () => {
+    const fact: Fact = {
+      type: 'Fish',
+      num: 5,
+      base_units: [{type: 'Row', id: 1}, {type: 'Row', id: 4}],
+      cover_units: [{type: 'Col', id: 2}, {type: 'Col', id: 6}],
+      finned_locs: [],
+      elimination_locs: [20, 24], // R3C3, R3C7
+    };
+    expect(shorthandFact(fact)).to.equal('5 X-Wing: R2,R5 x C3,C7');
+    expect(describeFact(fact)).to.equal(
+      '5 X-Wing: R2,R5 x C3,C7: X-Wing for 5 in Rows 2, 5 (Columns 3, 7) eliminates 5 at {R3C3, R3C7}',
+    );
+  });
+
+  it('formats Finned Fish (Swordfish) correctly', () => {
+    const fact: Fact = {
+      type: 'Fish',
+      num: 5,
+      base_units: [{type: 'Row', id: 1}, {type: 'Row', id: 4}, {type: 'Row', id: 7}],
+      cover_units: [{type: 'Col', id: 0}, {type: 'Col', id: 3}, {type: 'Col', id: 6}],
+      finned_locs: [12], // R2C4
+      elimination_locs: [24], // R3C7
+    };
+    expect(shorthandFact(fact)).to.equal('5 Finned Swordfish: R2,R5,R8 x C1,C4,C7');
+    expect(describeFact(fact)).to.equal(
+      '5 Finned Swordfish: R2,R5,R8 x C1,C4,C7: Finned Swordfish for 5 in Rows 2, 5, 8 (Columns 1, 4, 7) with fin at {R2C4} eliminates 5 at {R3C7}',
+    );
+  });
+
+  it('formats Empty Rectangle correctly', () => {
+    const fact: Fact = {
+      type: 'EmptyRectangle',
+      num: 5,
+      block: {type: 'Blk', id: 0},
+      row: {type: 'Row', id: 0},
+      col: {type: 'Col', id: 0},
+      conjugate_pair: [27, 30], // R4C1, R4C4
+      elimination_locs: [3], // R1C4
+    };
+    expect(shorthandFact(fact)).to.equal('5 ER: B1 (R1, C1) ➔ {R1C4}');
+    expect(describeFact(fact)).to.equal(
+      '5 ER: B1 (R1, C1) ➔ {R1C4}: Empty Rectangle for 5 in Block 1 with Row 1, Column 1 and conjugate pair {R4C1, R4C4} eliminates 5 at {R1C4}',
+    );
+  });
+
+  it('formats Skyscraper correctly', () => {
+    const fact: Fact = {
+      type: 'Skyscraper',
+      num: 5,
+      base_units: [{type: 'Row', id: 1}, {type: 'Row', id: 5}],
+      roof_locs: [11, 51], // R2C3, R6C7
+      elimination_locs: [29], // R4C3
+    };
+    expect(shorthandFact(fact)).to.equal('5 Skyscraper: R2,R6 ➔ {R4C3}');
+    expect(describeFact(fact)).to.equal(
+      '5 Skyscraper: R2,R6 ➔ {R4C3}: Skyscraper for 5 in Rows 2, 6 with roofs {R2C3, R6C7} eliminates 5 at {R4C3}',
+    );
+  });
+
+  it('formats 2-String Kite correctly', () => {
+    const fact: Fact = {
+      type: 'TwoStringKite',
+      num: 5,
+      block: {type: 'Blk', id: 0},
+      row: {type: 'Row', id: 0},
+      col: {type: 'Col', id: 0},
+      string_ends: [7, 54], // R1C8, R7C1
+      elimination_locs: [61], // R7C8
+    };
+    expect(shorthandFact(fact)).to.equal('5 Kite: B1 (R1, C1) ➔ {R7C8}');
+    expect(describeFact(fact)).to.equal(
+      '5 Kite: B1 (R1, C1) ➔ {R7C8}: 2-String Kite for 5 in Block 1 connecting Row 1 and Column 1 with ends {R1C8, R7C1} eliminates 5 at {R7C8}',
+    );
+  });
 });

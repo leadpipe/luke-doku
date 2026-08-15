@@ -43,6 +43,38 @@ export function formatUnit(unit: Unit): string {
   return `${typeStr} ${unit.id + 1}`;
 }
 
+/** Returns the human-readable name of a Fish pattern based on base size and fins. */
+export function getFishName(size: number, isFinned: boolean): string {
+  let baseName = 'Fish';
+  if (size === 2) baseName = 'X-Wing';
+  else if (size === 3) baseName = 'Swordfish';
+  else if (size === 4) baseName = 'Jellyfish';
+  return isFinned ? `Finned ${baseName}` : baseName;
+}
+
+/** Formats a list of units in shorthand notation. Example: "R2,R5" */
+export function formatUnitsShorthand(units: readonly Unit[]): string {
+  return units.map(formatUnitShorthand).join(',');
+}
+
+/** Formats a list of units with full names. Example: "Rows 2, 5" or "Columns 3, 7" */
+export function formatUnits(units: readonly Unit[]): string {
+  if (units.length === 0) return '';
+  const allRows = units.every(u => u.type === 'Row');
+  const allCols = units.every(u => u.type === 'Col');
+  const allBlks = units.every(u => u.type === 'Blk');
+  if (allRows) {
+    return `Rows ${units.map(u => u.id + 1).join(', ')}`;
+  }
+  if (allCols) {
+    return `Columns ${units.map(u => u.id + 1).join(', ')}`;
+  }
+  if (allBlks) {
+    return `Blocks ${units.map(u => u.id + 1).join(', ')}`;
+  }
+  return units.map(formatUnit).join(', ');
+}
+
 /** Translates a Fact into a mathematical shorthand notation. */
 export function shorthandFact(fact: Fact): string {
   switch (fact.type) {
@@ -79,14 +111,21 @@ export function shorthandFact(fact: Fact): string {
       return `${antecedents} ➔ ${shorthandFact(fact.consequent)}`;
     }
 
-    case 'Fish':
-      return `${formatNum(fact.num)} Fish`;
+    case 'Fish': {
+      const isFinned = fact.finned_locs.length > 0;
+      const fishName = getFishName(fact.base_units.length, isFinned);
+      return `${formatNum(fact.num)} ${fishName}: ${formatUnitsShorthand(fact.base_units)} x ${formatUnitsShorthand(fact.cover_units)}`;
+    }
+
     case 'EmptyRectangle':
-      return `${formatNum(fact.num)} ER`;
+      return `${formatNum(fact.num)} ER: ${formatUnitShorthand(fact.block)} (${formatUnitShorthand(fact.row)}, ${formatUnitShorthand(fact.col)}) ➔ ${formatLocs(fact.elimination_locs)}`;
+
     case 'Skyscraper':
-      return `${formatNum(fact.num)} Skyscraper`;
+      return `${formatNum(fact.num)} Skyscraper: ${formatUnitsShorthand(fact.base_units)} ➔ ${formatLocs(fact.elimination_locs)}`;
+
     case 'TwoStringKite':
-      return `${formatNum(fact.num)} Kite`;
+      return `${formatNum(fact.num)} Kite: ${formatUnitShorthand(fact.block)} (${formatUnitShorthand(fact.row)}, ${formatUnitShorthand(fact.col)}) ➔ ${formatLocs(fact.elimination_locs)}`;
+
     default:
       ensureExhaustiveSwitch(fact);
   }
@@ -138,14 +177,22 @@ export function describeFact(fact: Fact): string {
       return `${consequentDesc}, because ${antecedentsDesc}`;
     }
 
-    case 'Fish':
-      return `${shorthand}: Fish pattern for ${formatNum(fact.num)}`;
+    case 'Fish': {
+      const isFinned = fact.finned_locs.length > 0;
+      const fishName = getFishName(fact.base_units.length, isFinned);
+      const finStr = isFinned ? ` with fin at ${formatLocs(fact.finned_locs)}` : '';
+      return `${shorthand}: ${fishName} for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} (${formatUnits(fact.cover_units)})${finStr} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+    }
+
     case 'EmptyRectangle':
-      return `${shorthand}: Empty Rectangle for ${formatNum(fact.num)}`;
+      return `${shorthand}: Empty Rectangle for ${formatNum(fact.num)} in ${formatUnit(fact.block)} with ${formatUnit(fact.row)}, ${formatUnit(fact.col)} and conjugate pair ${formatLocs(fact.conjugate_pair)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+
     case 'Skyscraper':
-      return `${shorthand}: Skyscraper for ${formatNum(fact.num)}`;
+      return `${shorthand}: Skyscraper for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} with roofs ${formatLocs(fact.roof_locs)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+
     case 'TwoStringKite':
-      return `${shorthand}: 2-String Kite for ${formatNum(fact.num)}`;
+      return `${shorthand}: 2-String Kite for ${formatNum(fact.num)} in ${formatUnit(fact.block)} connecting ${formatUnit(fact.row)} and ${formatUnit(fact.col)} with ends ${formatLocs(fact.string_ends)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+
     default:
       ensureExhaustiveSwitch(fact);
   }
