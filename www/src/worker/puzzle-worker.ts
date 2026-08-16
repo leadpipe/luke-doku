@@ -7,6 +7,7 @@ import type {DisproofMetadata} from './worker-types';
 import {
   type CalculateErroneousProductivityMessage,
   type DeduceFactsMessage,
+  type DeduceQuickFactMessage,
   type DisproveErroneousAssignmentMessage,
   type ErrorCaughtMessage,
   type EvaluatePuzzleMessage,
@@ -42,6 +43,9 @@ export async function handleToWorkerMessage(
       break;
     case ToWorkerMessageType.DEDUCE_FACTS:
       scope.postMessage(deduceFacts(message));
+      break;
+    case ToWorkerMessageType.DEDUCE_QUICK_FACT:
+      scope.postMessage(deduceQuickFact(message));
       break;
     case ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY:
       scope.postMessage(calculateErroneousProductivity(message));
@@ -207,6 +211,39 @@ function deduceFacts(m: DeduceFactsMessage): FromWorkerMessage {
   const elapsedMs = performance.now() - startTimeMs;
   return {
     type: FromWorkerMessageType.FACTS_DEDUCED,
+    toWorkerMessage: m,
+    facts,
+    timedOut,
+    elapsedMs,
+  };
+}
+
+function deduceQuickFact(m: DeduceQuickFactMessage): FromWorkerMessage {
+  const grid = wasm.Grid.newFromString(m.grid);
+  if (!grid) {
+    return toErrorCaught(m, 'deduceQuickFact', new Error('Invalid grid'));
+  }
+  const startTimeMs = performance.now();
+  let facts: any[] = [];
+  let timedOut = false;
+  try {
+    const result = wasm.deduceQuickFact(
+      grid,
+      m.target.loc,
+      m.target.num,
+      m.eliminations,
+      m.maxTimeMs ?? 200,
+    );
+    facts = result?.facts || [];
+    timedOut = result?.timedOut || false;
+  } catch (e: unknown) {
+    return toErrorCaught(m, 'deduceQuickFact', e);
+  } finally {
+    grid.free();
+  }
+  const elapsedMs = performance.now() - startTimeMs;
+  return {
+    type: FromWorkerMessageType.QUICK_FACT_DEDUCED,
     toWorkerMessage: m,
     facts,
     timedOut,

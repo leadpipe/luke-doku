@@ -121,7 +121,11 @@ impl Collector {
       find_naked_singles(self);
 
       if !antecedents.is_empty() {
-        for fact in self.facts[start..].iter_mut() {
+        for i in start..self.facts.len() {
+          if self.check_timeout() {
+            break;
+          }
+          let fact = self.facts[i].clone();
           let required = narrow_antecedents(
             &fact,
             antecedents.as_slice(),
@@ -132,9 +136,9 @@ impl Collector {
             0,
           );
           if !required.is_empty() {
-            *fact = Fact::Implication {
+            self.facts[i] = Fact::Implication {
               antecedents: required,
-              consequent: Box::new(fact.clone()),
+              consequent: Box::new(fact),
             };
           }
         }
@@ -160,6 +164,87 @@ impl Collector {
   pub fn collect_singles(&mut self) {
     find_hidden_singles(self);
     find_naked_singles(self);
+  }
+
+  /// Quickly searches for a fact supporting a specific target assignment
+  /// (single or implication leading to a single).
+  pub fn collect_targeted(&mut self, target: Asgmt) -> Option<Fact> {
+    // 1. Direct singles check
+    find_hidden_singles(self);
+    find_naked_singles(self);
+    for fact in &self.facts {
+      if fact.as_asgmt() == Some(target) {
+        return Some(fact.clone());
+      }
+    }
+    self.facts.clear();
+    self.found.clear();
+
+    let base_remaining_asgmts = self.remaining_asgmts;
+    let base_actual_asgmts = self.actual_asgmts;
+    let base_sukaku_map = self.sukaku_map;
+    let mut antecedents: Vec<Fact> = vec![];
+    let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
+    let mut set_state = SetState::new();
+
+    for _round in 0..3 {
+      if self.check_timeout() {
+        break;
+      }
+      let eliminations_start = self.facts.len();
+      find_overlaps(self);
+      if self.check_timeout() {
+        break;
+      }
+      find_subsets(self, &mut set_state);
+      if self.check_timeout() {
+        break;
+      }
+      let eliminations_end = self.facts.len();
+      if eliminations_start == eliminations_end {
+        break;
+      }
+
+      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+      antecedents.extend(self.facts[eliminations_start..eliminations_end].to_vec());
+      antecedent_eliminations.extend(eliminations);
+      let all_eliminated_asgmts = self.facts[eliminations_start..eliminations_end]
+        .iter()
+        .fold(AsgmtSet::new(), |acc, x| acc | x.as_eliminations());
+      self.remaining_asgmts -= all_eliminated_asgmts;
+      self.sukaku_map.eliminate(&all_eliminated_asgmts);
+
+      let singles_start = self.facts.len();
+      find_hidden_singles(self);
+      find_naked_singles(self);
+      let singles_end = self.facts.len();
+
+      for fact in self.facts[singles_start..singles_end].iter() {
+        if fact.as_asgmt() == Some(target) {
+          let required = narrow_antecedents(
+            fact,
+            antecedents.as_slice(),
+            &antecedent_eliminations,
+            base_remaining_asgmts,
+            base_actual_asgmts,
+            base_sukaku_map,
+            0,
+          );
+          if !required.is_empty() {
+            return Some(Fact::Implication {
+              antecedents: required,
+              consequent: Box::new(fact.clone()),
+            });
+          } else {
+            return Some(fact.clone());
+          }
+        }
+      }
+    }
+    None
   }
 }
 

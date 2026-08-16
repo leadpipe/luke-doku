@@ -9,7 +9,7 @@ import {
   unitContains,
   type StepWithContext,
 } from '../facts/utils';
-import {CompletionState} from '../game/command';
+import {CommandTag, CompletionState} from '../game/command';
 import {ClearCell, SetNum, SetNums} from '../game/commands';
 import {Game} from '../game/game';
 import {Loc} from '../game/loc';
@@ -19,6 +19,7 @@ import {
   requestErroneousAssignmentDisproof,
   requestErroneousProductivityCalculation,
   requestFactDeduction,
+  requestQuickFact,
 } from '../system/puzzle-service';
 import * as wasm from '../wasm';
 import type {DisproofMetadata} from '../worker/worker-types';
@@ -66,6 +67,7 @@ export class ReviewController implements ReactiveController {
   interestingIndices: number[] = [];
 
   private searchToken = 0;
+  private factsToken = 0;
   private playIntervalId: number | null = null;
 
   constructor(host: ReactiveControllerHost) {
@@ -92,7 +94,6 @@ export class ReviewController implements ReactiveController {
         if (newGame.completionState === CompletionState.SOLVED) {
           this.playback.index = 0;
         }
-        this.updateFacts();
         // Start playback when arriving on the page
         this.playForward();
       } else {
@@ -110,7 +111,55 @@ export class ReviewController implements ReactiveController {
     this.interestingIndices = computeInterestingIndices(this.playback.history);
   }
 
+  async updateQuickFactForCurrentState() {
+    this.factsToken++;
+    const token = this.factsToken;
+    if (!this.playback) return;
+
+    this.disproofs = [];
+    this.productivityScores.clear();
+    this.searchStatus = '';
+    this.isSearching = false;
+
+    const nextCommand =
+      (
+        this.playback.deviations.length === 0 &&
+        this.playback.index < this.playback.history.length
+      ) ?
+        this.playback.history[this.playback.index]
+      : undefined;
+
+    if (nextCommand && nextCommand.command.tag() === CommandTag.SET_NUM) {
+      const setNum = nextCommand.command as SetNum;
+      const target = {loc: setNum.loc.index, num: setNum.num};
+      const grid = this.playback.wrapper.game.asGrid();
+      const gridString = grid.toFlatString();
+      const elims = this.playback.getAppliedDisproofs();
+      const constraints = getEliminationConstraints(elims);
+
+      try {
+        const response = await requestQuickFact(
+          gridString,
+          target,
+          constraints,
+          200,
+        );
+        if (token !== this.factsToken) return;
+        this.facts = [...response.facts];
+        this.host.requestUpdate();
+      } catch (e) {
+        // Ignored if superseded or failed
+      }
+    } else {
+      this.facts = [];
+      this.host.requestUpdate();
+    }
+  }
+
   async updateFacts(keepSelection = false) {
+    this.factsToken++;
+    const token = this.factsToken;
+
     if (!keepSelection) {
       this.selectedLoc = null;
       this.selectedFact = null;
@@ -128,11 +177,14 @@ export class ReviewController implements ReactiveController {
         5000,
         constraints,
       );
+      if (token !== this.factsToken) return;
       this.facts = [...response.facts].sort(compareFacts);
     } catch (e) {
+      if (token !== this.factsToken) return;
       console.error('Failed to deduce facts:', e);
       this.facts = [];
     }
+    if (token !== this.factsToken) return;
     this.host.requestUpdate();
 
     this.startDisproofSearch();
@@ -605,6 +657,7 @@ export class ReviewController implements ReactiveController {
   playForward() {
     this.clearPlayInterval();
     this.isPlayingForward = true;
+    this.updateQuickFactForCurrentState();
     this.playIntervalId = window.setInterval(() => this.stepForward(true), 500);
     this.host.requestUpdate();
   }
@@ -612,6 +665,7 @@ export class ReviewController implements ReactiveController {
   playBackward() {
     this.clearPlayInterval();
     this.isPlayingBackward = true;
+    this.updateQuickFactForCurrentState();
     this.playIntervalId = window.setInterval(
       () => this.stepBackward(true),
       500,
@@ -625,9 +679,14 @@ export class ReviewController implements ReactiveController {
     if (this.playback.deviations.length > 0) return;
     if (this.playback.index < this.playback.history.length) {
       this.playback.index++;
-      this.updateFacts();
+      this.host.requestUpdate();
+      if (this.isPlayingForward) {
+        this.updateQuickFactForCurrentState();
+      } else {
+        this.updateFacts();
+      }
     } else if (fromInterval) {
-      this.clearPlayInterval();
+      this.pause();
     }
   }
 
@@ -636,12 +695,18 @@ export class ReviewController implements ReactiveController {
     if (!this.playback) return;
     if (this.playback.deviations.length > 0) {
       this.playback.popDeviation();
+      this.host.requestUpdate();
       this.updateFacts();
     } else if (this.playback.index > 0) {
       this.playback.index--;
-      this.updateFacts();
+      this.host.requestUpdate();
+      if (this.isPlayingBackward) {
+        this.updateQuickFactForCurrentState();
+      } else {
+        this.updateFacts();
+      }
     } else if (fromInterval) {
-      this.clearPlayInterval();
+      this.pause();
     }
   }
 
@@ -664,12 +729,14 @@ export class ReviewController implements ReactiveController {
       this.selectedLocFacts = [];
     }
 
+    this.host.requestUpdate();
     this.updateFacts(keepSelection);
   }
 
   exitDigression() {
     if (this.playback) {
       this.playback.clearDeviations();
+      this.host.requestUpdate();
       this.updateFacts();
     }
   }
@@ -682,6 +749,7 @@ export class ReviewController implements ReactiveController {
     );
     if (nextIdx !== undefined) {
       this.playback.index = nextIdx;
+      this.host.requestUpdate();
       this.updateFacts();
     }
   }
@@ -693,18 +761,24 @@ export class ReviewController implements ReactiveController {
     const prevIdx = reversed.find(idx => idx < this.playback!.index);
     if (prevIdx !== undefined) {
       this.playback.index = prevIdx;
+      this.host.requestUpdate();
       this.updateFacts();
     }
   }
 
   pause() {
+    const wasPlaying = this.isPlayingForward || this.isPlayingBackward;
     this.clearPlayInterval();
+    if (wasPlaying) {
+      this.updateFacts();
+    }
   }
 
   setPlaybackIndex(index: number) {
     this.clearPlayInterval();
     if (this.playback) {
       this.playback.index = index;
+      this.host.requestUpdate();
       this.updateFacts();
     }
   }

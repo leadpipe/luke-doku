@@ -8,6 +8,7 @@ export enum ToWorkerMessageType {
   TEST_PUZZLE = 'TEST_PUZZLE',
   FIND_SYMMETRIES = 'FIND_SYMMETRIES',
   DEDUCE_FACTS = 'DEDUCE_FACTS',
+  DEDUCE_QUICK_FACT = 'DEDUCE_QUICK_FACT',
   CALCULATE_ERRONEOUS_PRODUCTIVITY = 'CALCULATE_ERRONEOUS_PRODUCTIVITY',
   DISPROVE_ERRONEOUS_ASSIGNMENT = 'DISPROVE_ERRONEOUS_ASSIGNMENT',
 }
@@ -66,6 +67,14 @@ export interface DeduceFactsMessage extends ToWorkerMessageBase {
   readonly eliminations?: readonly EliminationConstraint[];
 }
 
+export interface DeduceQuickFactMessage extends ToWorkerMessageBase {
+  readonly type: ToWorkerMessageType.DEDUCE_QUICK_FACT;
+  readonly grid: string;
+  readonly target: {loc: number; num: number};
+  readonly eliminations?: readonly EliminationConstraint[];
+  readonly maxTimeMs?: number;
+}
+
 export interface CalculateErroneousProductivityMessage extends ToWorkerMessageBase {
   readonly type: ToWorkerMessageType.CALCULATE_ERRONEOUS_PRODUCTIVITY;
   readonly grid: string;
@@ -90,6 +99,7 @@ export type ToWorkerMessage =
   | TestPuzzleMessage
   | FindSymmetriesMessage
   | DeduceFactsMessage
+  | DeduceQuickFactMessage
   | CalculateErroneousProductivityMessage
   | DisproveErroneousAssignmentMessage;
 
@@ -100,6 +110,7 @@ export enum FromWorkerMessageType {
   PUZZLE_TESTED = 'PUZZLE_TESTED',
   SYMMETRIES_FOUND = 'SYMMETRIES_FOUND',
   FACTS_DEDUCED = 'FACTS_DEDUCED',
+  QUICK_FACT_DEDUCED = 'QUICK_FACT_DEDUCED',
   ERRONEOUS_PRODUCTIVITY_CALCULATED = 'ERRONEOUS_PRODUCTIVITY_CALCULATED',
   ERRONEOUS_ASSIGNMENT_DISPROVED = 'ERRONEOUS_ASSIGNMENT_DISPROVED',
 }
@@ -229,6 +240,20 @@ export interface FactsDeducedMessage extends FromWorkerMessageBase {
   readonly elapsedMs: number;
 }
 
+export interface QuickFactDeducedMessage extends FromWorkerMessageBase {
+  readonly toWorkerMessage: DeduceQuickFactMessage;
+  readonly type: FromWorkerMessageType.QUICK_FACT_DEDUCED;
+
+  /** The facts deduced for the target. */
+  readonly facts: readonly Fact[];
+
+  /** True if the deduction timed out. */
+  readonly timedOut: boolean;
+
+  /** How long it took to deduce facts, in milliseconds. */
+  readonly elapsedMs: number;
+}
+
 export interface ErroneousProductivityCalculatedMessage extends FromWorkerMessageBase {
   readonly type: FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED;
   readonly toWorkerMessage: CalculateErroneousProductivityMessage;
@@ -262,5 +287,6 @@ export type FromWorkerMessage =
   | PuzzleTestedMessage
   | SymmetriesFoundMessage
   | FactsDeducedMessage
+  | QuickFactDeducedMessage
   | ErroneousProductivityCalculatedMessage
   | ErroneousAssignmentDisprovedMessage;

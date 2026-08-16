@@ -10,6 +10,7 @@ import {
   type ErroneousAssignmentDisprovedMessage,
   type ErroneousProductivityCalculatedMessage,
   type FactsDeducedMessage,
+  type QuickFactDeducedMessage,
   type GeneratePuzzleMessage,
   type PuzzleEvaluatedMessage,
   type PuzzleGeneratedMessage,
@@ -158,6 +159,14 @@ class WorkerQueue {
           });
           pending.resolve(e.data);
           break;
+        case FromWorkerMessageType.QUICK_FACT_DEDUCED:
+          logEvent(EventType.SYSTEM, {
+            category: 'worker quick fact deduced time',
+            detail: e.data.toWorkerMessage.grid,
+            elapsedMs: e.data.elapsedMs,
+          });
+          pending.resolve(e.data);
+          break;
         case FromWorkerMessageType.ERRONEOUS_PRODUCTIVITY_CALCULATED:
           logEvent(EventType.SYSTEM, {
             category: 'worker erroneous productivity calculated time',
@@ -184,12 +193,24 @@ class WorkerQueue {
   request<T extends ToWorkerMessage>(
     message: Omit<T, 'interactionId'>,
     expectedResponseType: FromWorkerMessageType,
+    supersedeTypes?: readonly ToWorkerMessageType[],
   ): Promise<FromWorkerMessage> {
     return new Promise((resolve, reject) => {
       const sent: T = {
         ...message,
         interactionId: WorkerQueue.messageCounter++,
       } as T;
+
+      if (supersedeTypes && supersedeTypes.length > 0) {
+        // Drop any un-sent queued messages matching supersedeTypes
+        for (let i = this.pending.length - 1; i >= 1; i--) {
+          if (supersedeTypes.includes(this.pending[i].sent.type)) {
+            const dropped = this.pending.splice(i, 1)[0];
+            dropped.reject('Superseded by newer request');
+          }
+        }
+      }
+
       this.pending.push({sent, expectedResponseType, resolve, reject});
       if (this.pending.length === 1) {
         this.sendNextRequest();
@@ -313,7 +334,37 @@ export async function requestFactDeduction(
   return evaluateQueue.request(
     message,
     FromWorkerMessageType.FACTS_DEDUCED,
+    [ToWorkerMessageType.DEDUCE_FACTS, ToWorkerMessageType.DEDUCE_QUICK_FACT],
   ) as Promise<FactsDeducedMessage>;
+}
+
+/**
+ * Quickly checks if a specific target assignment is deduced from the grid as a single
+ * or an implication leading to a single.
+ * @param grid The grid state, as a flat string.
+ * @param target The target assignment to find a supporting deduction for.
+ * @param eliminations Applied disproof constraints.
+ * @param maxTimeMs Max time to spend.
+ * @returns A promise that resolves to the quick deduction result.
+ */
+export async function requestQuickFact(
+  grid: string,
+  target: {loc: number; num: number},
+  eliminations?: readonly EliminationConstraint[],
+  maxTimeMs = 200,
+): Promise<QuickFactDeducedMessage> {
+  const message = {
+    type: ToWorkerMessageType.DEDUCE_QUICK_FACT,
+    grid,
+    target,
+    eliminations,
+    maxTimeMs,
+  };
+  return evaluateQueue.request(
+    message,
+    FromWorkerMessageType.QUICK_FACT_DEDUCED,
+    [ToWorkerMessageType.DEDUCE_FACTS, ToWorkerMessageType.DEDUCE_QUICK_FACT],
+  ) as Promise<QuickFactDeducedMessage>;
 }
 
 /**

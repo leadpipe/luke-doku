@@ -295,6 +295,21 @@ impl FactFinder {
     collector.facts
   }
 
+  pub fn deduce_quick_fact(
+    &self,
+    target: Asgmt,
+    max_time_ms: Option<f64>,
+  ) -> (Vec<Fact>, bool) {
+    let mut collector =
+      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    collector.max_time_ms = max_time_ms.or(Some(200.0));
+    if let Some(fact) = collector.collect_targeted(target) {
+      (vec![fact], false)
+    } else {
+      (vec![], collector.timed_out)
+    }
+  }
+
   /// Returns only the direct assignments that can be deduced from the
   /// current state of the grid.
   pub fn deduce_singles(&self) -> Vec<Fact> {
@@ -392,6 +407,52 @@ pub fn apply_constraints(finder: &mut FactFinder, constraints: &[Vec<WasmAsgmt>]
       }
     }
   }
+}
+
+#[wasm_bindgen(js_name = "deduceQuickFact")]
+pub fn deduce_quick_fact(
+  grid: &Grid,
+  target_loc: i8,
+  target_num: i8,
+  eliminations: wasm_bindgen::JsValue,
+  max_time_ms: Option<f64>,
+) -> wasm_bindgen::JsValue {
+  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
+    if eliminations.is_undefined() || eliminations.is_null() {
+      None
+    } else {
+      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+    };
+
+  let loc = match Loc::new(target_loc) {
+    Some(l) => l,
+    None => {
+      return serde_wasm_bindgen::to_value(&DeduceResult {
+        facts: vec![],
+        timed_out: false,
+      })
+      .unwrap()
+    }
+  };
+  let num = match Num::new(target_num) {
+    Some(n) => n,
+    None => {
+      return serde_wasm_bindgen::to_value(&DeduceResult {
+        facts: vec![],
+        timed_out: false,
+      })
+      .unwrap()
+    }
+  };
+  let target = Asgmt::new(num, loc);
+
+  let mut finder = FactFinder::new(grid);
+  if let Some(ref c) = constraints {
+    apply_constraints(&mut finder, c);
+  }
+
+  let (facts, timed_out) = finder.deduce_quick_fact(target, max_time_ms);
+  serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
 
 #[wasm_bindgen(js_name = "deduceFacts")]
@@ -1019,5 +1080,36 @@ mod tests {
     } else {
       panic!("Root fact should be an Implication");
     }
+  }
+
+  #[test]
+  fn test_deduce_quick_fact() {
+    let grid = Grid::from_str(
+      r"
+      6 . . | . . 3 | 1 . 7
+      . . 2 | . 9 . | 8 . .
+      . 7 . | . 4 . | . . .
+      ------+------+------
+      . . . | . . . | . . 3
+      . 1 9 | . 2 4 | . . .
+      4 . . | . 6 . | . 5 .
+      ------+------+------
+      1 2 . | . . . | 9 4 .
+      . . . | . . 8 | 7 . .
+      . . . | . . . | . . .
+      ",
+    )
+    .unwrap();
+
+    let finder = FactFinder::new(&grid);
+    let all_facts = finder.deduce_all();
+    let asgmt_fact = all_facts.iter().find(|f| f.as_asgmt().is_some()).unwrap();
+    let target = asgmt_fact.as_asgmt().unwrap();
+    println!("Testing deduce_quick_fact with target {:?}", target);
+
+    let (facts, timed_out) = finder.deduce_quick_fact(target, Some(200.0));
+    assert!(!timed_out);
+    assert_eq!(facts.len(), 1);
+    assert_eq!(facts[0].as_asgmt(), Some(target));
   }
 }
