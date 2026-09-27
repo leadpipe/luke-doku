@@ -76,46 +76,51 @@ Features are computed deterministically during the logical evaluation phase in `
 
 ```
 +------------------------------------------------------------------------------------+
-|                             Puzzle Feature Vector X (28-D)                         |
+|                             Puzzle Feature Vector X                                |
 +------------------------------------+-----------------------------------------------+
 | Category                           | Features Included                             |
 +------------------------------------+-----------------------------------------------+
-| 1. Grid & Clue Topology            | • Clue count (e.g., 22–38)                    |
+| 1. Base Solving Speed (Dynamic)    | • User's rolling avg ms per Block SingleLoc   |
+|    (Injected at inference time)    | • User's rolling avg ms per Line SingleLoc    |
+|                                    | • User's rolling avg ms per SingleNum         |
++------------------------------------+-----------------------------------------------+
+| 2. Grid & Clue Topology            | • Clue count (e.g., 22–38)                    |
 |                                    | • Clue variance across rows, cols, blocks     |
 |                                    | • Symmetry conformance ratio                  |
-|                                    | • Solution count (1, 2, or 3 valid solutions) |
 |                                    | • Initial open candidate count                |
 +------------------------------------+-----------------------------------------------+
-| 2. Elementary Deductions           | • SingleLoc count (Hidden singles)            |
-|                                    | • SingleNum count (Naked singles)             |
-|                                    | • Overlap count (Pointing / Claiming lines)   |
-|                                    | • Total deduction steps to solve or stall     |
+| 3. Singles & Chains (Main Work)    | • Block SingleLoc count (across solution/trails)|
+|                                    | • Line (Row/Col) SingleLoc count              |
+|                                    | • SingleNum count                             |
+|                                    | • SingleNum avg difficulty (density of filled |
+|                                    |   cells in intersecting row/col/block)        |
+|                                    | • Choke point count (solver states with       |
+|                                    |   exactly 1 available single)                 |
+|                                    | • Average concurrent Block SingleLoc          |
+|                                    |   availability per solver state               |
 +------------------------------------+-----------------------------------------------+
-| 3. Subset & Intersections          | • Naked Pairs count                           |
-|                                    | • Hidden Pairs count                          |
-|                                    | • Naked Triples / Quads count                 |
-|                                    | • Hidden Triples / Quads count                |
+| 4. Advanced Patterns (Required)    | • Required Naked/Hidden Pairs count           |
+|                                    | • Required Naked/Hidden Triples/Quads count   |
+|                                    | • Required Overlap count (Pointing/Claiming)  |
+|                                    | • Required Basic Fish (X-Wing, Swordfish)     |
+|                                    | • Required Skyscraper, 2-String Kite, etc.    |
 +------------------------------------+-----------------------------------------------+
-| 4. Advanced Single-Digit Facts     | • Basic Fish count (X-Wing, Swordfish, Jelly) |
-|                                    | • Finned / Sashimi Fish count                 |
-|                                    | • Skyscraper count                            |
-|                                    | • 2-String Kite count                         |
-|                                    | • Empty Rectangle count                       |
-+------------------------------------+-----------------------------------------------+
-| 5. Trail / Disproof Complexity     | • Evaluated Complexity tier (1 to 5)          |
+| 5. Trail / Disproof Complexity     | • Requires Trails (Boolean flag)              |
+|                                    | • Evaluated Complexity tier (1 to 5)          |
 |                                    | • Sequential disproofs required (series count)|
 |                                    | • Disproof availability (distinct productive  |
 |                                    |   disproofs available at stall: 1 vs 30)      |
-|                                    | • Max disproof productivity (elimination yield)|
-|                                    | • Average disproof productivity               |
+|                                    | • Max & average disproof productivity         |
 |                                    | • Search depth to reach disproof contradiction|
-|                                    | • Nested disproof depth (for Lunatic)         |
-|                                    | • Disproof candidate search space size        |
 +------------------------------------+-----------------------------------------------+
 ```
 
-### 3.1 Handling Multiple Solutions
-Approximately **10% of Luke-doku puzzles have 2 or 3 solutions**, strictly constrained by Luke-doku's generator such that **no more than 7 cells may differ among the solutions**. Empirically, these improper puzzles are not inherently more complicated than unique-solution puzzles, and uniquely solvable puzzles can exhibit just as much ambiguous internal structure. The solution count (1, 2, or 3) is included in the feature vector simply as a topological property of the puzzle rather than an assumption of added difficulty.
+### 3.1 Complexity vs. Solving Speed (Extrapolation)
+A common misconception is that the 5-star complexity rating is a direct proxy for human solve time. In reality, **complexity is not a good proxy for difficulty (time to solve)**. Often, a "Simple" puzzle can take longer than an "Expert" one because a hard-to-spot `SingleNum` gates the entire solution. Conversely, an "Expert" rating explicitly signals the need for trails, making it obviously worthwhile to start speculating early, which often lands a solution faster than being stuck searching for a needle in a haystack on a less complex puzzle.
+
+To capture this paradox, the feature vector heavily weights the specific *structure* of the puzzle (e.g., the boolean `Requires Trails` flag and the structural single counts) over the abstract complexity tier. 
+
+Furthermore, because Random Forests cannot extrapolate beyond the target durations (`y`) seen in their training set, the frontend calculates the user's **rolling average time** for basic operations (milliseconds per Block SingleLoc, Line SingleLoc, and SingleNum) and injects these as dynamic features into the model at inference time. Because the vast majority of work in any Luke-doku puzzle is following chains of singles (whether in the main grid or within speculative trails), the model correlates the puzzle's structural single counts with the user's current execution speed for those singles. This allows the model to accurately predict times even for puzzles whose structural composition takes longer than anything in the user's history.
 
 ### 3.2 Detailed Disproof Metrics
 In Expert and Lunatic puzzles, solve times are heavily dominated by trail exploration. We extract two distinct dimensions of disproof complexity:
@@ -196,7 +201,7 @@ pub struct RandomForestModel {
 }
 
 impl RandomForestModel {
-  pub fn train(x: &[Vec<f32>], y: &[f32], config: &ForestConfig) -> Self { ... }
+  pub fn train(x_flat: &[f32], features_per_sample: usize, y: &[f32], config: &ForestConfig) -> Self { ... }
   pub fn predict(&self, features: &[f32]) -> f64 {
     let avg_log_time: f32 = self.trees.iter()
       .map(|t| t.predict(features))
@@ -261,7 +266,7 @@ As dedicated players accumulate hundreds or thousands of completed puzzles:
 ### 5.4 Data Quality & Outlier Filtering
 
 To avoid training on skewed data:
-* **First-Attempt Only:** Only games completed on their initial attempt (`previousAttempts` is empty or 0) are used. Restarts and replayed attempts are excluded.
+* **First-Attempt Only:** Only games completed on their initial attempt (`previousAttempts` is empty or 0) are used. If a player abandons a game, checks the review page, and then plays it again, that generates a second attempt which is excluded from the training set. However, an in-game "undo to start" is simply part of a single continuous attempt.
 * **Idle & Pause Filtering:** Games with prolonged pauses or idle gaps where $\text{elapsedMs} > 3.5 \times \text{median}(\text{complexity tier})$ are trimmed or excluded from the training set.
 * **Abandoned Games:** Unfinished or abandoned games (`attemptState != COMPLETED`) are never included in the training set.
 
@@ -302,8 +307,14 @@ override render() {
   if (!this.game?.complexity) return undefined;
   
   const complexity = this.game.complexity;
-  const estimatedMs = this.game.estimatedTimeMs;
-  const timeText = formatEstimatedTime(estimatedMs);
+  
+  // Predict time dynamically using the latest model so estimates are never stale
+  let estimatedMs = undefined;
+  if (this.game.features && modelService.hasTrainedModel()) {
+    estimatedMs = wasm.predict_time(modelService.getModelBytes(), this.game.features);
+  }
+  
+  const timeText = estimatedMs ? formatEstimatedTime(estimatedMs) : '';
 
   return html`
     ${iota(5).map(i => html`
@@ -334,8 +345,8 @@ export interface LukeDokuDb extends DBSchema {
       symmetryMatches: DbSymMatch[];
       puzzleId?: [string, number, number];
       complexity?: wasm.Complexity;
-      estimatedTimeMs?: number;       // <--- NEW: Cached prediction
-      features?: Float32Array;         // <--- NEW: Cached 28-D feature vector
+      featuresVersion?: number;        // <--- NEW: Version of the extracted features
+      features?: Float32Array;         // <--- NEW: Cached feature vector
       attemptState: AttemptState;
       lastUpdated: Date;
       elapsedMs?: number;
@@ -367,7 +378,7 @@ export interface LukeDokuDb extends DBSchema {
 
 ### Phase A: Rust Core Engine & ML Regressor
 1. Create `crate/src/evaluate/forest.rs` implementing decision tree training, split search (MSE variance reduction), bootstrap sampling, and ensemble prediction.
-2. Implement feature extraction in `crate/src/evaluate/internals.rs` returning a fixed-width `Vec<f32>` (28-D vector with detailed disproof & topology metrics).
+2. Implement feature extraction in `crate/src/evaluate/internals.rs` returning a fixed-width `Vec<f32>` (feature vector with detailed disproof & topology metrics).
 3. Expose `train_model(x, y)` and `predict_time(model_bytes, features)` via `wasm-bindgen` in `crate/src/evaluate.rs`.
 4. Add unit tests and cargo benchmarks in `crate/tests/` to guarantee training time $< 5\text{ ms}$ on 500 samples.
 
