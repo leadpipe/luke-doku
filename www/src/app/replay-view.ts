@@ -116,6 +116,7 @@ export class ReplayView extends SudokuView {
         fill: light-dark(rgba(66, 165, 245, 0.25), rgba(25, 118, 210, 0.45));
         stroke: light-dark(#1976d2, #64b5f6);
         stroke-width: 2;
+        stroke-linejoin: round;
       }
       .fish-node-text {
         font-weight: bold;
@@ -125,6 +126,9 @@ export class ReplayView extends SudokuView {
         fill: light-dark(rgba(239, 83, 80, 0.25), rgba(198, 40, 40, 0.45));
         stroke: light-dark(#e53935, #ef5350);
         stroke-width: 2.5;
+        stroke-linejoin: round;
+        transform-box: fill-box;
+        transform-origin: center;
         animation: pulse-fin 1.3s infinite ease-in-out;
       }
       .fish-fin-text {
@@ -156,6 +160,7 @@ export class ReplayView extends SudokuView {
         fill: light-dark(rgba(0, 137, 123, 0.22), rgba(38, 166, 154, 0.4));
         stroke: light-dark(#00897b, #4db6ac);
         stroke-width: 2;
+        stroke-linejoin: round;
       }
       .strong-link-text {
         font-weight: bold;
@@ -171,6 +176,7 @@ export class ReplayView extends SudokuView {
         fill: light-dark(rgba(0, 172, 193, 0.25), rgba(0, 151, 167, 0.45));
         stroke: light-dark(#00838f, #4dd0e1);
         stroke-width: 2.5;
+        stroke-linejoin: round;
       }
       .skyscraper-roof-text {
         font-weight: bold;
@@ -185,6 +191,7 @@ export class ReplayView extends SudokuView {
         fill: light-dark(rgba(63, 81, 181, 0.25), rgba(57, 73, 171, 0.45));
         stroke: light-dark(#303f9f, #7986cb);
         stroke-width: 2.5;
+        stroke-linejoin: round;
       }
       .kite-end-text {
         font-weight: bold;
@@ -215,6 +222,7 @@ export class ReplayView extends SudokuView {
         stroke: light-dark(#0288d1, #29b6f6);
         stroke-width: 2;
         stroke-dasharray: 3 3;
+        stroke-linejoin: round;
         opacity: 0.5;
       }
       .hint-tether-line {
@@ -224,13 +232,26 @@ export class ReplayView extends SudokuView {
         opacity: 0.45;
       }
       @keyframes pulse-fin {
-        0% { transform: scale(1); stroke-width: 2.5; }
-        50% { transform: scale(1.05); stroke-width: 3.5; }
-        100% { transform: scale(1); stroke-width: 2.5; }
+        0% {
+          transform: scale(1);
+          stroke-width: 2.5;
+        }
+        50% {
+          transform: scale(1.05);
+          stroke-width: 3.5;
+        }
+        100% {
+          transform: scale(1);
+          stroke-width: 2.5;
+        }
       }
       @keyframes dash-flow {
-        from { stroke-dashoffset: 16; }
-        to { stroke-dashoffset: 0; }
+        from {
+          stroke-dashoffset: 16;
+        }
+        to {
+          stroke-dashoffset: 0;
+        }
       }
     `,
   ];
@@ -691,14 +712,21 @@ export class ReplayView extends SudokuView {
             ...this.renderEliminationTarget(
               fact.num,
               loc,
-              relevantOrigins.length > 0 ? relevantOrigins : allOrigins.slice(0, 2),
+              relevantOrigins.length > 0 ?
+                relevantOrigins
+              : allOrigins.slice(0, 2),
             ),
           );
         }
       }
     } else if (fact.type === 'EmptyRectangle') {
       // ER Block highlight
-      const {x: bx, y: by, width: bw, height: bh} = this.getUnitRect(fact.block);
+      const {
+        x: bx,
+        y: by,
+        width: bw,
+        height: bh,
+      } = this.getUnitRect(fact.block);
       answer.push(
         svg`<rect class="er-block-bg" x=${bx} y=${by} width=${bw} height=${bh} rx=${this.cellSize * 0.15} />`,
       );
@@ -822,7 +850,9 @@ export class ReplayView extends SudokuView {
                   fact.roof_locs.includes(ol.index)
                 )
                   return false;
-                return unit.type === 'Col' ? ol.row === l.row : ol.col === l.col;
+                return unit.type === 'Col' ?
+                    ol.row === l.row
+                  : ol.col === l.col;
               });
             });
 
@@ -861,7 +891,12 @@ export class ReplayView extends SudokuView {
       }
     } else if (fact.type === 'TwoStringKite') {
       // Kite Block highlight
-      const {x: bx, y: by, width: bw, height: bh} = this.getUnitRect(fact.block);
+      const {
+        x: bx,
+        y: by,
+        width: bw,
+        height: bh,
+      } = this.getUnitRect(fact.block);
       answer.push(
         svg`<rect class="kite-block-bg" x=${bx} y=${by} width=${bw} height=${bh} rx=${this.cellSize * 0.15} />`,
       );
@@ -990,6 +1025,15 @@ export class ReplayView extends SudokuView {
     }
   }
 
+  private pentagonPoints(cx: number, cy: number, r: number): string {
+    const points: string[] = [];
+    for (let i = 0; i < 5; i++) {
+      const angle = -Math.PI / 2 + (i * 2 * Math.PI) / 5;
+      points.push(`${cx + r * Math.cos(angle)},${cy + r * Math.sin(angle)}`);
+    }
+    return points.join(' ');
+  }
+
   private renderNodeBadge(
     num: number,
     loc: Loc,
@@ -998,9 +1042,9 @@ export class ReplayView extends SudokuView {
   ): TemplateResult[] {
     const {cellCenter, cellSize} = this;
     const [x, y] = cellCenter(loc);
-    const r = cellSize * 0.32;
+    const r = cellSize * 0.4;
     return [
-      svg`<circle class="${badgeClass}" cx=${x} cy=${y} r=${r} />`,
+      svg`<polygon class="${badgeClass}" points="${this.pentagonPoints(x, y, r)}" />`,
       svg`<text class="${textClass}" x=${x} y=${y}>${num}</text>`,
     ];
   }
@@ -1276,7 +1320,7 @@ export class ReplayView extends SudokuView {
               if (loc) {
                 const [x, y] = cellCenter(loc);
                 answer.push(
-                  svg`<circle class="hint-advanced-node" cx=${x} cy=${y} r=${this.cellSize * 0.28} />`,
+                  svg`<polygon class="hint-advanced-node" points="${this.pentagonPoints(x, y, this.cellSize * 0.4)}" />`,
                 );
               }
             }
