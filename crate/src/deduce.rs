@@ -1,7 +1,6 @@
 //! Code that emulates human Sudoku deduction patterns.
 
 use crate::core::*;
-use crate::time;
 
 pub mod advanced;
 mod internals;
@@ -230,6 +229,26 @@ impl Fact {
       _ => self,
     }
   }
+
+  /// Returns the static variant name of this fact.
+  pub fn type_name(&self) -> &'static str {
+    match self {
+      Fact::SingleLoc { .. } => "SingleLoc",
+      Fact::SingleNum { .. } => "SingleNum",
+      Fact::SpeculativeAssignment { .. } => "SpeculativeAssignment",
+      Fact::NoLoc { .. } => "NoLoc",
+      Fact::NoNum { .. } => "NoNum",
+      Fact::Conflict { .. } => "Conflict",
+      Fact::ConflictLoc { .. } => "ConflictLoc",
+      Fact::Overlap { .. } => "Overlap",
+      Fact::Subset { .. } => "Subset",
+      Fact::Implication { .. } => "Implication",
+      Fact::Fish { .. } => "Fish",
+      Fact::EmptyRectangle { .. } => "EmptyRectangle",
+      Fact::Skyscraper { .. } => "Skyscraper",
+      Fact::TwoStringKite { .. } => "TwoStringKite",
+    }
+  }
 }
 
 /// A stateful object that can deduce facts about a Sudoku grid.
@@ -237,14 +256,14 @@ impl Fact {
 pub struct FactFinder {
   /// The remaining possible assignments: all possible assignments that haven't
   /// already happened.
-  remaining_asgmts: AsgmtSet,
+  pub(crate) remaining_asgmts: AsgmtSet,
 
   /// The assignments that have been made.
-  actual_asgmts: AsgmtSet,
+  pub(crate) actual_asgmts: AsgmtSet,
 
   /// An alternate view of `remaining_asgmts` that is more efficient for some
   /// operations.  Also tracks errors.
-  sukaku_map: internals::SukakuMap,
+  pub(crate) sukaku_map: internals::SukakuMap,
 }
 
 impl FactFinder {
@@ -258,6 +277,15 @@ impl FactFinder {
       actual_asgmts: simple_asgmts,
       sukaku_map,
     }
+  }
+
+  /// Creates a new `FactFinder` with the given grid and optional constraints.
+  pub fn with_constraints(grid: &Grid, constraints: Option<&[Vec<WasmAsgmt>]>) -> Self {
+    let mut finder = Self::new(grid);
+    if let Some(c) = constraints {
+      apply_constraints(&mut finder, c);
+    }
+    finder
   }
 
   /// Returns the current state of the grid.
@@ -279,42 +307,32 @@ impl FactFinder {
   /// Returns the facts deducible from the current state of the grid, including
   /// any errors, and stopping early if the max time is reached.
   pub fn deduce_all_with_timeout(&self, max_time_ms: Option<f64>) -> (Vec<Fact>, bool) {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
-    collector.max_time_ms = max_time_ms;
+    let mut collector = internals::Collector::with_timeout(*self, max_time_ms);
     collector.collect(internals::ErrorMode::Collect).unwrap();
-    (collector.facts, collector.timed_out)
+    (collector.facts, collector.timeout.timed_out)
   }
 
   /// Returns the facts deducible from the current state of the grid, ignoring
   /// any errors: use this when the current state is known to be valid.
   pub fn deduce_valid(&self) -> Vec<Fact> {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    let mut collector = internals::Collector::new(*self);
     collector.collect(internals::ErrorMode::Ignore).unwrap();
     collector.facts
   }
 
-  pub fn deduce_quick_fact(
-    &self,
-    target: Asgmt,
-    max_time_ms: Option<f64>,
-  ) -> (Vec<Fact>, bool) {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
-    collector.max_time_ms = max_time_ms.or(Some(200.0));
+  pub fn deduce_quick_fact(&self, target: Asgmt, max_time_ms: Option<f64>) -> (Vec<Fact>, bool) {
+    let mut collector = internals::Collector::with_timeout(*self, max_time_ms.or(Some(200.0)));
     if let Some(fact) = collector.collect_targeted(target) {
       (vec![fact], false)
     } else {
-      (vec![], collector.timed_out)
+      (vec![], collector.timeout.timed_out)
     }
   }
 
   /// Returns only the direct assignments that can be deduced from the
   /// current state of the grid.
   pub fn deduce_singles(&self) -> Vec<Fact> {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    let mut collector = internals::Collector::new(*self);
     collector.collect_singles();
     collector.facts
   }
@@ -323,8 +341,7 @@ impl FactFinder {
   /// the search if an error is found.  This is useful for finding errors in the
   /// current state of the grid, such as when the grid is known to be invalid.
   pub fn deduce_invalid(&self) -> Result<Vec<Fact>, Invalid> {
-    let mut collector =
-      internals::Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    let mut collector = internals::Collector::new(*self);
     collector.collect(internals::ErrorMode::ShortCircuit)?;
     Ok(collector.facts)
   }
@@ -336,10 +353,13 @@ impl FactFinder {
     if let Some(asgmt) = fact.as_asgmt() {
       self.apply(asgmt);
     } else {
-      let eliminations = fact.as_eliminations();
-      self.remaining_asgmts -= eliminations;
-      self.sukaku_map.eliminate(&eliminations);
+      self.eliminate_set(fact.as_eliminations());
     }
+  }
+
+  pub fn eliminate_set(&mut self, eliminations: AsgmtSet) {
+    self.remaining_asgmts -= eliminations;
+    self.sukaku_map.eliminate(&eliminations);
   }
 
   pub fn eliminate(&mut self, asgmt: Asgmt) {
@@ -369,40 +389,45 @@ pub struct WasmAsgmt {
   pub num: i8,
 }
 
+impl WasmAsgmt {
+  pub fn to_asgmt(&self) -> Option<Asgmt> {
+    Some(Asgmt::new(Num::new(self.num)?, Loc::new(self.loc)?))
+  }
+}
+
+fn parse_constraints(eliminations: wasm_bindgen::JsValue) -> Option<Vec<Vec<WasmAsgmt>>> {
+  if eliminations.is_undefined() || eliminations.is_null() {
+    None
+  } else {
+    Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
+  }
+}
+
 pub fn apply_constraints(finder: &mut FactFinder, constraints: &[Vec<WasmAsgmt>]) {
   let mut changed = true;
   while changed {
     changed = false;
     for constraint in constraints {
-      let mut active_asgmts = Vec::new();
-      let mut inactive_asgmts = Vec::new();
+      let mut active_count = 0;
+      let mut inactive_count = 0;
+      let mut single_inactive = None;
 
       for wa in constraint {
-        let asgmt = Asgmt::new(Num::new(wa.num).unwrap(), Loc::new(wa.loc).unwrap());
+        let asgmt = wa.to_asgmt().unwrap();
         if finder.actual_asgmts.contains(asgmt) {
-          active_asgmts.push(asgmt);
+          active_count += 1;
         } else if finder.remaining_asgmts.contains(asgmt) {
-          inactive_asgmts.push(asgmt);
+          inactive_count += 1;
+          single_inactive = Some(asgmt);
         }
       }
 
-      if active_asgmts.len() == constraint.len() {
+      if active_count == constraint.len() {
         finder.remaining_asgmts = AsgmtSet::new();
         changed = false;
         break;
-      } else if active_asgmts.len() == constraint.len() - 1 && inactive_asgmts.len() == 1 {
-        let target = inactive_asgmts[0];
-        let mut elim_set = AsgmtSet::new();
-        elim_set.insert(target);
-        finder.remaining_asgmts -= elim_set;
-        finder.sukaku_map.eliminate(&elim_set);
-        changed = true;
-      } else if constraint.len() == 1 && inactive_asgmts.len() == 1 {
-        let target = inactive_asgmts[0];
-        let mut elim_set = AsgmtSet::new();
-        elim_set.insert(target);
-        finder.remaining_asgmts -= elim_set;
-        finder.sukaku_map.eliminate(&elim_set);
+      } else if active_count + 1 == constraint.len() && inactive_count == 1 {
+        finder.eliminate(single_inactive.unwrap());
         changed = true;
       }
     }
@@ -417,16 +442,10 @@ pub fn deduce_quick_fact(
   eliminations: wasm_bindgen::JsValue,
   max_time_ms: Option<f64>,
 ) -> wasm_bindgen::JsValue {
-  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
-    if eliminations.is_undefined() || eliminations.is_null() {
-      None
-    } else {
-      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
-    };
-
-  let loc = match Loc::new(target_loc) {
-    Some(l) => l,
-    None => {
+  let constraints = parse_constraints(eliminations);
+  let target = match (Num::new(target_num), Loc::new(target_loc)) {
+    (Some(num), Some(loc)) => Asgmt::new(num, loc),
+    _ => {
       return serde_wasm_bindgen::to_value(&DeduceResult {
         facts: vec![],
         timed_out: false,
@@ -434,23 +453,8 @@ pub fn deduce_quick_fact(
       .unwrap()
     }
   };
-  let num = match Num::new(target_num) {
-    Some(n) => n,
-    None => {
-      return serde_wasm_bindgen::to_value(&DeduceResult {
-        facts: vec![],
-        timed_out: false,
-      })
-      .unwrap()
-    }
-  };
-  let target = Asgmt::new(num, loc);
 
-  let mut finder = FactFinder::new(grid);
-  if let Some(ref c) = constraints {
-    apply_constraints(&mut finder, c);
-  }
-
+  let finder = FactFinder::with_constraints(grid, constraints.as_deref());
   let (facts, timed_out) = finder.deduce_quick_fact(target, max_time_ms);
   serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
@@ -461,18 +465,8 @@ pub fn deduce_facts(
   eliminations: wasm_bindgen::JsValue,
   max_time_ms: Option<f64>,
 ) -> wasm_bindgen::JsValue {
-  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
-    if eliminations.is_undefined() || eliminations.is_null() {
-      None
-    } else {
-      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
-    };
-
-  let mut finder = FactFinder::new(grid);
-  if let Some(ref c) = constraints {
-    apply_constraints(&mut finder, c);
-  }
-
+  let constraints = parse_constraints(eliminations);
+  let finder = FactFinder::with_constraints(grid, constraints.as_deref());
   let (facts, timed_out) = finder.deduce_all_with_timeout(max_time_ms);
   serde_wasm_bindgen::to_value(&DeduceResult { facts, timed_out }).unwrap()
 }
@@ -498,9 +492,9 @@ pub fn calculate_erroneous_productivity_native(
 
   if let Some(c) = constraints {
     for constraint in c {
-      if constraint.len() == 1 {
-        let wa = &constraint[0];
-        base_ledger.eliminate(Num::new(wa.num).unwrap(), Loc::new(wa.loc).unwrap());
+      if let [wa] = constraint.as_slice() {
+        let asgmt = wa.to_asgmt().unwrap();
+        base_ledger.eliminate(asgmt.num, asgmt.loc);
       }
     }
   }
@@ -510,11 +504,7 @@ pub fn calculate_erroneous_productivity_native(
   }
 
   let base_solved = 81 - base_ledger.unset().len();
-
-  let mut solutions_asgmt_set = AsgmtSet::new();
-  for solution in solutions {
-    solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
-  }
+  let solutions_asgmt_set = AsgmtSet::from_solutions(solutions);
 
   let erroneous_candidates: Vec<Asgmt> = (base_ledger.asgmts() - solutions_asgmt_set)
     .iter()
@@ -559,12 +549,7 @@ pub fn calculate_erroneous_productivity(
   eliminations: wasm_bindgen::JsValue,
 ) -> wasm_bindgen::JsValue {
   let solutions = solutions.unwrap_or_default();
-  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
-    if eliminations.is_undefined() || eliminations.is_null() {
-      None
-    } else {
-      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
-    };
+  let constraints = parse_constraints(eliminations);
 
   let results = calculate_erroneous_productivity_native(grid, &solutions, constraints.as_deref());
   serde_wasm_bindgen::to_value(&results).unwrap()
@@ -580,19 +565,10 @@ pub fn disprove_erroneous_assignment_wasm(
   max_depth: Option<usize>,
 ) -> Option<String> {
   let target: WasmAsgmt = serde_wasm_bindgen::from_value(target).unwrap();
-  let target_asgmt = Asgmt::new(Num::new(target.num).unwrap(), Loc::new(target.loc).unwrap());
+  let target_asgmt = target.to_asgmt().unwrap();
 
-  let constraints: Option<Vec<Vec<WasmAsgmt>>> =
-    if eliminations.is_undefined() || eliminations.is_null() {
-      None
-    } else {
-      Some(serde_wasm_bindgen::from_value(eliminations).unwrap())
-    };
-
-  let mut base_finder = FactFinder::new(grid);
-  if let Some(ref c) = constraints {
-    apply_constraints(&mut base_finder, c);
-  }
+  let constraints = parse_constraints(eliminations);
+  let base_finder = FactFinder::with_constraints(grid, constraints.as_deref());
 
   let solutions = solutions.unwrap_or_default();
   let max_depth = max_depth.unwrap_or(5);
@@ -614,27 +590,17 @@ pub fn disprove_erroneous_assignment_wasm(
 pub fn disprove_erroneous_assignment(
   base_finder: &FactFinder,
   target: Asgmt,
-  solutions: &[SolvedGrid],
+  _solutions: &[SolvedGrid],
   max_time_ms: Option<f64>,
   max_depth: usize,
 ) -> Option<Fact> {
-  let start_time = time::now();
+  let mut timeout = internals::Timeout::new(max_time_ms);
   let target_fact = Fact::SpeculativeAssignment {
     loc: target.loc,
     num: target.num,
   };
 
-  let err_fact = disprove_recursive(
-    base_finder,
-    vec![target_fact.clone()],
-    solutions,
-    1,
-    max_depth,
-    start_time,
-    max_time_ms,
-  )?;
-
-  Some(err_fact)
+  disprove_recursive(base_finder, vec![target_fact], 1, max_depth, &mut timeout)
 }
 
 /// A recursive helper that performs a nested disproof search to find logical contradictions.
@@ -646,37 +612,20 @@ pub fn disprove_erroneous_assignment(
 /// in the current state, potentially unlocking further deductions to reach a contradiction
 /// for the root speculative assignment.
 ///
-/// It bounds the search depth via `max_depth` and overall execution time via `max_time_ms`.
+/// It bounds the search depth via `max_depth` and overall execution time via `timeout`.
 fn disprove_recursive(
   base_finder: &FactFinder,
   initial_level: Vec<Fact>,
-  solutions: &[SolvedGrid],
   depth: usize,
   max_depth: usize,
-  start_time: f64,
-  max_time_ms: Option<f64>,
+  timeout: &mut internals::Timeout,
 ) -> Option<Fact> {
-  if let Some(limit) = max_time_ms {
-    if time::now() - start_time > limit {
-      return None;
-    }
-  }
-  if depth > max_depth {
+  if timeout.check() || depth > max_depth {
     return None;
   }
 
-  let mut collector = internals::TreeCollector::new(
-    base_finder.remaining_asgmts,
-    base_finder.actual_asgmts,
-    base_finder.sukaku_map,
-  );
-
-  collector.max_time_ms = max_time_ms.map(|limit| {
-    let elapsed = time::now() - start_time;
-    (limit - elapsed).max(0.0)
-  });
-
-  collector.add_level(initial_level.clone());
+  let mut collector = internals::TreeCollector::with_timeout(*base_finder, *timeout);
+  collector.add_level(initial_level);
 
   loop {
     if collector.collect_next_level() {
@@ -684,16 +633,13 @@ fn disprove_recursive(
         return collector.backward_reduce();
       }
     } else {
-      if depth >= max_depth {
+      timeout.timed_out |= collector.timeout.timed_out;
+      if timeout.check() || depth >= max_depth {
         return None;
       }
 
       // We stalled. Evaluate nested disproofs against the current stalled state.
-      let mut current_finder = base_finder.clone();
-      current_finder.remaining_asgmts = collector.remaining_asgmts;
-      current_finder.actual_asgmts = collector.actual_asgmts;
-      current_finder.sukaku_map = collector.sukaku_map;
-
+      let current_finder = collector.finder;
       let base_grid = current_finder.to_grid();
       let base_ledger = Ledger::new(&base_grid).ok()?;
 
@@ -703,28 +649,19 @@ fn disprove_recursive(
       }
 
       let mut targets = Vec::new();
-      let mut min_size = 10;
 
       for loc in Loc::all() {
         let nums = current_finder.sukaku_map[loc];
-        let len = nums.len();
-        if len > 0 {
+        if !nums.is_empty() {
           targets.push(Target::NoNum(loc, nums));
-          if len < min_size {
-            min_size = len;
-          }
         }
       }
 
       for unit in Unit::all() {
         for num in Num::all() {
           let locs = unit.locs() & current_finder.remaining_asgmts.num_locs(num);
-          let len = locs.len();
-          if len > 0 {
+          if !locs.is_empty() {
             targets.push(Target::NoLoc(unit, num, locs));
-            if len < min_size {
-              min_size = len;
-            }
           }
         }
       }
@@ -765,11 +702,9 @@ fn disprove_recursive(
           if let Some(err_fact) = disprove_recursive(
             &current_finder,
             vec![cand_fact],
-            solutions,
             depth + 1,
             max_depth,
-            start_time,
-            max_time_ms,
+            timeout,
           ) {
             branch_disproofs.push(err_fact);
           } else {
@@ -901,11 +836,7 @@ mod tests {
     assert!(!summary.solutions.is_empty());
 
     let results = calculate_erroneous_productivity_native(&grid, &summary.solutions, None);
-
-    let mut solutions_asgmt_set = AsgmtSet::new();
-    for solution in &summary.solutions {
-      solutions_asgmt_set |= AsgmtSet::simple_from_grid(&solution.grid());
-    }
+    let solutions_asgmt_set = AsgmtSet::from_solutions(&summary.solutions);
 
     // Verify all candidates returned are indeed erroneous
     for res in &results {
@@ -1111,5 +1042,211 @@ mod tests {
     assert!(!timed_out);
     assert_eq!(facts.len(), 1);
     assert_eq!(facts[0].as_asgmt(), Some(target));
+  }
+
+  #[test]
+  fn test_fact_type_name_all_variants() {
+    let cases: Vec<(Fact, &str)> = vec![
+      (
+        Fact::SingleLoc {
+          num: N1,
+          unit: R1.to_unit(),
+          loc: L11,
+        },
+        "SingleLoc",
+      ),
+      (Fact::SingleNum { loc: L11, num: N1 }, "SingleNum"),
+      (
+        Fact::SpeculativeAssignment { loc: L11, num: N1 },
+        "SpeculativeAssignment",
+      ),
+      (
+        Fact::NoLoc {
+          num: N1,
+          unit: R1.to_unit(),
+        },
+        "NoLoc",
+      ),
+      (Fact::NoNum { loc: L11 }, "NoNum"),
+      (
+        Fact::Conflict {
+          num: N1,
+          unit: R1.to_unit(),
+          locs: L11.as_set() | L12.as_set(),
+        },
+        "Conflict",
+      ),
+      (
+        Fact::ConflictLoc {
+          loc: L11,
+          nums: N1.as_set() | N2.as_set(),
+        },
+        "ConflictLoc",
+      ),
+      (
+        Fact::Overlap {
+          num: N1,
+          unit: B1.to_unit(),
+          cross_unit: R1.to_unit(),
+        },
+        "Overlap",
+      ),
+      (
+        Fact::Subset {
+          nums: N1.as_set() | N2.as_set(),
+          unit: R1.to_unit(),
+          locs: L11.as_set() | L12.as_set(),
+          cross_unit: None,
+          is_naked: true,
+        },
+        "Subset",
+      ),
+      (
+        Fact::Implication {
+          antecedents: vec![],
+          consequent: Box::new(Fact::NoNum { loc: L11 }),
+        },
+        "Implication",
+      ),
+      (
+        Fact::Fish {
+          num: N1,
+          base_units: UnitSet::default(),
+          cover_units: UnitSet::default(),
+          finned_locs: LocSet::new(),
+          elimination_locs: LocSet::new(),
+        },
+        "Fish",
+      ),
+      (
+        Fact::EmptyRectangle {
+          num: N1,
+          block: B1.to_unit(),
+          row: R1.to_unit(),
+          col: C1.to_unit(),
+          conjugate_pair: LocSet::new(),
+          elimination_locs: LocSet::new(),
+        },
+        "EmptyRectangle",
+      ),
+      (
+        Fact::Skyscraper {
+          num: N1,
+          base_units: UnitSet::default(),
+          roof_locs: LocSet::new(),
+          elimination_locs: LocSet::new(),
+        },
+        "Skyscraper",
+      ),
+      (
+        Fact::TwoStringKite {
+          num: N1,
+          block: B1.to_unit(),
+          rows: UnitSet::default(),
+          cols: UnitSet::default(),
+          string_ends: LocSet::new(),
+          elimination_locs: LocSet::new(),
+        },
+        "TwoStringKite",
+      ),
+    ];
+
+    for (fact, expected) in cases {
+      assert_eq!(fact.type_name(), expected);
+    }
+  }
+
+  #[test]
+  fn test_wasm_asgmt_and_constraints_edge_cases() {
+    assert_eq!(
+      WasmAsgmt { loc: 0, num: 1 }.to_asgmt(),
+      Some(Asgmt::new(N1, L11))
+    );
+    assert_eq!(
+      WasmAsgmt { loc: 80, num: 9 }.to_asgmt(),
+      Some(Asgmt::new(N9, L99))
+    );
+    assert_eq!(WasmAsgmt { loc: -1, num: 1 }.to_asgmt(), None);
+    assert_eq!(WasmAsgmt { loc: 81, num: 1 }.to_asgmt(), None);
+    assert_eq!(WasmAsgmt { loc: 0, num: 0 }.to_asgmt(), None);
+    assert_eq!(WasmAsgmt { loc: 0, num: 10 }.to_asgmt(), None);
+
+    let grid = Grid::new();
+    let c1 = vec![WasmAsgmt { loc: 0, num: 1 }];
+    let finder = FactFinder::with_constraints(&grid, Some(&[c1]));
+    assert!(!finder.remaining_asgmts.contains(Asgmt::new(N1, L11)));
+    assert!(!finder.sukaku_map[L11].contains(N1));
+
+    // Test eliminate_set updates both remaining_asgmts and sukaku_map
+    let mut finder = FactFinder::new(&grid);
+    let mut elims = AsgmtSet::new();
+    elims.insert(Asgmt::new(N2, L11));
+    elims.insert(Asgmt::new(N3, L22));
+    finder.eliminate_set(elims);
+    assert!(!finder.remaining_asgmts.contains(Asgmt::new(N2, L11)));
+    assert!(!finder.remaining_asgmts.contains(Asgmt::new(N3, L22)));
+    assert!(!finder.sukaku_map[L11].contains(N2));
+    assert!(!finder.sukaku_map[L22].contains(N3));
+
+    // When a constraint has 2 inactive candidates, neither should be eliminated.
+    let mut finder = FactFinder::new(&grid);
+    let two_inactive = vec![vec![
+      WasmAsgmt { loc: 0, num: 4 },
+      WasmAsgmt { loc: 1, num: 5 },
+    ]];
+    apply_constraints(&mut finder, &two_inactive);
+    assert!(finder.remaining_asgmts.contains(Asgmt::new(N4, L11)));
+    assert!(finder.remaining_asgmts.contains(Asgmt::new(N5, L12)));
+
+    // When all assignments in a constraint are active, remaining_asgmts is cleared.
+    finder.apply(Asgmt::new(N4, L11));
+    finder.apply(Asgmt::new(N5, L12));
+    apply_constraints(&mut finder, &two_inactive);
+    assert!(finder.remaining_asgmts.is_empty());
+  }
+
+  #[test]
+  fn test_calculate_erroneous_productivity_with_constraints_and_invalid_grid() {
+    let grid = Grid::from_str(
+      r"
+            . 7 4 | . 9 . | 6 . 3
+            3 . 9 | 7 . 6 | . 4 .
+            6 . 5 | . 4 3 | 9 7 .
+            - - - + - - - + - - -
+            4 3 8 | 2 6 9 | 7 1 5
+            . . 6 | 4 8 7 | 2 3 9
+            7 9 2 | . . . | 4 6 8
+            - - - + - - - + - - -
+            . . 1 | . 7 4 | . . 6
+            . 4 3 | 6 . . | . . 7
+            8 6 7 | 9 . . | . 2 4",
+    )
+    .unwrap();
+
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&grid, 10, &mut helper);
+    let baseline = calculate_erroneous_productivity_native(&grid, &summary.solutions, None);
+    assert!(!baseline.is_empty());
+
+    let first_err = &baseline[0];
+    let constraints = vec![vec![WasmAsgmt {
+      loc: first_err.loc.index() as i8,
+      num: first_err.num.get(),
+    }]];
+    let constrained =
+      calculate_erroneous_productivity_native(&grid, &summary.solutions, Some(&constraints));
+    assert!(
+      !constrained
+        .iter()
+        .any(|r| r.loc == first_err.loc && r.num == first_err.num),
+      "Constrained erroneous assignment should already be eliminated from base_ledger"
+    );
+
+    // Invalid grid returns empty results
+    let mut invalid_grid = grid.clone();
+    invalid_grid[L11] = Some(N7); // Clashes with L12 = N7
+    assert!(
+      calculate_erroneous_productivity_native(&invalid_grid, &summary.solutions, None).is_empty()
+    );
   }
 }

@@ -113,11 +113,7 @@ impl Puzzle {
   /// more than one solution, the resulting set will be the union of all the
   /// solutions.
   pub fn solution_asgmts(&self) -> AsgmtSet {
-    let mut answer = AsgmtSet::new();
-    for solution in &self.solutions {
-      answer |= AsgmtSet::simple_from_grid(&solution.grid());
-    }
-    answer
+    AsgmtSet::from_solutions(&self.solutions)
   }
 }
 

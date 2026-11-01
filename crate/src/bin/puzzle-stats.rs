@@ -23,25 +23,6 @@ struct Args {
   days: i32,
 }
 
-fn fact_type_name(fact: &Fact) -> &'static str {
-  match fact {
-    Fact::SingleLoc { .. } => "SingleLoc",
-    Fact::SingleNum { .. } => "SingleNum",
-    Fact::SpeculativeAssignment { .. } => "SpeculativeAssignment",
-    Fact::NoLoc { .. } => "NoLoc",
-    Fact::NoNum { .. } => "NoNum",
-    Fact::Conflict { .. } => "Conflict",
-    Fact::ConflictLoc { .. } => "ConflictLoc",
-    Fact::Overlap { .. } => "Overlap",
-    Fact::Subset { .. } => "Subset",
-    Fact::Implication { .. } => "Implication",
-    Fact::Fish { .. } => "Fish",
-    Fact::EmptyRectangle { .. } => "EmptyRectangle",
-    Fact::Skyscraper { .. } => "Skyscraper",
-    Fact::TwoStringKite { .. } => "TwoStringKite",
-  }
-}
-
 fn count_interesting_facts(fact: &Fact, counts: &mut HashMap<&'static str, usize>) {
   match fact {
     Fact::SingleLoc { .. } | Fact::SingleNum { .. } | Fact::SpeculativeAssignment { .. } => {}
@@ -55,7 +36,7 @@ fn count_interesting_facts(fact: &Fact, counts: &mut HashMap<&'static str, usize
       count_interesting_facts(consequent, counts);
     }
     _ => {
-      *counts.entry(fact_type_name(fact)).or_insert(0) += 1;
+      *counts.entry(fact.type_name()).or_insert(0) += 1;
     }
   }
 }

@@ -13,17 +13,43 @@ use crate::core::*;
 use crate::define_set_operators;
 use crate::time;
 
-use super::Fact;
+use super::{Fact, FactFinder};
 
-pub struct Collector {
-  pub remaining_asgmts: AsgmtSet,
-  pub actual_asgmts: AsgmtSet,
-  pub sukaku_map: SukakuMap,
-  pub facts: Vec<Fact>,
-  pub found: HashMap<Fact, ()>,
+#[derive(Clone, Copy, Debug)]
+pub struct Timeout {
   pub max_time_ms: Option<f64>,
   pub start_time_ms: f64,
   pub timed_out: bool,
+}
+
+impl Timeout {
+  pub fn new(max_time_ms: Option<f64>) -> Self {
+    Self {
+      max_time_ms,
+      start_time_ms: time::now(),
+      timed_out: false,
+    }
+  }
+
+  pub fn check(&mut self) -> bool {
+    if self.timed_out {
+      return true;
+    }
+    if let Some(max_time) = self.max_time_ms {
+      if time::now() - self.start_time_ms > max_time {
+        self.timed_out = true;
+        return true;
+      }
+    }
+    false
+  }
+}
+
+pub struct Collector {
+  pub finder: FactFinder,
+  pub facts: Vec<Fact>,
+  pub found: HashMap<Fact, ()>,
+  pub timeout: Timeout,
   pub min_overlap_size: i32,
 }
 
@@ -39,31 +65,22 @@ pub enum ErrorMode {
 }
 
 impl Collector {
-  pub fn new(remaining_asgmts: AsgmtSet, actual_asgmts: AsgmtSet, sukaku_map: SukakuMap) -> Self {
+  pub fn new(finder: FactFinder) -> Self {
+    Self::with_timeout(finder, None)
+  }
+
+  pub fn with_timeout(finder: FactFinder, max_time_ms: Option<f64>) -> Self {
     Self {
-      remaining_asgmts,
-      actual_asgmts,
-      sukaku_map,
+      finder,
       facts: Vec::new(),
       found: HashMap::new(),
-      max_time_ms: None,
-      start_time_ms: time::now(),
-      timed_out: false,
+      timeout: Timeout::new(max_time_ms),
       min_overlap_size: 1,
     }
   }
 
   pub fn check_timeout(&mut self) -> bool {
-    if self.timed_out {
-      return true;
-    }
-    if let Some(max_time) = self.max_time_ms {
-      if time::now() - self.start_time_ms > max_time {
-        self.timed_out = true;
-        return true;
-      }
-    }
-    false
+    self.timeout.check()
   }
 
   pub fn add_fact(&mut self, fact: Fact) {
@@ -73,12 +90,26 @@ impl Collector {
       .or_insert_with_key(|fact| self.facts.push(fact.clone()));
   }
 
+  fn record_and_apply_eliminations(
+    &mut self,
+    range: std::ops::Range<usize>,
+    antecedents: &mut Vec<Fact>,
+    antecedent_eliminations: &mut Vec<AsgmtSet>,
+  ) {
+    let mut all_eliminated_asgmts = AsgmtSet::new();
+    for fact in &self.facts[range] {
+      let elim = fact.as_eliminations();
+      all_eliminated_asgmts |= elim;
+      antecedents.push(fact.clone());
+      antecedent_eliminations.push(elim);
+    }
+    self.finder.eliminate_set(all_eliminated_asgmts);
+  }
+
   /// Collects all facts from the current state of the collector, using the
   /// given error mode to determine how to handle errors.
   pub fn collect(&mut self, error_mode: ErrorMode) -> Result<(), Invalid> {
-    let base_remaining_asgmts = self.remaining_asgmts;
-    let base_actual_asgmts = self.actual_asgmts;
-    let base_sukaku_map = self.sukaku_map;
+    let base_finder = self.finder;
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
     let mut set_state = SetState::new();
@@ -125,38 +156,22 @@ impl Collector {
           if self.check_timeout() {
             break;
           }
-          let fact = self.facts[i].clone();
-          let required = narrow_antecedents(
-            &fact,
-            antecedents.as_slice(),
+          self.facts[i] = narrow_implication(
+            self.facts[i].clone(),
+            &antecedents,
             &antecedent_eliminations,
-            base_remaining_asgmts,
-            base_actual_asgmts,
-            base_sukaku_map,
-            0,
+            &base_finder,
           );
-          if !required.is_empty() {
-            self.facts[i] = Fact::Implication {
-              antecedents: required,
-              consequent: Box::new(fact),
-            };
-          }
         }
       }
       if eliminations_start == eliminations_end {
         break;
       }
-      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
-      antecedents.extend(self.facts[eliminations_start..eliminations_end].to_vec());
-      antecedent_eliminations.extend(eliminations);
-      let all_eliminated_asgmts = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .fold(AsgmtSet::new(), |acc, x| acc | x.as_eliminations());
-      self.remaining_asgmts -= all_eliminated_asgmts;
-      self.sukaku_map.eliminate(&all_eliminated_asgmts);
+      self.record_and_apply_eliminations(
+        eliminations_start..eliminations_end,
+        &mut antecedents,
+        &mut antecedent_eliminations,
+      );
     }
     Ok(())
   }
@@ -180,9 +195,7 @@ impl Collector {
     self.facts.clear();
     self.found.clear();
 
-    let base_remaining_asgmts = self.remaining_asgmts;
-    let base_actual_asgmts = self.actual_asgmts;
-    let base_sukaku_map = self.sukaku_map;
+    let base_finder = self.finder;
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
     let mut set_state = SetState::new();
@@ -205,42 +218,25 @@ impl Collector {
         break;
       }
 
-      let eliminations: Vec<AsgmtSet> = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
-      antecedents.extend(self.facts[eliminations_start..eliminations_end].to_vec());
-      antecedent_eliminations.extend(eliminations);
-      let all_eliminated_asgmts = self.facts[eliminations_start..eliminations_end]
-        .iter()
-        .fold(AsgmtSet::new(), |acc, x| acc | x.as_eliminations());
-      self.remaining_asgmts -= all_eliminated_asgmts;
-      self.sukaku_map.eliminate(&all_eliminated_asgmts);
+      self.record_and_apply_eliminations(
+        eliminations_start..eliminations_end,
+        &mut antecedents,
+        &mut antecedent_eliminations,
+      );
 
       let singles_start = self.facts.len();
       find_hidden_singles(self);
       find_naked_singles(self);
       let singles_end = self.facts.len();
 
-      for fact in self.facts[singles_start..singles_end].iter() {
+      for fact in &self.facts[singles_start..singles_end] {
         if fact.as_asgmt() == Some(target) {
-          let required = narrow_antecedents(
-            fact,
-            antecedents.as_slice(),
+          return Some(narrow_implication(
+            fact.clone(),
+            &antecedents,
             &antecedent_eliminations,
-            base_remaining_asgmts,
-            base_actual_asgmts,
-            base_sukaku_map,
-            0,
-          );
-          if !required.is_empty() {
-            return Some(Fact::Implication {
-              antecedents: required,
-              consequent: Box::new(fact.clone()),
-            });
-          } else {
-            return Some(fact.clone());
-          }
+            &base_finder,
+          ));
         }
       }
     }
@@ -251,78 +247,52 @@ impl Collector {
 pub struct LevelData {
   pub facts: Vec<Fact>,
   pub eliminations: Vec<AsgmtSet>,
-  pub remaining_asgmts_before: AsgmtSet,
-  pub actual_asgmts_before: AsgmtSet,
-  pub sukaku_map_before: SukakuMap,
+  pub finder_before: FactFinder,
 }
 
 pub struct TreeCollector {
-  pub remaining_asgmts: AsgmtSet,
-  pub actual_asgmts: AsgmtSet,
-  pub sukaku_map: SukakuMap,
+  pub finder: FactFinder,
   pub levels: Vec<LevelData>,
   pub found: HashMap<Fact, ()>,
   pub error_found: Option<Fact>,
-  pub max_time_ms: Option<f64>,
-  pub start_time_ms: f64,
-  pub timed_out: bool,
+  pub timeout: Timeout,
   pub min_overlap_size: i32,
 }
 
 impl TreeCollector {
-  pub fn new(remaining_asgmts: AsgmtSet, actual_asgmts: AsgmtSet, sukaku_map: SukakuMap) -> Self {
+  pub fn with_timeout(finder: FactFinder, timeout: Timeout) -> Self {
     Self {
-      remaining_asgmts,
-      actual_asgmts,
-      sukaku_map,
+      finder,
       levels: Vec::new(),
       found: HashMap::new(),
       error_found: None,
-      max_time_ms: None,
-      start_time_ms: time::now(),
-      timed_out: false,
+      timeout,
       min_overlap_size: 2,
     }
   }
 
   pub fn check_timeout(&mut self) -> bool {
-    if self.timed_out {
-      return true;
-    }
-    if let Some(max_time) = self.max_time_ms {
-      if time::now() - self.start_time_ms > max_time {
-        self.timed_out = true;
-        return true;
-      }
-    }
-    false
+    self.timeout.check()
   }
 
   pub fn add_level(&mut self, facts: Vec<Fact>) {
-    let mut elims = Vec::new();
+    let finder_before = self.finder;
+    let mut eliminations = Vec::with_capacity(facts.len());
     for f in &facts {
-      elims.push(f.as_eliminations());
-    }
-    self.levels.push(LevelData {
-      facts: facts.clone(),
-      eliminations: elims,
-      remaining_asgmts_before: self.remaining_asgmts,
-      actual_asgmts_before: self.actual_asgmts,
-      sukaku_map_before: self.sukaku_map,
-    });
-    for f in &facts {
+      let elim = f.as_eliminations();
+      eliminations.push(elim);
       self.found.insert(f.clone(), ());
       if let Some(asgmt) = f.as_asgmt() {
-        self.remaining_asgmts.apply(asgmt);
-        self.remaining_asgmts.remove(asgmt);
-        self.actual_asgmts.insert(asgmt);
-        self.sukaku_map.apply(asgmt);
+        self.finder.apply(asgmt);
+      } else {
+        self.finder.eliminate_set(elim);
       }
     }
-    for elim in &self.levels.last().unwrap().eliminations {
-      self.remaining_asgmts -= *elim;
-      self.sukaku_map.eliminate(elim);
-    }
+    self.levels.push(LevelData {
+      facts,
+      eliminations,
+      finder_before,
+    });
   }
 
   /// Runs one level of deduction. Returns true if new facts were found.
@@ -331,8 +301,7 @@ impl TreeCollector {
       return false;
     }
 
-    let mut temp_collector =
-      Collector::new(self.remaining_asgmts, self.actual_asgmts, self.sukaku_map);
+    let mut temp_collector = Collector::new(self.finder);
     temp_collector.found = self.found.clone();
     temp_collector.min_overlap_size = self.min_overlap_size;
 
@@ -359,12 +328,12 @@ impl TreeCollector {
       if fact.is_error() {
         filtered_facts.push(fact);
       } else if let Some(asgmt) = fact.as_asgmt() {
-        if !self.actual_asgmts.contains(asgmt) && !level_asgmts.contains(asgmt) {
+        if !self.finder.actual_asgmts.contains(asgmt) && !level_asgmts.contains(asgmt) {
           level_asgmts.insert(asgmt);
           filtered_facts.push(fact);
         }
       } else {
-        let elims = fact.as_eliminations() & (self.remaining_asgmts - level_eliminations);
+        let elims = fact.as_eliminations() & (self.finder.remaining_asgmts - level_eliminations);
         if !elims.is_empty() {
           level_eliminations |= elims;
           filtered_facts.push(fact);
@@ -384,32 +353,36 @@ impl TreeCollector {
   pub fn backward_reduce(&self) -> Option<Fact> {
     let mut consequent = self.error_found.clone()?;
     for level in self.levels.iter().rev() {
-      let required = narrow_antecedents(
-        &consequent,
+      consequent = narrow_implication(
+        consequent,
         &level.facts,
         &level.eliminations,
-        level.remaining_asgmts_before,
-        level.actual_asgmts_before,
-        level.sukaku_map_before,
-        level.facts.len(), // Force checking all facts
+        &level.finder_before,
       );
-      if !required.is_empty() {
-        consequent = Fact::Implication {
-          antecedents: required,
-          consequent: Box::new(consequent),
-        };
-      }
     }
     Some(consequent)
   }
 }
 
-fn fact_is_implied(
-  fact: &Fact,
-  remaining_asgmts: &AsgmtSet,
-  actual_asgmts: &AsgmtSet,
-  sukaku_map: &SukakuMap,
+fn is_consequent_implied_after(
+  consequent: &Fact,
+  base_finder: &FactFinder,
+  elims: AsgmtSet,
+  actual_asgmts: AsgmtSet,
+  uses_sukaku: bool,
 ) -> bool {
+  let mut state = FactFinder {
+    remaining_asgmts: base_finder.remaining_asgmts - elims,
+    actual_asgmts,
+    sukaku_map: base_finder.sukaku_map,
+  };
+  if uses_sukaku {
+    state.sukaku_map.eliminate(&elims);
+  }
+  fact_is_implied(consequent, &state)
+}
+
+fn fact_is_implied(fact: &Fact, finder: &FactFinder) -> bool {
   match fact {
     Fact::Implication {
       antecedents,
@@ -418,15 +391,11 @@ fn fact_is_implied(
       let is_disproof = consequent.is_error()
         && antecedents.len() == 1
         && matches!(antecedents[0], Fact::SpeculativeAssignment { .. });
-      if !is_disproof
-        && !antecedents
-          .iter()
-          .all(|ant| fact_is_implied(ant, remaining_asgmts, actual_asgmts, sukaku_map))
-      {
+      if !is_disproof && !antecedents.iter().all(|ant| fact_is_implied(ant, finder)) {
         return false;
       }
       let mut implied_elims = AsgmtSet::new();
-      let mut implied_actual = *actual_asgmts;
+      let mut implied_actual = finder.actual_asgmts;
       for ant in antecedents {
         implied_elims |= ant.as_eliminations();
         if let Some(asgmt) = ant.as_asgmt() {
@@ -434,14 +403,37 @@ fn fact_is_implied(
           implied_actual.insert(asgmt);
         }
       }
-      let state_remaining = *remaining_asgmts - implied_elims;
-      let mut state_sukaku = *sukaku_map;
-      if consequent.uses_sukaku_map() {
-        state_sukaku.eliminate(&implied_elims);
-      }
-      fact_is_implied(consequent, &state_remaining, &implied_actual, &state_sukaku)
+      is_consequent_implied_after(
+        consequent,
+        finder,
+        implied_elims,
+        implied_actual,
+        consequent.uses_sukaku_map(),
+      )
     }
-    other => other.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map),
+    other => other.is_implied_by(finder),
+  }
+}
+
+fn narrow_implication(
+  consequent: Fact,
+  antecedents: &[Fact],
+  antecedent_eliminations: &[AsgmtSet],
+  base_finder: &FactFinder,
+) -> Fact {
+  let required = narrow_antecedents(
+    &consequent,
+    antecedents,
+    antecedent_eliminations,
+    base_finder,
+  );
+  if required.is_empty() {
+    consequent
+  } else {
+    Fact::Implication {
+      antecedents: required,
+      consequent: Box::new(consequent),
+    }
   }
 }
 
@@ -449,10 +441,7 @@ fn narrow_antecedents(
   consequent: &Fact,
   antecedents: &[Fact],
   antecedent_eliminations: &[AsgmtSet],
-  remaining_asgmts: AsgmtSet,
-  actual_asgmts: AsgmtSet,
-  sukaku_map: SukakuMap,
-  _num_speculative_facts: usize,
+  base_finder: &FactFinder,
 ) -> Vec<Fact> {
   if antecedents.is_empty() {
     return Vec::new();
@@ -462,7 +451,7 @@ fn narrow_antecedents(
 
   let implies_consequent = |indices: &[usize]| -> bool {
     let mut elims = AsgmtSet::new();
-    let mut state_actual = actual_asgmts;
+    let mut state_actual = base_finder.actual_asgmts;
     for &idx in indices {
       elims |= antecedent_eliminations[idx];
       if let Some(asgmt) = antecedents[idx].as_asgmt() {
@@ -470,12 +459,7 @@ fn narrow_antecedents(
         state_actual.insert(asgmt);
       }
     }
-    let state_remaining = remaining_asgmts - elims;
-    let mut state_sukaku = sukaku_map;
-    if uses_sukaku {
-      state_sukaku.eliminate(&elims);
-    }
-    fact_is_implied(consequent, &state_remaining, &state_actual, &state_sukaku)
+    is_consequent_implied_after(consequent, base_finder, elims, state_actual, uses_sukaku)
   };
 
   let mut kept_indices: Vec<usize> = (0..antecedents.len()).collect();
@@ -513,12 +497,10 @@ impl Fact {
     }
   }
 
-  fn is_implied_by(
-    &self,
-    remaining_asgmts: &AsgmtSet,
-    actual_asgmts: &AsgmtSet,
-    sukaku_map: &SukakuMap,
-  ) -> bool {
+  fn is_implied_by(&self, finder: &FactFinder) -> bool {
+    let remaining_asgmts = &finder.remaining_asgmts;
+    let actual_asgmts = &finder.actual_asgmts;
+    let sukaku_map = &finder.sukaku_map;
     match self {
       Fact::SingleLoc { num, unit, loc } => {
         (remaining_asgmts.num_locs(*num) & unit.locs()) == loc.as_set()
@@ -533,15 +515,7 @@ impl Fact {
         let actual = actual_asgmts.num_locs(*num) & unit.locs();
         *locs <= actual
       }
-      Fact::ConflictLoc { loc, nums } => {
-        let mut actual_nums = NumSet::new();
-        for num in Num::all() {
-          if actual_asgmts.num_locs(num).contains(*loc) {
-            actual_nums.insert(num);
-          }
-        }
-        *nums <= actual_nums
-      }
+      Fact::ConflictLoc { loc, nums } => *nums <= actual_asgmts.loc_nums(*loc),
       Fact::Overlap {
         num,
         unit,
@@ -569,9 +543,7 @@ impl Fact {
         }
         true
       }
-      Fact::Implication { .. } => {
-        fact_is_implied(self, remaining_asgmts, actual_asgmts, sukaku_map)
-      }
+      Fact::Implication { .. } => fact_is_implied(self, finder),
       Fact::Fish {
         num,
         base_units,
@@ -647,17 +619,8 @@ impl Fact {
       } => {
         let num_locs = remaining_asgmts.num_locs(*num);
         let blk_locs = block.locs();
-        for r in rows.iter() {
-          let u_locs = num_locs & r.locs();
-          if u_locs.len() != 2
-            || (u_locs & *string_ends).len() != 1
-            || (u_locs & blk_locs).len() != 1
-          {
-            return false;
-          }
-        }
-        for c in cols.iter() {
-          let u_locs = num_locs & c.locs();
+        for u in (*rows | *cols).iter() {
+          let u_locs = num_locs & u.locs();
           if u_locs.len() != 2
             || (u_locs & *string_ends).len() != 1
             || (u_locs & blk_locs).len() != 1
@@ -672,14 +635,9 @@ impl Fact {
 }
 
 fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Invalid> {
-  let possible_asgmts = collector.remaining_asgmts | collector.actual_asgmts;
+  let possible_asgmts = collector.finder.possible_asgmts();
   for loc in Loc::all() {
-    let mut nums = NumSet::new();
-    for num in Num::all() {
-      if collector.actual_asgmts.num_locs(num).contains(loc) {
-        nums.insert(num);
-      }
-    }
+    let nums = collector.finder.actual_asgmts.loc_nums(loc);
     if nums.len() > 1 {
       if short_circuit {
         return Err(Invalid);
@@ -690,7 +648,7 @@ fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Inv
   for unit in Unit::all() {
     let unit_locs = unit.locs();
     for num in Num::all() {
-      let actual_locs = collector.actual_asgmts.num_locs(num) & unit_locs;
+      let actual_locs = collector.finder.actual_asgmts.num_locs(num) & unit_locs;
       if actual_locs.len() > 1 {
         if short_circuit {
           return Err(Invalid);
@@ -710,8 +668,8 @@ fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Inv
       }
     }
   }
-  for loc in (!collector.actual_asgmts.naked_singles()).iter() {
-    if collector.sukaku_map[loc].is_empty() {
+  for loc in (!collector.finder.actual_asgmts.naked_singles()).iter() {
+    if collector.finder.sukaku_map[loc].is_empty() {
       if short_circuit {
         return Err(Invalid);
       }
@@ -723,8 +681,8 @@ fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Inv
 
 fn find_overlaps(collector: &mut Collector) {
   // Note: this mimics the logic in `collect` but only for overlaps.
-  let base_remaining_asgmts = collector.remaining_asgmts;
-  let mut remaining_asgmts = collector.remaining_asgmts;
+  let base_finder = collector.finder;
+  let mut remaining_asgmts = collector.finder.remaining_asgmts;
   for num in Num::all() {
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
@@ -735,39 +693,27 @@ fn find_overlaps(collector: &mut Collector) {
         let band_locs = num_locs.band_locs(band);
         let blk_row_bits = band_locs_to_blk_rows(band_locs);
         let blk_col_bits = locs_to_blk_cols(num_locs, band);
-        blk_row_bits_to_overlaps(blk_row_bits, num, band, collector, &remaining_asgmts);
-        blk_col_bits_to_overlaps(blk_col_bits, num, band, collector, &remaining_asgmts);
+        add_band_overlaps(blk_row_bits, num, band, true, collector, &remaining_asgmts);
+        add_band_overlaps(blk_col_bits, num, band, false, collector, &remaining_asgmts);
       }
       if !antecedents.is_empty() {
-        for fact in collector.facts[start..].iter_mut() {
-          let required = narrow_antecedents(
-            &fact,
-            antecedents.as_slice(),
+        for fact in &mut collector.facts[start..] {
+          *fact = narrow_implication(
+            fact.clone(),
+            &antecedents,
             &antecedent_eliminations,
-            base_remaining_asgmts,
-            collector.actual_asgmts,
-            collector.sukaku_map,
-            0,
+            &base_finder,
           );
-          if !required.is_empty() {
-            *fact = Fact::Implication {
-              antecedents: required,
-              consequent: Box::new(fact.clone()),
-            };
-          }
         }
       }
       if start == collector.facts.len() {
         break;
       }
-      let eliminations: Vec<AsgmtSet> = collector.facts[start..]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
-      antecedents.extend(collector.facts[start..].to_vec());
-      antecedent_eliminations.extend(eliminations.iter().copied());
-      for asgmts in eliminations.iter() {
-        remaining_asgmts -= *asgmts;
+      for fact in &collector.facts[start..] {
+        let elim = fact.as_eliminations();
+        remaining_asgmts -= elim;
+        antecedents.push(fact.clone());
+        antecedent_eliminations.push(elim);
       }
     }
   }
@@ -796,7 +742,7 @@ fn find_subsets(collector: &mut Collector, set_state: &mut SetState) {
 
 fn find_hidden_singles(collector: &mut Collector) {
   for num in Num::all() {
-    let num_locs = collector.remaining_asgmts.num_locs(num);
+    let num_locs = collector.finder.remaining_asgmts.num_locs(num);
     let mut units_to_check = UnitSet::default();
     for band in Band::all() {
       let band_locs = num_locs.band_locs(band);
@@ -822,7 +768,7 @@ fn find_hidden_singles(collector: &mut Collector) {
 
 fn find_naked_singles(collector: &mut Collector) {
   for loc in Loc::all() {
-    let nums = collector.sukaku_map[loc];
+    let nums = collector.finder.sukaku_map[loc];
     if nums.len() != 1 {
       continue;
     }
@@ -860,47 +806,22 @@ fn blk_col_bit(locs: LocSet, row_band: Band, col_band: Band, blk_line: BlkLine) 
   (blk_col_bits >> blk_line.index()) as u8 & 1
 }
 
-/// Extracts the overlaps from a bitmap of block-rows, and stores them as facts
-/// in the given vector.  The bitmap represents the block-rows of the given
-/// row-band; the ones mean that at least one of the locations in the
-/// corresponding block-row is assignable to the given numeral.
-fn blk_row_bits_to_overlaps(
-  blk_row_bits: Bits9,
+/// Extracts the overlaps from a bitmap of block-rows or block-columns, and
+/// stores them as facts in the collector.
+fn add_band_overlaps(
+  blk_line_bits: Bits9,
   num: Num,
   band: Band,
+  is_row: bool,
   collector: &mut Collector,
   remaining_asgmts: &AsgmtSet,
 ) {
-  for spec in blk_line_bits_to_overlap_specs(blk_row_bits).iter() {
-    let fact = spec.to_row_band_overlap(num, band);
-    if collector.min_overlap_size > 1 {
-      if let Fact::Overlap {
-        unit, cross_unit, ..
-      } = fact
-      {
-        let available = remaining_asgmts.num_locs(num) & unit.locs() & cross_unit.locs();
-        if available.len() < collector.min_overlap_size {
-          continue;
-        }
-      }
-    }
-    collector.add_fact(fact);
-  }
-}
-
-/// Extracts the overlaps from a bitmap of block-columns, and stores them as
-/// facts in the given vector.  The bitmap represents the block-columns of the
-/// given column-band; the ones mean that at least one of the locations in the
-/// corresponding block-column is assignable to the given numeral.
-fn blk_col_bits_to_overlaps(
-  blk_col_bits: Bits9,
-  num: Num,
-  band: Band,
-  collector: &mut Collector,
-  remaining_asgmts: &AsgmtSet,
-) {
-  for spec in blk_line_bits_to_overlap_specs(blk_col_bits).iter() {
-    let fact = spec.to_col_band_overlap(num, band);
+  for spec in blk_line_bits_to_overlap_specs(blk_line_bits).iter() {
+    let fact = if is_row {
+      spec.to_row_band_overlap(num, band)
+    } else {
+      spec.to_col_band_overlap(num, band)
+    };
     if collector.min_overlap_size > 1 {
       if let Fact::Overlap {
         unit, cross_unit, ..
@@ -1234,29 +1155,30 @@ const fn blk_line_bits_to_band_units_impl_unrolled_line(bits: Bits9, line: i32) 
 /// Manages the state of the deduction process for locked sets by tracking which
 /// numerals and locations have been allocated to sets in each unit.
 struct SetState {
-  nums: HashMap<Unit, NumSet>,
-  locs: HashMap<Unit, LocSet>,
+  nums: [NumSet; UnitId::COUNT],
+  locs: [LocSet; UnitId::COUNT],
 }
 
 impl SetState {
   fn new() -> Self {
     Self {
-      nums: HashMap::new(),
-      locs: HashMap::new(),
+      nums: [NumSet::new(); UnitId::COUNT],
+      locs: [LocSet::new(); UnitId::COUNT],
     }
   }
 
-  fn get_nums(&mut self, unit: Unit) -> NumSet {
-    *self.nums.entry(unit).or_default()
+  fn get_nums(&self, unit: Unit) -> NumSet {
+    self.nums[unit.unit_id().index()]
   }
 
-  fn get_locs(&mut self, unit: Unit) -> LocSet {
-    *self.locs.entry(unit).or_default()
+  fn get_locs(&self, unit: Unit) -> LocSet {
+    self.locs[unit.unit_id().index()]
   }
 
   fn add(&mut self, unit: Unit, nums: NumSet, locs: LocSet) {
-    *self.nums.entry(unit).or_default() |= nums;
-    *self.locs.entry(unit).or_default() |= locs;
+    let idx = unit.unit_id().index();
+    self.nums[idx] |= nums;
+    self.locs[idx] |= locs;
   }
 }
 
@@ -1357,7 +1279,7 @@ fn find_hidden_sets(collector: &mut Collector, set_state: &mut SetState, unit: U
   let mut nums_to_check = NumSet::default();
   let mut unset_count = 0;
   for num in Num::all() {
-    let possible_size = (collector.remaining_asgmts.num_locs(num) & unit_locs).len();
+    let possible_size = (collector.finder.remaining_asgmts.num_locs(num) & unit_locs).len();
     if possible_size > 1 {
       unset_count += 1;
       if possible_size <= size && !nums_in_sets.contains(num) {
@@ -1373,7 +1295,7 @@ fn find_hidden_sets(collector: &mut Collector, set_state: &mut SetState, unit: U
         if nums_in_sets.contains(*num) {
           continue 'outer;
         }
-        locs |= collector.remaining_asgmts.num_locs(*num) & unit_locs;
+        locs |= collector.finder.remaining_asgmts.num_locs(*num) & unit_locs;
         nums.insert(*num);
       }
       if locs.len() == size {
@@ -1401,7 +1323,7 @@ fn find_naked_sets(collector: &mut Collector, set_state: &mut SetState, unit: Un
   let mut locs_to_check = LocSet::default();
   let mut unset_count = 0;
   for loc in unit_locs.iter() {
-    let possible_size = collector.sukaku_map[loc].len();
+    let possible_size = collector.finder.sukaku_map[loc].len();
     if possible_size > 1 {
       unset_count += 1;
       if possible_size <= size && !locs_in_sets.contains(loc) {
@@ -1418,7 +1340,7 @@ fn find_naked_sets(collector: &mut Collector, set_state: &mut SetState, unit: Un
           continue 'outer;
         }
         locs.insert(*loc);
-        nums |= collector.sukaku_map[*loc];
+        nums |= collector.finder.sukaku_map[*loc];
       }
       if nums.len() == size {
         let cross_unit = find_overlapping_unit(unit, locs);
@@ -1611,10 +1533,7 @@ mod tests {
   }
 
   fn make_collector(grid: &Grid) -> Collector {
-    let actual_asgmts = AsgmtSet::simple_from_grid(&grid);
-    let remaining_asgmts = AsgmtSet::possibles_from_grid(&grid) - actual_asgmts;
-    let sukaku_map = SukakuMap::from_grid(&grid);
-    Collector::new(remaining_asgmts, actual_asgmts, sukaku_map)
+    Collector::new(FactFinder::new(grid))
   }
 
   #[test]
@@ -1965,23 +1884,7 @@ mod tests {
     collector.collect(ErrorMode::Collect).unwrap();
     let mut nub_counts: HashMap<String, i32> = HashMap::new();
     for fact in collector.facts.iter() {
-      let fact = fact.nub();
-      let name = match fact {
-        Fact::SingleLoc { .. } => "SingleLoc",
-        Fact::SingleNum { .. } => "SingleNum",
-        Fact::SpeculativeAssignment { .. } => "SpeculativeAssignment",
-        Fact::NoLoc { .. } => "NoLoc",
-        Fact::NoNum { .. } => "NoNum",
-        Fact::Conflict { .. } => "Conflict",
-        Fact::ConflictLoc { .. } => "ConflictLoc",
-        Fact::Overlap { .. } => "Overlap",
-        Fact::Subset { .. } => "Subset",
-        Fact::Implication { .. } => "Implication",
-        Fact::Fish { .. } => "Fish",
-        Fact::EmptyRectangle { .. } => "EmptyRectangle",
-        Fact::Skyscraper { .. } => "Skyscraper",
-        Fact::TwoStringKite { .. } => "TwoStringKite",
-      };
+      let name = fact.nub().type_name();
       *nub_counts.entry(name.to_string()).or_insert(0) += 1;
     }
     let mut nub_counts = nub_counts
@@ -2045,7 +1948,7 @@ mod tests {
     )
     .unwrap();
     let mut collector = make_collector(&grid);
-    collector.timed_out = true;
+    collector.timeout.timed_out = true;
     collector.collect(ErrorMode::Ignore).unwrap();
     assert!(collector.facts.is_empty());
   }
@@ -2073,15 +1976,17 @@ mod tests {
 
     let antecedents = vec![outer_ant.clone()];
     let antecedent_eliminations = vec![outer_ant.as_eliminations()];
+    let base_finder = FactFinder {
+      remaining_asgmts: base_asgmts,
+      actual_asgmts: AsgmtSet::new(),
+      sukaku_map: base_sukaku_map,
+    };
 
     let required = narrow_antecedents(
       &consequent,
       &antecedents,
       &antecedent_eliminations,
-      base_asgmts,
-      AsgmtSet::new(),
-      base_sukaku_map,
-      0,
+      &base_finder,
     );
 
     // Before the fix, the heuristic only checks if outer_ant reveals inner_ant.
@@ -2199,16 +2104,13 @@ mod tests {
       unrelated_ant.as_eliminations(),
       required_ant.as_eliminations(),
     ];
+    let fish_finder = FactFinder {
+      remaining_asgmts: base_asgmts,
+      actual_asgmts: AsgmtSet::new(),
+      sukaku_map: base_sukaku_map,
+    };
 
-    let narrowed = narrow_antecedents(
-      &fish,
-      &antecedents,
-      &antecedent_eliminations,
-      base_asgmts,
-      AsgmtSet::new(),
-      base_sukaku_map,
-      0,
-    );
+    let narrowed = narrow_antecedents(&fish, &antecedents, &antecedent_eliminations, &fish_finder);
     assert_eq!(narrowed, vec![required_ant.clone()]);
 
     // Also test EmptyRectangle narrowing:
@@ -2226,15 +2128,169 @@ mod tests {
       conjugate_pair: L42.as_set() | L47.as_set(),
       elimination_locs: L17.as_set(),
     };
-    let narrowed_er = narrow_antecedents(
-      &er,
-      &antecedents,
-      &antecedent_eliminations,
-      er_asgmts,
-      AsgmtSet::new(),
-      base_sukaku_map,
-      0,
-    );
+    let er_finder = FactFinder {
+      remaining_asgmts: er_asgmts,
+      actual_asgmts: AsgmtSet::new(),
+      sukaku_map: base_sukaku_map,
+    };
+    let narrowed_er = narrow_antecedents(&er, &antecedents, &antecedent_eliminations, &er_finder);
     assert_eq!(narrowed_er, vec![required_ant]);
+  }
+
+  #[test]
+  fn test_conflict_loc_and_advanced_is_implied_by() {
+    // 1. ConflictLoc in find_errors and Fact::is_implied_by / narrow_implication:
+    let mut finder = FactFinder::new(&Grid::new());
+    finder.actual_asgmts.insert(Asgmt::new(N3, L11));
+    finder.actual_asgmts.insert(Asgmt::new(N7, L11));
+
+    let mut collector = Collector::new(finder);
+    assert!(find_errors(&mut collector, true).is_err());
+
+    let mut collector = Collector::new(finder);
+    find_errors(&mut collector, false).unwrap();
+    let expected_conflict_loc = Fact::ConflictLoc {
+      loc: L11,
+      nums: N3.as_set() | N7.as_set(),
+    };
+    assert!(collector.facts.contains(&expected_conflict_loc));
+    assert!(expected_conflict_loc.is_implied_by(&finder));
+
+    // Verify narrow_implication narrows to the two assignment antecedents that create ConflictLoc
+    let base_finder = FactFinder::new(&Grid::new());
+    let ant1 = Fact::SingleLoc {
+      num: N3,
+      unit: R1.to_unit(),
+      loc: L11,
+    };
+    let ant2 = Fact::SingleLoc {
+      num: N7,
+      unit: C1.to_unit(),
+      loc: L11,
+    };
+    let unrelated = Fact::SingleLoc {
+      num: N9,
+      unit: B9.to_unit(),
+      loc: L99,
+    };
+    let ants = vec![ant1.clone(), unrelated, ant2.clone()];
+    let ant_elims: Vec<_> = ants.iter().map(|a| a.as_eliminations()).collect();
+    let narrowed_fact = narrow_implication(
+      expected_conflict_loc.clone(),
+      &ants,
+      &ant_elims,
+      &base_finder,
+    );
+    assert_eq!(
+      narrowed_fact,
+      Fact::Implication {
+        antecedents: vec![ant1, ant2],
+        consequent: Box::new(expected_conflict_loc.clone()),
+      }
+    );
+
+    // When consequent is already implied in base_finder, narrow_implication returns unwrapped consequent:
+    let unwrapped = narrow_implication(expected_conflict_loc.clone(), &ants, &ant_elims, &finder);
+    assert_eq!(unwrapped, expected_conflict_loc);
+
+    // 2. Skyscraper and TwoStringKite is_implied_by + narrowing:
+    let mut sky_asgmts = AsgmtSet::new();
+    // Row 1 CP at L11, L14 once L12 is eliminated by required_ant; Row 7 CP at L71, L76.
+    for loc in [L11, L12, L14, L71, L76, L26, L84] {
+      sky_asgmts.insert(Asgmt::new(N5, loc));
+    }
+    let sky_finder = FactFinder {
+      remaining_asgmts: sky_asgmts,
+      actual_asgmts: AsgmtSet::new(),
+      sukaku_map: SukakuMap([NumSet::new(); 81]),
+    };
+    let mut sky_bases = UnitSet::default();
+    sky_bases.insert(R1.to_unit());
+    sky_bases.insert(R7.to_unit());
+    let sky_fact = Fact::Skyscraper {
+      num: N5,
+      base_units: sky_bases,
+      roof_locs: L14.as_set() | L76.as_set(),
+      elimination_locs: L26.as_set() | L84.as_set(),
+    };
+    assert!(
+      !sky_fact.is_implied_by(&sky_finder),
+      "Skyscraper not implied while L12 still has N5"
+    );
+
+    let req_sky_ant = Fact::Overlap {
+      num: N5,
+      unit: B4.to_unit(),
+      cross_unit: C2.to_unit(),
+    };
+    let unrel_sky_ant = Fact::Overlap {
+      num: N2,
+      unit: B1.to_unit(),
+      cross_unit: R1.to_unit(),
+    };
+    let sky_ants = vec![unrel_sky_ant, req_sky_ant.clone()];
+    let sky_elims: Vec<_> = sky_ants.iter().map(|a| a.as_eliminations()).collect();
+    assert_eq!(
+      narrow_antecedents(&sky_fact, &sky_ants, &sky_elims, &sky_finder),
+      vec![req_sky_ant]
+    );
+
+    // TwoStringKite is_implied_by:
+    let mut kite_asgmts = AsgmtSet::new();
+    for loc in [L84, L89, L27, L97, L24] {
+      kite_asgmts.insert(Asgmt::new(N5, loc));
+    }
+    let mut kite_finder = FactFinder {
+      remaining_asgmts: kite_asgmts,
+      actual_asgmts: AsgmtSet::new(),
+      sukaku_map: SukakuMap([NumSet::new(); 81]),
+    };
+    let mut kite_rows = UnitSet::default();
+    kite_rows.insert(R8.to_unit());
+    let mut kite_cols = UnitSet::default();
+    kite_cols.insert(C7.to_unit());
+    let kite_fact = Fact::TwoStringKite {
+      num: N5,
+      block: B9.to_unit(),
+      rows: kite_rows,
+      cols: kite_cols,
+      string_ends: L84.as_set() | L27.as_set(),
+      elimination_locs: L24.as_set(),
+    };
+    assert!(kite_fact.is_implied_by(&kite_finder));
+    // Adding an extra candidate to R8 breaks the conjugate pair:
+    kite_finder.remaining_asgmts.insert(Asgmt::new(N5, L81));
+    assert!(!kite_fact.is_implied_by(&kite_finder));
+  }
+
+  #[test]
+  fn test_collect_targeted_direct_chained_and_none() {
+    let grid = Grid::from_str(
+      r"
+            . . . | 6 . 2 | . . .
+            1 . . | . . . | . . .
+            . . . | 4 . 8 | . . .
+            - - - + - - - + - - -
+            . 3 . | 5 . 6 | . . .
+            . . . | . . . | . . .
+            . 7 . | 8 . 9 | . . .
+            - - - + - - - + - - -
+            . 9 . | . . . | . . .
+            . . . | . . . | . . .
+            . 2 . | . . . | . . .",
+    )
+    .unwrap();
+
+    // Chained deduction: L82 = N1 requires overlaps o1 -> o2 -> o3
+    let mut collector = make_collector(&grid);
+    let chained = collector
+      .collect_targeted(Asgmt::new(N1, L82))
+      .expect("Should deduce L82 = N1 via implication chain");
+    assert_eq!(chained.as_asgmt(), Some(Asgmt::new(N1, L82)));
+    assert!(matches!(chained, Fact::Implication { .. }));
+
+    // Unreachable assignment returns None
+    let mut collector = make_collector(&grid);
+    assert!(collector.collect_targeted(Asgmt::new(N9, L11)).is_none());
   }
 }

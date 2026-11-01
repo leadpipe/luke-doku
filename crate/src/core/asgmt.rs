@@ -2,7 +2,7 @@
 //! locations in a Sudoku.
 
 use super::bits::{Bits, Bits27, Bits3x27, Bits9x3x27, BitsArray};
-use super::grid::Grid;
+use super::grid::{Grid, SolvedGrid};
 use super::masks::loc_to_zeroed_peers;
 use super::set::Set;
 use super::{loc::*, num::*, Invalid};
@@ -94,6 +94,27 @@ impl AsgmtSet {
       answer.insert(asgmt);
     }
     answer
+  }
+
+  /// Makes a new AsgmtSet containing the union of all assignments in the given
+  /// solved grids.
+  pub fn from_solutions(solutions: &[SolvedGrid]) -> Self {
+    let mut answer = Self::new();
+    for solution in solutions {
+      answer |= Self::simple_from_grid(&solution.grid());
+    }
+    answer
+  }
+
+  /// Returns the numerals present at the given location in this set.
+  pub fn loc_nums(&self, loc: Loc) -> NumSet {
+    let mut nums = NumSet::new();
+    for num in Num::all() {
+      if self.num_locs(num).contains(loc) {
+        nums.insert(num);
+      }
+    }
+    nums
   }
 
   /// Converts this set into a grid, with any location having multiple
@@ -312,5 +333,51 @@ mod tests {
 
     set.remove(Asgmt { loc: L12, num: N1 });
     assert!(set.valid_singles_and_doubles().is_err());
+  }
+
+  #[test]
+  fn loc_nums_and_from_solutions() {
+    let mut set = AsgmtSet::new();
+    assert_eq!(set.loc_nums(L11), NumSet::new());
+
+    set.insert(Asgmt::new(N2, L11));
+    set.insert(Asgmt::new(N5, L11));
+    set.insert(Asgmt::new(N9, L11));
+    set.insert(Asgmt::new(N7, L12));
+
+    let mut expected = NumSet::new();
+    expected.insert(N2);
+    expected.insert(N5);
+    expected.insert(N9);
+    assert_eq!(set.loc_nums(L11), expected);
+    assert_eq!(set.loc_nums(L12), NumSet::singleton(N7));
+    assert_eq!(set.loc_nums(L13), NumSet::new());
+
+    // Empty solutions slice produces an empty AsgmtSet.
+    assert_eq!(AsgmtSet::from_solutions(&[]), AsgmtSet::new());
+
+    // Solve a grid with multiple solutions and verify from_solutions unions them.
+    let multi_grid =
+      ".3....91.8.6.....2...8.4...5.2..7..........7.9..4.65.....7.3...3.8.....1.97...8.."
+        .parse::<Grid>()
+        .unwrap();
+    let mut helper = crate::solve::DefaultHelper();
+    let summary = crate::solve::solve(&multi_grid, 10, &mut helper);
+    assert!(summary.solutions.len() >= 2);
+
+    let single_union = AsgmtSet::from_solutions(&summary.solutions[..1]);
+    assert_eq!(single_union.len(), 81);
+    assert_eq!(
+      single_union,
+      AsgmtSet::simple_from_grid(&summary.solutions[0].grid())
+    );
+
+    let multi_union = AsgmtSet::from_solutions(&summary.solutions);
+    assert!(multi_union.len() > 81);
+    for sol in &summary.solutions {
+      for asgmt in sol.grid().iter() {
+        assert!(multi_union.contains(asgmt));
+      }
+    }
   }
 }
