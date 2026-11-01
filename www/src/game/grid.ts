@@ -24,14 +24,17 @@ export class Grid {
   constructor(grid: string);
 
   constructor(grid?: wasm.Grid | wasm.SolvedGrid | ReadonlyGrid | string) {
+    let tempWasmGrid: wasm.Grid | undefined;
     if (typeof grid === 'string') {
-      grid = wasm.Grid.newFromString(grid);
+      tempWasmGrid = wasm.Grid.newFromString(grid);
+      grid = tempWasmGrid;
     }
     this.array =
       grid instanceof wasm.Grid || grid instanceof wasm.SolvedGrid ?
         grid.bytes()
       : grid ? new Uint8Array(grid.bytes)
       : new Uint8Array(81);
+    tempWasmGrid?.free();
   }
 
   /** Creates a Rust Grid from the contents of this object. */
