@@ -65,7 +65,12 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
   if (!dailySolution) {
     startTimeMs = performance.now();
     try {
-      dailySolution = wasm.dailySolution(wasm.LogicalDate.fromString(m.date));
+      const ld = wasm.LogicalDate.fromString(m.date);
+      try {
+        dailySolution = wasm.dailySolution(ld);
+      } finally {
+        ld.free();
+      }
     } catch (e: unknown) {
       return toErrorCaught(m, 'dailySolution', e);
     }
@@ -73,7 +78,9 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
     dailySolutions.set(m.date, dailySolution);
     while (dailySolutions.size > MAX_CACHED) {
       const date = dailySolutions.keys().next().value!;
+      const evicted = dailySolutions.get(date);
       dailySolutions.delete(date);
+      evicted?.free();
     }
   }
   let puzzle;
@@ -89,14 +96,21 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
     puzzle.free();
     return symmetriesFound;
   }
+  const cluesGrid = puzzle.clues;
+  const cluesStr = cluesGrid.toFlatString();
+  cluesGrid.free();
   const answer = {
     type: FromWorkerMessageType.PUZZLE_GENERATED,
     toWorkerMessage: m,
     generatorVersion: dailySolution.generator_version,
-    clues: puzzle.clues.toFlatString(),
-    solutions: puzzle.solutions.map((s: wasm.SolvedGrid) =>
-      s.grid().toFlatString(),
-    ),
+    clues: cluesStr,
+    solutions: puzzle.solutions.map((s: wasm.SolvedGrid) => {
+      const g = s.grid();
+      const str = g.toFlatString();
+      g.free();
+      s.free();
+      return str;
+    }),
     symmetriesFound,
     dailySolutionElapsedMs,
     elapsedMs,
@@ -105,19 +119,36 @@ function generatePuzzle(m: GeneratePuzzleMessage): FromWorkerMessage {
   return answer;
 }
 
+function parseSolvedGrid(s: string): wasm.SolvedGrid | undefined {
+  const g = wasm.Grid.newFromString(s);
+  if (!g) return undefined;
+  try {
+    return g.solvedGrid();
+  } finally {
+    g.free();
+  }
+}
+
 function evaluatePuzzle(m: EvaluatePuzzleMessage): FromWorkerMessage {
   const clues = wasm.Grid.newFromString(m.clues);
-  const solutions = m.solutions.map(s =>
-    wasm.Grid.newFromString(s)?.solvedGrid(),
-  );
+  const solutions = m.solutions.map(parseSolvedGrid);
   if (!clues || solutions.some(s => !s)) {
+    clues?.free();
+    for (const s of solutions) {
+      s?.free();
+    }
     return toErrorCaught(
       m,
       'evaluatePuzzle',
       new Error('Invalid clues or solutions'),
     );
   }
-  const puzzle = wasm.Puzzle.new(clues, solutions as wasm.SolvedGrid[]);
+  let puzzle: wasm.Puzzle | undefined;
+  try {
+    puzzle = wasm.Puzzle.new(clues, solutions as wasm.SolvedGrid[]);
+  } finally {
+    clues.free();
+  }
   if (!puzzle) {
     return toErrorCaught(m, 'evaluatePuzzle', new Error('Invalid puzzle'));
   }
@@ -153,17 +184,33 @@ function testPuzzle(m: TestPuzzleMessage): FromWorkerMessage {
     return toErrorCaught(m, 'testPuzzle', new Error('Invalid clues'));
   }
   const startTimeMs = performance.now();
-  const result = wasm.Puzzle.test(clues);
-  const elapsedMs = performance.now() - startTimeMs;
-  return {
-    type: FromWorkerMessageType.PUZZLE_TESTED,
-    toWorkerMessage: m,
-    solutions: result.puzzle?.solutions.map((s: wasm.SolvedGrid) =>
-      s.grid().toFlatString(),
-    ),
-    incomplete: result.incomplete,
-    elapsedMs,
-  };
+  let result: wasm.PuzzleProspect | undefined;
+  try {
+    result = wasm.Puzzle.test(clues);
+    const elapsedMs = performance.now() - startTimeMs;
+    const puzzle = result.puzzle;
+    let solutions: string[] | undefined;
+    if (puzzle) {
+      solutions = puzzle.solutions.map((s: wasm.SolvedGrid) => {
+        const g = s.grid();
+        const str = g.toFlatString();
+        g.free();
+        s.free();
+        return str;
+      });
+      puzzle.free();
+    }
+    return {
+      type: FromWorkerMessageType.PUZZLE_TESTED,
+      toWorkerMessage: m,
+      solutions,
+      incomplete: result.incomplete,
+      elapsedMs,
+    };
+  } finally {
+    clues.free();
+    result?.free();
+  }
 }
 
 function findSymmetries(
@@ -284,7 +331,7 @@ function calculateErroneousProductivity(
     if (m.solutions) {
       solutions = [];
       for (const s of m.solutions) {
-        const sg = wasm.Grid.newFromString(s)?.solvedGrid();
+        const sg = parseSolvedGrid(s);
         if (sg) {
           solutions.push(sg);
         }
@@ -333,7 +380,7 @@ function disproveErroneousAssignment(
     if (m.solutions) {
       solutions = [];
       for (const s of m.solutions) {
-        const sg = wasm.Grid.newFromString(s)?.solvedGrid();
+        const sg = parseSolvedGrid(s);
         if (sg) {
           solutions.push(sg);
         }
