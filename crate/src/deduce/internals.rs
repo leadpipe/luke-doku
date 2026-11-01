@@ -415,9 +415,13 @@ fn fact_is_implied(
       antecedents,
       consequent,
     } => {
-      if !antecedents
-        .iter()
-        .all(|ant| fact_is_implied(ant, remaining_asgmts, actual_asgmts, sukaku_map))
+      let is_disproof = consequent.is_error()
+        && antecedents.len() == 1
+        && matches!(antecedents[0], Fact::SpeculativeAssignment { .. });
+      if !is_disproof
+        && !antecedents
+          .iter()
+          .all(|ant| fact_is_implied(ant, remaining_asgmts, actual_asgmts, sukaku_map))
       {
         return false;
       }
@@ -426,6 +430,7 @@ fn fact_is_implied(
       for ant in antecedents {
         implied_elims |= ant.as_eliminations();
         if let Some(asgmt) = ant.as_asgmt() {
+          implied_elims.insert(asgmt);
           implied_actual.insert(asgmt);
         }
       }
@@ -461,6 +466,7 @@ fn narrow_antecedents(
     for &idx in indices {
       elims |= antecedent_eliminations[idx];
       if let Some(asgmt) = antecedents[idx].as_asgmt() {
+        elims.insert(asgmt);
         state_actual.insert(asgmt);
       }
     }
@@ -519,7 +525,9 @@ impl Fact {
       }
       Fact::SingleNum { loc, num } => sukaku_map[*loc] == num.as_set(),
       Fact::SpeculativeAssignment { .. } => false,
-      Fact::NoLoc { num, unit } => (remaining_asgmts.num_locs(*num) & unit.locs()).is_empty(),
+      Fact::NoLoc { num, unit } => {
+        ((remaining_asgmts.num_locs(*num) | actual_asgmts.num_locs(*num)) & unit.locs()).is_empty()
+      }
       Fact::NoNum { loc } => sukaku_map[*loc].is_empty(),
       Fact::Conflict { num, unit, locs } => {
         let actual = actual_asgmts.num_locs(*num) & unit.locs();
@@ -561,39 +569,104 @@ impl Fact {
         }
         true
       }
-      Fact::Implication {
-        antecedents,
-        consequent,
-      } => {
-        // An implication is implied if all of its antecedents are implied
-        // and its consequent is also implied in the given state.
-        for antecedent in antecedents.iter() {
-          if !antecedent.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map) {
-            return false;
-          }
-        }
-        consequent.is_implied_by(remaining_asgmts, actual_asgmts, sukaku_map)
+      Fact::Implication { .. } => {
+        fact_is_implied(self, remaining_asgmts, actual_asgmts, sukaku_map)
       }
       Fact::Fish {
         num,
-        elimination_locs,
+        base_units,
+        cover_units,
+        finned_locs,
         ..
+      } => {
+        let mut base_locs = LocSet::new();
+        for u in base_units.iter() {
+          base_locs |= u.locs();
+        }
+        let mut allowed_locs = *finned_locs;
+        for u in cover_units.iter() {
+          allowed_locs |= u.locs();
+        }
+        ((remaining_asgmts.num_locs(*num) & base_locs) - allowed_locs).is_empty()
       }
-      | Fact::EmptyRectangle {
+      Fact::EmptyRectangle {
         num,
-        elimination_locs,
+        block,
+        row,
+        col,
+        conjugate_pair,
         ..
+      } => {
+        let mut iter = conjugate_pair.iter();
+        if let (Some(l1), Some(l2)) = (iter.next(), iter.next()) {
+          let cp_unit = if l1.row() == l2.row() {
+            l1.row().to_unit()
+          } else {
+            l1.col().to_unit()
+          };
+          let er_ok = ((remaining_asgmts.num_locs(*num) & block.locs())
+            - (row.locs() | col.locs()))
+          .is_empty();
+          let cp_ok =
+            ((remaining_asgmts.num_locs(*num) & cp_unit.locs()) - *conjugate_pair).is_empty();
+          er_ok && cp_ok
+        } else {
+          false
+        }
       }
-      | Fact::Skyscraper {
+      Fact::Skyscraper {
         num,
-        elimination_locs,
+        base_units,
+        roof_locs,
         ..
+      } => {
+        let num_locs = remaining_asgmts.num_locs(*num);
+        let mut bases = LocSet::new();
+        for u in base_units.iter() {
+          let u_locs = num_locs & u.locs();
+          let non_roof = u_locs - *roof_locs;
+          if (u_locs & *roof_locs).len() != 1 || non_roof.len() != 1 {
+            return false;
+          }
+          bases |= non_roof;
+        }
+        let mut iter = bases.iter();
+        if let (Some(b1), Some(b2)) = (iter.next(), iter.next()) {
+          b1.row() == b2.row() || b1.col() == b2.col()
+        } else {
+          false
+        }
       }
-      | Fact::TwoStringKite {
+      Fact::TwoStringKite {
         num,
-        elimination_locs,
+        block,
+        rows,
+        cols,
+        string_ends,
         ..
-      } => (remaining_asgmts.num_locs(*num) & *elimination_locs).is_empty(),
+      } => {
+        let num_locs = remaining_asgmts.num_locs(*num);
+        let blk_locs = block.locs();
+        for r in rows.iter() {
+          let u_locs = num_locs & r.locs();
+          if u_locs.len() != 2
+            || (u_locs & *string_ends).len() != 1
+            || (u_locs & blk_locs).len() != 1
+          {
+            return false;
+          }
+        }
+        for c in cols.iter() {
+          let u_locs = num_locs & c.locs();
+          if u_locs.len() != 2
+            || (u_locs & *string_ends).len() != 1
+            || (u_locs & blk_locs).len() != 1
+          {
+            return false;
+          }
+        }
+        true
+      }
     }
   }
 }
@@ -650,8 +723,8 @@ fn find_errors(collector: &mut Collector, short_circuit: bool) -> Result<(), Inv
 
 fn find_overlaps(collector: &mut Collector) {
   // Note: this mimics the logic in `collect` but only for overlaps.
+  let base_remaining_asgmts = collector.remaining_asgmts;
   let mut remaining_asgmts = collector.remaining_asgmts;
-  let mut prev_remaining_asgmts = collector.remaining_asgmts;
   for num in Num::all() {
     let mut antecedents: Vec<Fact> = vec![];
     let mut antecedent_eliminations: Vec<AsgmtSet> = vec![];
@@ -665,17 +738,13 @@ fn find_overlaps(collector: &mut Collector) {
         blk_row_bits_to_overlaps(blk_row_bits, num, band, collector, &remaining_asgmts);
         blk_col_bits_to_overlaps(blk_col_bits, num, band, collector, &remaining_asgmts);
       }
-      let eliminations: Vec<AsgmtSet> = collector.facts[start..]
-        .iter()
-        .map(|fact| fact.as_eliminations())
-        .collect();
       if !antecedents.is_empty() {
         for fact in collector.facts[start..].iter_mut() {
           let required = narrow_antecedents(
             &fact,
             antecedents.as_slice(),
             &antecedent_eliminations,
-            prev_remaining_asgmts,
+            base_remaining_asgmts,
             collector.actual_asgmts,
             collector.sukaku_map,
             0,
@@ -691,9 +760,12 @@ fn find_overlaps(collector: &mut Collector) {
       if start == collector.facts.len() {
         break;
       }
-      antecedents = collector.facts[start..].to_vec();
-      antecedent_eliminations = eliminations.clone();
-      prev_remaining_asgmts = remaining_asgmts;
+      let eliminations: Vec<AsgmtSet> = collector.facts[start..]
+        .iter()
+        .map(|fact| fact.as_eliminations())
+        .collect();
+      antecedents.extend(collector.facts[start..].to_vec());
+      antecedent_eliminations.extend(eliminations.iter().copied());
       for asgmts in eliminations.iter() {
         remaining_asgmts -= *asgmts;
       }
@@ -2078,5 +2150,91 @@ mod tests {
       subset_units.len(),
       subset_units
     );
+  }
+
+  #[test]
+  fn test_narrow_antecedents_advanced_facts() {
+    use crate::core::{
+      AsgmtSet, NumSet, B1, C1, C2, C3, C7, L11, L12, L17, L23, L27, L42, L47, L53, L57, L63, L71,
+      L82, L99, N1, N5, R1, R2, R5,
+    };
+
+    let mut base_asgmts = AsgmtSet::new();
+    let base_sukaku_map = SukakuMap([NumSet::new(); 81]);
+
+    // Set up candidates for N5 in R2 and R5 so an X-Wing on R2, R5 x C3, C7
+    // requires eliminating N5 from L21 (by required_ant) while ignoring unrelated_ant.
+    let l21 = Loc::at(R2, C1);
+    for loc in [L12, l21, L23, L27, L53, L57, L63, L71, L99] {
+      base_asgmts.insert(Asgmt::new(N5, loc));
+    }
+
+    let required_ant = Fact::Overlap {
+      num: N5,
+      unit: B7.to_unit(),
+      cross_unit: C1.to_unit(),
+    };
+    let unrelated_ant = Fact::Overlap {
+      num: N1,
+      unit: B1.to_unit(),
+      cross_unit: R1.to_unit(),
+    };
+
+    let mut base_units = UnitSet::default();
+    base_units.insert(R2.to_unit());
+    base_units.insert(R5.to_unit());
+    let mut cover_units = UnitSet::default();
+    cover_units.insert(C3.to_unit());
+    cover_units.insert(C7.to_unit());
+    let fish = Fact::Fish {
+      num: N5,
+      base_units,
+      cover_units,
+      finned_locs: LocSet::new(),
+      elimination_locs: L63.as_set(),
+    };
+
+    let antecedents = vec![unrelated_ant.clone(), required_ant.clone()];
+    let antecedent_eliminations = vec![
+      unrelated_ant.as_eliminations(),
+      required_ant.as_eliminations(),
+    ];
+
+    let narrowed = narrow_antecedents(
+      &fish,
+      &antecedents,
+      &antecedent_eliminations,
+      base_asgmts,
+      AsgmtSet::new(),
+      base_sukaku_map,
+      0,
+    );
+    assert_eq!(narrowed, vec![required_ant.clone()]);
+
+    // Also test EmptyRectangle narrowing:
+    // N5 in B1 confined to R1 | C2 once L21 is eliminated by required_ant,
+    // with conjugate pair in R4 at {L42, L47}, eliminating L17.
+    let mut er_asgmts = AsgmtSet::new();
+    for loc in [L11, L12, l21, L42, L47, L17, L71, L82] {
+      er_asgmts.insert(Asgmt::new(N5, loc));
+    }
+    let er = Fact::EmptyRectangle {
+      num: N5,
+      block: B1.to_unit(),
+      row: R1.to_unit(),
+      col: C2.to_unit(),
+      conjugate_pair: L42.as_set() | L47.as_set(),
+      elimination_locs: L17.as_set(),
+    };
+    let narrowed_er = narrow_antecedents(
+      &er,
+      &antecedents,
+      &antecedent_eliminations,
+      er_asgmts,
+      AsgmtSet::new(),
+      base_sukaku_map,
+      0,
+    );
+    assert_eq!(narrowed_er, vec![required_ant]);
   }
 }

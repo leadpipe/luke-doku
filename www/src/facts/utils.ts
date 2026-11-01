@@ -95,11 +95,19 @@ export function compareFacts(a: Fact, b: Fact): number {
   return getFactRank(a) - getFactRank(b);
 }
 
+const totalAntecedentsCache = new WeakMap<Fact, number>();
+
 export function getTotalAntecedents(fact: Fact): number {
   if (fact.type !== 'Implication') {
     return 0;
   }
-  return flattenImplication(fact).antecedents.length + 1;
+  const cached = totalAntecedentsCache.get(fact);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const count = flattenImplication(fact).antecedents.length + 1;
+  totalAntecedentsCache.set(fact, count);
+  return count;
 }
 
 function getFactRank(fact: Fact): number {
