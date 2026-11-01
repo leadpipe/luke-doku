@@ -880,7 +880,9 @@ export class ReviewController implements ReactiveController {
           return (
             base.elimination_locs.includes(locIndex) ||
             base.string_ends.includes(locIndex) ||
-            unitContains(base.block, this.selectedLoc!)
+            unitContains(base.block, this.selectedLoc!) ||
+            base.rows.some(u => unitContains(u, this.selectedLoc!)) ||
+            base.cols.some(u => unitContains(u, this.selectedLoc!))
           );
         default:
           ensureExhaustiveSwitch(base);

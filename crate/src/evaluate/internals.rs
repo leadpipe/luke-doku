@@ -162,7 +162,13 @@ impl Fact {
           Complexity::Complex
         }
       }
-      Fact::TwoStringKite { .. } => Complexity::Moderate,
+      Fact::TwoStringKite { rows, .. } => {
+        if rows.len() == 1 {
+          Complexity::Moderate
+        } else {
+          Complexity::Complex
+        }
+      }
       Fact::EmptyRectangle { .. } | Fact::Skyscraper { .. } => Complexity::Complex,
       _ => Complexity::Complex,
     }

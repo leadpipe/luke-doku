@@ -123,79 +123,116 @@ export function shorthandFact(fact: Fact): string {
     case 'Skyscraper':
       return `${formatNum(fact.num)} Skyscraper: ${formatUnitsShorthand(fact.base_units)} ➔ ${formatLocs(fact.elimination_locs)}`;
 
-    case 'TwoStringKite':
-      return `${formatNum(fact.num)} Kite: ${formatUnitShorthand(fact.block)} (${formatUnitShorthand(fact.row)}, ${formatUnitShorthand(fact.col)}) ➔ ${formatLocs(fact.elimination_locs)}`;
+    case 'TwoStringKite': {
+      const isDual = fact.rows.length > 1;
+      const kiteName = isDual ? 'Dual Kite' : 'Kite';
+      return `${formatNum(fact.num)} ${kiteName}: ${formatUnitShorthand(fact.block)} (${formatUnitsShorthand(fact.rows)}, ${formatUnitsShorthand(fact.cols)}) ➔ ${formatLocs(fact.elimination_locs)}`;
+    }
 
     default:
       ensureExhaustiveSwitch(fact);
   }
 }
 
+const describeFactCache = new WeakMap<Fact, string>();
+
 /** Translates a Fact into a full human-readable description incorporating shorthand. */
 export function describeFact(fact: Fact): string {
+  const cached = describeFactCache.get(fact);
+  if (cached !== undefined) {
+    return cached;
+  }
+
+  let result: string;
+  if (fact.type === 'Implication') {
+    if (isDisproof(fact)) {
+      result = formatDisproofDescription(fact as Disproof);
+    } else {
+      const antecedentsDesc = fact.antecedents.map(describeFact).join(' and ');
+      const consequentDesc = describeFact(fact.consequent);
+      result = `${consequentDesc}, because ${antecedentsDesc}`;
+    }
+    describeFactCache.set(fact, result);
+    return result;
+  }
+
   const shorthand = shorthandFact(fact);
 
   switch (fact.type) {
     case 'SingleLoc':
-      return `${shorthand}: Only one location for ${formatNum(fact.num)} in ${formatUnit(fact.unit)} (${GameLoc.of(fact.loc).toString()})`;
+      result = `${shorthand}: Only one location for ${formatNum(fact.num)} in ${formatUnit(fact.unit)} (${GameLoc.of(fact.loc).toString()})`;
+      break;
 
     case 'SingleNum':
-      return `${shorthand}: Only one possible number for ${GameLoc.of(fact.loc).toString()} (${formatNum(fact.num)})`;
+      result = `${shorthand}: Only one possible number for ${GameLoc.of(fact.loc).toString()} (${formatNum(fact.num)})`;
+      break;
 
     case 'SpeculativeAssignment':
-      return `${shorthand}: Speculative assignment of ${formatNum(fact.num)} to ${GameLoc.of(fact.loc).toString()}`;
+      result = `${shorthand}: Speculative assignment of ${formatNum(fact.num)} to ${GameLoc.of(fact.loc).toString()}`;
+      break;
 
     case 'NoLoc':
-      return `${shorthand}: ${formatNum(fact.num)} cannot be placed anywhere in ${formatUnit(fact.unit)}`;
+      result = `${shorthand}: ${formatNum(fact.num)} cannot be placed anywhere in ${formatUnit(fact.unit)}`;
+      break;
 
     case 'NoNum':
-      return `${shorthand}: ${GameLoc.of(fact.loc).toString()} has no possible numbers`;
+      result = `${shorthand}: ${GameLoc.of(fact.loc).toString()} has no possible numbers`;
+      break;
 
     case 'Conflict':
-      return `${shorthand}: Conflict! ${formatNum(fact.num)} appears in ${formatUnit(fact.unit)} at multiple locations: ${formatLocs(fact.locs)}`;
+      result = `${shorthand}: Conflict! ${formatNum(fact.num)} appears in ${formatUnit(fact.unit)} at multiple locations: ${formatLocs(fact.locs)}`;
+      break;
 
     case 'ConflictLoc':
-      return `${shorthand}: Conflict! Multiple numbers assigned to ${GameLoc.of(fact.loc).toString()}: ${formatNums(fact.nums)}`;
+      result = `${shorthand}: Conflict! Multiple numbers assigned to ${GameLoc.of(fact.loc).toString()}: ${formatNums(fact.nums)}`;
+      break;
 
     case 'Overlap':
-      return `${shorthand}: ${formatNum(fact.num)} in ${formatUnit(fact.unit)} is restricted to ${formatUnit(fact.cross_unit)}`;
+      result = `${shorthand}: ${formatNum(fact.num)} in ${formatUnit(fact.unit)} is restricted to ${formatUnit(fact.cross_unit)}`;
+      break;
 
-    case 'Subset':
+    case 'Subset': {
       const subsetType = fact.is_naked ? 'Naked' : 'Hidden';
       const crossUnitStr =
         fact.cross_unit ?
           ` (also restricted to ${formatUnit(fact.cross_unit)})`
         : '';
-      return `${shorthand}: ${subsetType} subset of ${formatNums(fact.nums)} in ${formatUnit(fact.unit)} at ${formatLocs(fact.locs)}${crossUnitStr}`;
-
-    case 'Implication': {
-      if (isDisproof(fact)) {
-        return formatDisproofDescription(fact as Disproof);
-      }
-      const antecedentsDesc = fact.antecedents.map(describeFact).join(' and ');
-      const consequentDesc = describeFact(fact.consequent);
-      return `${consequentDesc}, because ${antecedentsDesc}`;
+      result = `${shorthand}: ${subsetType} subset of ${formatNums(fact.nums)} in ${formatUnit(fact.unit)} at ${formatLocs(fact.locs)}${crossUnitStr}`;
+      break;
     }
 
     case 'Fish': {
       const isFinned = fact.finned_locs.length > 0;
       const fishName = getFishName(fact.base_units.length, isFinned);
       const finStr = isFinned ? ` with fin at ${formatLocs(fact.finned_locs)}` : '';
-      return `${shorthand}: ${fishName} for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} (${formatUnits(fact.cover_units)})${finStr} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      result = `${shorthand}: ${fishName} for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} (${formatUnits(fact.cover_units)})${finStr} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      break;
     }
 
     case 'EmptyRectangle':
-      return `${shorthand}: Empty Rectangle for ${formatNum(fact.num)} in ${formatUnit(fact.block)} with ${formatUnit(fact.row)}, ${formatUnit(fact.col)} and conjugate pair ${formatLocs(fact.conjugate_pair)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      result = `${shorthand}: Empty Rectangle for ${formatNum(fact.num)} in ${formatUnit(fact.block)} with ${formatUnit(fact.row)}, ${formatUnit(fact.col)} and conjugate pair ${formatLocs(fact.conjugate_pair)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      break;
 
     case 'Skyscraper':
-      return `${shorthand}: Skyscraper for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} with roofs ${formatLocs(fact.roof_locs)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      result = `${shorthand}: Skyscraper for ${formatNum(fact.num)} in ${formatUnits(fact.base_units)} with roofs ${formatLocs(fact.roof_locs)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      break;
 
-    case 'TwoStringKite':
-      return `${shorthand}: 2-String Kite for ${formatNum(fact.num)} in ${formatUnit(fact.block)} connecting ${formatUnit(fact.row)} and ${formatUnit(fact.col)} with ends ${formatLocs(fact.string_ends)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+    case 'TwoStringKite': {
+      const isDual = fact.rows.length > 1;
+      const title = isDual ? 'Dual 2-String Kite' : '2-String Kite';
+      const rowsStr =
+        isDual ? formatUnits(fact.rows) : formatUnit(fact.rows[0]);
+      const colsStr =
+        isDual ? formatUnits(fact.cols) : formatUnit(fact.cols[0]);
+      result = `${shorthand}: ${title} for ${formatNum(fact.num)} in ${formatUnit(fact.block)} connecting ${rowsStr} and ${colsStr} with ends ${formatLocs(fact.string_ends)} eliminates ${formatNum(fact.num)} at ${formatLocs(fact.elimination_locs)}`;
+      break;
+    }
 
     default:
       ensureExhaustiveSwitch(fact);
   }
+  describeFactCache.set(fact, result);
+  return result;
 }
 
 export function formatDisproofDescription(fact: Disproof): string {

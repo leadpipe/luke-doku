@@ -195,14 +195,30 @@ describe('Fact formatting utilities', () => {
       type: 'TwoStringKite',
       num: 5,
       block: {type: 'Blk', id: 0},
-      row: {type: 'Row', id: 0},
-      col: {type: 'Col', id: 0},
+      rows: [{type: 'Row', id: 0}],
+      cols: [{type: 'Col', id: 0}],
       string_ends: [7, 54], // R1C8, R7C1
       elimination_locs: [61], // R7C8
     };
     expect(shorthandFact(fact)).to.equal('5 Kite: B1 (R1, C1) ➔ {R7C8}');
     expect(describeFact(fact)).to.equal(
       '5 Kite: B1 (R1, C1) ➔ {R7C8}: 2-String Kite for 5 in Block 1 connecting Row 1 and Column 1 with ends {R1C8, R7C1} eliminates 5 at {R7C8}',
+    );
+  });
+
+  it('formats Dual 2-String Kite correctly', () => {
+    const fact: Fact = {
+      type: 'TwoStringKite',
+      num: 1,
+      block: {type: 'Blk', id: 0},
+      rows: [{type: 'Row', id: 0}, {type: 'Row', id: 2}],
+      cols: [{type: 'Col', id: 0}, {type: 'Col', id: 2}],
+      string_ends: [7, 45, 26, 29], // R1C8, R6C1, R3C9, R4C3
+      elimination_locs: [52, 35], // R6C8, R4C9
+    };
+    expect(shorthandFact(fact)).to.equal('1 Dual Kite: B1 (R1,R3, C1,C3) ➔ {R6C8, R4C9}');
+    expect(describeFact(fact)).to.equal(
+      '1 Dual Kite: B1 (R1,R3, C1,C3) ➔ {R6C8, R4C9}: Dual 2-String Kite for 1 in Block 1 connecting Rows 1, 3 and Columns 1, 3 with ends {R1C8, R6C1, R3C9, R4C3} eliminates 1 at {R6C8, R4C9}',
     );
   });
 });

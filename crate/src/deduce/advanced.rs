@@ -498,14 +498,14 @@ pub fn find_two_string_kites(collector: &mut Collector) {
       continue;
     }
 
-    let mut row_pairs = Vec::new();
-    let mut col_pairs = Vec::new();
+    let mut row_pairs: [Option<(Loc, Loc)>; 9] = [None; 9];
+    let mut col_pairs: [Option<(Loc, Loc)>; 9] = [None; 9];
 
     for r in Row::all() {
       let u_locs = locs & r.to_unit().locs();
       if u_locs.len() == 2 {
         let mut iter = u_locs.iter();
-        row_pairs.push((r.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+        row_pairs[r.index()] = Some((iter.next().unwrap(), iter.next().unwrap()));
       }
     }
 
@@ -513,39 +513,159 @@ pub fn find_two_string_kites(collector: &mut Collector) {
       let u_locs = locs & c.to_unit().locs();
       if u_locs.len() == 2 {
         let mut iter = u_locs.iter();
-        col_pairs.push((c.to_unit(), iter.next().unwrap(), iter.next().unwrap()));
+        col_pairs[c.index()] = Some((iter.next().unwrap(), iter.next().unwrap()));
       }
     }
 
-    for &(r_unit, r_loc1, r_loc2) in &row_pairs {
+    for blk in Blk::all() {
       if collector.check_timeout() {
         return;
       }
-      for &(c_unit, c_loc1, c_loc2) in &col_pairs {
-        let combinations = [
-          (r_loc1, r_loc2, c_loc1, c_loc2),
-          (r_loc1, r_loc2, c_loc2, c_loc1),
-          (r_loc2, r_loc1, c_loc1, c_loc2),
-          (r_loc2, r_loc1, c_loc2, c_loc1),
-        ];
+      let b_locs = locs & blk.to_unit().locs();
+      if b_locs.len() < 2 {
+        continue;
+      }
+      let blk_vec: Vec<Loc> = b_locs.iter().collect();
 
-        for (r_base, r_roof, c_base, c_roof) in combinations {
-          if r_base.blk() == c_base.blk() && r_base != c_base {
-            let mut elims = locs & r_roof.peers() & c_roof.peers();
-            elims -= r_unit.locs() | c_unit.locs();
-            if !elims.is_empty() {
-              let mut string_ends = LocSet::new();
-              string_ends.insert(r_roof);
-              string_ends.insert(c_roof);
-              collector.add_fact(Fact::TwoStringKite {
-                num,
-                block: r_base.blk().to_unit(),
-                row: r_unit,
-                col: c_unit,
-                string_ends,
-                elimination_locs: elims,
-              });
+      for i in 0..blk_vec.len() {
+        for j in (i + 1)..blk_vec.len() {
+          if collector.check_timeout() {
+            return;
+          }
+          let loc_a = blk_vec[i];
+          let loc_b = blk_vec[j];
+
+          if loc_a.row() == loc_b.row() || loc_a.col() == loc_b.col() {
+            continue;
+          }
+
+          let r_a = loc_a.row();
+          let c_a = loc_a.col();
+          let r_b = loc_b.row();
+          let c_b = loc_b.col();
+
+          // String 1: Row A (base loc_a)
+          let str_r_a = row_pairs[r_a.index()].and_then(|(l1, l2)| {
+            let other = if l1 == loc_a { l2 } else { l1 };
+            if other.blk() != blk {
+              Some(other)
+            } else {
+              None
             }
+          });
+
+          // String 2: Col B (base loc_b)
+          let str_c_b = col_pairs[c_b.index()].and_then(|(l1, l2)| {
+            let other = if l1 == loc_b { l2 } else { l1 };
+            if other.blk() != blk {
+              Some(other)
+            } else {
+              None
+            }
+          });
+
+          // String 3: Row B (base loc_b)
+          let str_r_b = row_pairs[r_b.index()].and_then(|(l1, l2)| {
+            let other = if l1 == loc_b { l2 } else { l1 };
+            if other.blk() != blk {
+              Some(other)
+            } else {
+              None
+            }
+          });
+
+          // String 4: Col A (base loc_a)
+          let str_c_a = col_pairs[c_a.index()].and_then(|(l1, l2)| {
+            let other = if l1 == loc_a { l2 } else { l1 };
+            if other.blk() != blk {
+              Some(other)
+            } else {
+              None
+            }
+          });
+
+          // Kite 1 connects Row A and Col B
+          let kite1_elims = if let (Some(roof_ra), Some(roof_cb)) = (str_r_a, str_c_b) {
+            let mut elims = locs & roof_ra.peers() & roof_cb.peers();
+            elims -= r_a.to_unit().locs() | c_b.to_unit().locs();
+            elims
+          } else {
+            LocSet::new()
+          };
+
+          // Kite 2 connects Row B and Col A
+          let kite2_elims = if let (Some(roof_rb), Some(roof_ca)) = (str_r_b, str_c_a) {
+            let mut elims = locs & roof_rb.peers() & roof_ca.peers();
+            elims -= r_b.to_unit().locs() | c_a.to_unit().locs();
+            elims
+          } else {
+            LocSet::new()
+          };
+
+          if !kite1_elims.is_empty() && !kite2_elims.is_empty() {
+            // Dual 2-String Kite
+            let mut rows = UnitSet::default();
+            rows.insert(r_a.to_unit());
+            rows.insert(r_b.to_unit());
+
+            let mut cols = UnitSet::default();
+            cols.insert(c_a.to_unit());
+            cols.insert(c_b.to_unit());
+
+            let mut string_ends = LocSet::new();
+            string_ends.insert(str_r_a.unwrap());
+            string_ends.insert(str_c_b.unwrap());
+            string_ends.insert(str_r_b.unwrap());
+            string_ends.insert(str_c_a.unwrap());
+
+            collector.add_fact(Fact::TwoStringKite {
+              num,
+              block: blk.to_unit(),
+              rows,
+              cols,
+              string_ends,
+              elimination_locs: kite1_elims | kite2_elims,
+            });
+          } else if !kite1_elims.is_empty() {
+            // Standard 2-String Kite (Kite 1)
+            let mut rows = UnitSet::default();
+            rows.insert(r_a.to_unit());
+
+            let mut cols = UnitSet::default();
+            cols.insert(c_b.to_unit());
+
+            let mut string_ends = LocSet::new();
+            string_ends.insert(str_r_a.unwrap());
+            string_ends.insert(str_c_b.unwrap());
+
+            collector.add_fact(Fact::TwoStringKite {
+              num,
+              block: blk.to_unit(),
+              rows,
+              cols,
+              string_ends,
+              elimination_locs: kite1_elims,
+            });
+          } else if !kite2_elims.is_empty() {
+            // Standard 2-String Kite (Kite 2)
+            let mut rows = UnitSet::default();
+            rows.insert(r_b.to_unit());
+
+            let mut cols = UnitSet::default();
+            cols.insert(c_a.to_unit());
+
+            let mut string_ends = LocSet::new();
+            string_ends.insert(str_r_b.unwrap());
+            string_ends.insert(str_c_a.unwrap());
+
+            collector.add_fact(Fact::TwoStringKite {
+              num,
+              block: blk.to_unit(),
+              rows,
+              cols,
+              string_ends,
+              elimination_locs: kite2_elims,
+            });
           }
         }
       }
@@ -688,5 +808,123 @@ mod tests {
     find_empty_rectangles(&mut timed_collector);
     assert!(timed_collector.facts.is_empty());
     assert!(timed_collector.timed_out);
+  }
+
+  #[test]
+  fn test_two_string_kite_standard() {
+    let mut remaining = AsgmtSet::new();
+
+    // 2-String Kite for N5 in B9 (R8, C7)
+    // Row 8 CP: L84 (R8C4), L89 (R8C9 in B9)
+    remaining.insert(Asgmt::new(N5, L84));
+    remaining.insert(Asgmt::new(N5, L89));
+
+    // Col 7 CP: L27 (R2C7), L97 (R9C7 in B9)
+    remaining.insert(Asgmt::new(N5, L27));
+    remaining.insert(Asgmt::new(N5, L97));
+
+    // Target elimination at L24 (R2C4)
+    remaining.insert(Asgmt::new(N5, L24));
+
+    // Add extra candidates so rows/cols are not singletons
+    remaining.insert(Asgmt::new(N5, L11));
+    remaining.insert(Asgmt::new(N5, L33));
+
+    let mut collector = Collector::new(
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
+    );
+
+    find_two_string_kites(&mut collector);
+
+    let mut found = false;
+    for fact in &collector.facts {
+      if let Fact::TwoStringKite {
+        num,
+        block,
+        rows,
+        cols,
+        string_ends,
+        elimination_locs,
+      } = fact
+      {
+        if *num == N5
+          && *block == B9.to_unit()
+          && rows.len() == 1
+          && cols.len() == 1
+          && string_ends.contains(L84)
+          && string_ends.contains(L27)
+          && elimination_locs.contains(L24)
+        {
+          found = true;
+          break;
+        }
+      }
+    }
+    assert!(found, "Standard 2-String Kite should eliminate L24");
+  }
+
+  #[test]
+  fn test_two_string_kite_dual() {
+    let mut remaining = AsgmtSet::new();
+
+    // Dual 2-String Kite for N1 in B1 (Hodoku example 1)
+    // Connecting candidates in B1: L13 (R1C3) and L31 (R3C1)
+    // Row 1 CP: L13 and L18 (R1C8)
+    remaining.insert(Asgmt::new(N1, L13));
+    remaining.insert(Asgmt::new(N1, L18));
+
+    // Col 1 CP: L31 and L61 (R6C1)
+    remaining.insert(Asgmt::new(N1, L31));
+    remaining.insert(Asgmt::new(N1, L61));
+
+    // Row 3 CP: L31 and L39 (R3C9)
+    remaining.insert(Asgmt::new(N1, L39));
+
+    // Col 3 CP: L13 and L43 (R4C3)
+    remaining.insert(Asgmt::new(N1, L43));
+
+    // Eliminations: L68 (R6C8) and L49 (R4C9)
+    remaining.insert(Asgmt::new(N1, L68));
+    remaining.insert(Asgmt::new(N1, L49));
+
+    // Extra dummy candidates in other rows/cols to avoid unintended conjugate pairs
+    remaining.insert(Asgmt::new(N1, L85));
+    remaining.insert(Asgmt::new(N1, L96));
+
+    let mut collector = Collector::new(
+      remaining,
+      AsgmtSet::new(),
+      SukakuMap::from_grid(&Grid::new()),
+    );
+
+    find_two_string_kites(&mut collector);
+
+    let mut found = false;
+    for fact in &collector.facts {
+      if let Fact::TwoStringKite {
+        num,
+        block,
+        rows,
+        cols,
+        string_ends,
+        elimination_locs,
+      } = fact
+      {
+        if *num == N1
+          && *block == B1.to_unit()
+          && rows.len() == 2
+          && cols.len() == 2
+          && string_ends.len() == 4
+          && elimination_locs.contains(L68)
+          && elimination_locs.contains(L49)
+        {
+          found = true;
+          break;
+        }
+      }
+    }
+    assert!(found, "Dual 2-String Kite should eliminate L68 and L49");
   }
 }

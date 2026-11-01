@@ -920,52 +920,63 @@ export class ReplayView extends SudokuView {
       }
 
       // String tethers from corner block to string ends
-      const rowEnd = endLocs.find(e => unitContains(fact.row, e));
-      const colEnd = endLocs.find(e => unitContains(fact.col, e));
-      const blockRowCells = Loc.ALL.filter(
-        l => unitContains(fact.block, l) && unitContains(fact.row, l),
-      );
-      const blockColCells = Loc.ALL.filter(
-        l => unitContains(fact.block, l) && unitContains(fact.col, l),
-      );
-
-      if (rowEnd && blockRowCells.length > 0) {
-        const corner1 = blockRowCells[0];
-        const [cx, cy] = cellCenter(corner1);
-        const [ex, ey] = cellCenter(rowEnd);
-        answer.push(
-          svg`<line class="strong-link-tether" x1=${cx} y1=${cy} x2=${ex} y2=${ey} />`,
+      for (const row of fact.rows) {
+        const rowEnd = endLocs.find(e => unitContains(row, e));
+        const blockRowCells = Loc.ALL.filter(
+          l => unitContains(fact.block, l) && unitContains(row, l),
         );
-        if (!occupiedLocs.has(corner1.index)) {
-          occupiedLocs.add(corner1.index);
+        const corner =
+          fact.cols.length > 1 ?
+            (blockRowCells.find(l => fact.cols.some(c => unitContains(c, l))) ??
+            blockRowCells[0])
+          : blockRowCells[0];
+        if (rowEnd && corner) {
+          const [cx, cy] = cellCenter(corner);
+          const [ex, ey] = cellCenter(rowEnd);
           answer.push(
-            ...this.renderNodeBadge(
-              fact.num,
-              corner1,
-              'strong-link-node',
-              'solution fact-detail-text strong-link-text',
-            ),
+            svg`<line class="strong-link-tether" x1=${cx} y1=${cy} x2=${ex} y2=${ey} />`,
           );
+          if (!occupiedLocs.has(corner.index)) {
+            occupiedLocs.add(corner.index);
+            answer.push(
+              ...this.renderNodeBadge(
+                fact.num,
+                corner,
+                'strong-link-node',
+                'solution fact-detail-text strong-link-text',
+              ),
+            );
+          }
         }
       }
 
-      if (colEnd && blockColCells.length > 0) {
-        const corner2 = blockColCells[0];
-        const [cx, cy] = cellCenter(corner2);
-        const [ex, ey] = cellCenter(colEnd);
-        answer.push(
-          svg`<line class="strong-link-tether" x1=${cx} y1=${cy} x2=${ex} y2=${ey} />`,
+      for (const col of fact.cols) {
+        const colEnd = endLocs.find(e => unitContains(col, e));
+        const blockColCells = Loc.ALL.filter(
+          l => unitContains(fact.block, l) && unitContains(col, l),
         );
-        if (!occupiedLocs.has(corner2.index)) {
-          occupiedLocs.add(corner2.index);
+        const corner =
+          fact.rows.length > 1 ?
+            (blockColCells.find(l => fact.rows.some(r => unitContains(r, l))) ??
+            blockColCells[0])
+          : blockColCells[0];
+        if (colEnd && corner) {
+          const [cx, cy] = cellCenter(corner);
+          const [ex, ey] = cellCenter(colEnd);
           answer.push(
-            ...this.renderNodeBadge(
-              fact.num,
-              corner2,
-              'strong-link-node',
-              'solution fact-detail-text strong-link-text',
-            ),
+            svg`<line class="strong-link-tether" x1=${cx} y1=${cy} x2=${ex} y2=${ey} />`,
           );
+          if (!occupiedLocs.has(corner.index)) {
+            occupiedLocs.add(corner.index);
+            answer.push(
+              ...this.renderNodeBadge(
+                fact.num,
+                corner,
+                'strong-link-node',
+                'solution fact-detail-text strong-link-text',
+              ),
+            );
+          }
         }
       }
 
@@ -975,8 +986,15 @@ export class ReplayView extends SudokuView {
         if (!elimLoc) continue;
         if (!occupiedLocs.has(elimLoc.index)) {
           occupiedLocs.add(elimLoc.index);
+          const seeingEnds = endLocs.filter(e =>
+            elimLoc.getPeers().some(p => p.index === e.index),
+          );
+          const targetPoints =
+            seeingEnds.length >= 2 ?
+              seeingEnds.map(e => cellCenter(e))
+            : endPoints;
           answer.push(
-            ...this.renderEliminationTarget(fact.num, elimLoc, endPoints),
+            ...this.renderEliminationTarget(fact.num, elimLoc, targetPoints),
           );
         }
       }
@@ -1155,7 +1173,9 @@ export class ReplayView extends SudokuView {
           if (
             fact.elimination_locs.includes(loc.index) ||
             fact.string_ends.includes(loc.index) ||
-            unitContains(fact.block, loc)
+            unitContains(fact.block, loc) ||
+            fact.rows.some(u => unitContains(u, loc)) ||
+            fact.cols.some(u => unitContains(u, loc))
           )
             return true;
           break;
@@ -1347,6 +1367,26 @@ export class ReplayView extends SudokuView {
             answer.push(
               svg`<line class="hint-tether-line" x1=${x1} y1=${y1} x2=${x2} y2=${y2} />`,
             );
+          } else if (ends.length === 4) {
+            for (let i = 0; i < ends.length; i++) {
+              for (let j = i + 1; j < ends.length; j++) {
+                const sharesElim = base.elimination_locs.some(elim => {
+                  const el = Loc.of(elim);
+                  return (
+                    el &&
+                    el.getPeers().some(p => p.index === ends[i].index) &&
+                    el.getPeers().some(p => p.index === ends[j].index)
+                  );
+                });
+                if (sharesElim) {
+                  const [x1, y1] = cellCenter(ends[i]);
+                  const [x2, y2] = cellCenter(ends[j]);
+                  answer.push(
+                    svg`<line class="hint-tether-line" x1=${x1} y1=${y1} x2=${x2} y2=${y2} />`,
+                  );
+                }
+              }
+            }
           }
         }
       }

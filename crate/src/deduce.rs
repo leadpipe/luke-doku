@@ -86,8 +86,8 @@ pub enum Fact {
   TwoStringKite {
     num: Num,
     block: Unit,
-    row: Unit,
-    col: Unit,
+    rows: UnitSet,
+    cols: UnitSet,
     string_ends: LocSet,
     elimination_locs: LocSet,
   },
