@@ -81,6 +81,67 @@ export function unitContains(unit: Unit, loc: GameLoc): boolean {
 }
 
 /**
+ * Returns true if the given fact eliminates `num` as a candidate at `loc`.
+ * Mirrors `Fact::as_eliminations` in the Rust backend.
+ */
+export function doesFactEliminate(
+  fact: Fact,
+  loc: GameLoc,
+  num: number,
+): boolean {
+  if (isDisproof(fact)) {
+    const rootAsg = fact.antecedents[0];
+    return rootAsg.loc === loc.index && rootAsg.num === num;
+  }
+  switch (fact.type) {
+    case 'SingleLoc':
+    case 'SingleNum':
+    case 'SpeculativeAssignment':
+      if (fact.loc === loc.index) {
+        return fact.num !== num;
+      }
+      return (
+        fact.num === num && loc.getPeers().some(p => p.index === fact.loc)
+      );
+    case 'Overlap':
+      return (
+        fact.num === num &&
+        unitContains(fact.cross_unit, loc) &&
+        !unitContains(fact.unit, loc)
+      );
+    case 'Subset':
+      if (fact.nums.includes(num)) {
+        const inOutsideUnit =
+          unitContains(fact.unit, loc) && !fact.locs.includes(loc.index);
+        const inOutsideCross =
+          fact.cross_unit !== null &&
+          unitContains(fact.cross_unit, loc) &&
+          !unitContains(fact.unit, loc);
+        return inOutsideUnit || inOutsideCross;
+      } else {
+        return fact.locs.includes(loc.index);
+      }
+    case 'Fish':
+    case 'EmptyRectangle':
+    case 'Skyscraper':
+    case 'TwoStringKite':
+      return fact.num === num && fact.elimination_locs.includes(loc.index);
+    case 'Implication':
+      return (
+        doesFactEliminate(fact.consequent, loc, num) ||
+        fact.antecedents.some(ant => doesFactEliminate(ant, loc, num))
+      );
+    case 'NoLoc':
+    case 'NoNum':
+    case 'Conflict':
+    case 'ConflictLoc':
+      return false;
+    default:
+      ensureExhaustiveSwitch(fact);
+  }
+}
+
+/**
  * Orders facts primarily by total number of antecedents, then by type.
  * Type order follows:
  * Conflict, NoLoc, NoNum, Implication (nub is error),

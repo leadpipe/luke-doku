@@ -3,6 +3,7 @@ import {Loc as GameLoc} from '../game/loc';
 import type {Fact} from './Fact';
 import {
   collectStepsWithContext,
+  doesFactEliminate,
   getVisibleFactsAtStep,
   nub,
   unitContains,
@@ -173,6 +174,79 @@ describe('Fact utils', () => {
         fact2,
         E_A,
       ]);
+    });
+  });
+
+  describe('doesFactEliminate', () => {
+    it('handles SingleLoc, SingleNum, and SpeculativeAssignment', () => {
+      const fact: Fact = {type: 'SingleNum', loc: 7, num: 8}; // R1C8 = 8
+      // Eliminates other numbers at R1C8
+      expect(doesFactEliminate(fact, GameLoc.of(0, 7), 7)).to.be.true;
+      expect(doesFactEliminate(fact, GameLoc.of(0, 7), 8)).to.be.false;
+      // Eliminates 8 at peers of R1C8 (e.g. R1C2, R2C9)
+      expect(doesFactEliminate(fact, GameLoc.of(0, 1), 8)).to.be.true;
+      expect(doesFactEliminate(fact, GameLoc.of(1, 8), 8)).to.be.true;
+      expect(doesFactEliminate(fact, GameLoc.of(0, 1), 7)).to.be.false;
+    });
+
+    it('handles Overlap', () => {
+      const fact: Fact = {
+        type: 'Overlap',
+        num: 7,
+        unit: {type: 'Row', id: 0},
+        cross_unit: {type: 'Blk', id: 2},
+      };
+      // Eliminates 7 in Blk 2 outside Row 0 (e.g. R2C9)
+      expect(doesFactEliminate(fact, GameLoc.of(1, 8), 7)).to.be.true;
+      // Does not eliminate 7 in Row 0 inside Blk 2 (e.g. R1C8)
+      expect(doesFactEliminate(fact, GameLoc.of(0, 7), 7)).to.be.false;
+      // Does not eliminate other numbers
+      expect(doesFactEliminate(fact, GameLoc.of(1, 8), 5)).to.be.false;
+    });
+
+    it('handles Subset', () => {
+      const fact: Fact = {
+        type: 'Subset',
+        nums: [2, 7],
+        unit: {type: 'Row', id: 0},
+        locs: [1, 7], // R1C2, R1C8
+        cross_unit: null,
+        is_naked: true,
+      };
+      // Eliminates 2 and 7 outside {R1C2, R1C8} in Row 0
+      expect(doesFactEliminate(fact, GameLoc.of(0, 6), 7)).to.be.true;
+      expect(doesFactEliminate(fact, GameLoc.of(0, 7), 7)).to.be.false;
+      // Eliminates other numbers inside {R1C2, R1C8}
+      expect(doesFactEliminate(fact, GameLoc.of(0, 7), 5)).to.be.true;
+      expect(doesFactEliminate(fact, GameLoc.of(0, 6), 5)).to.be.false;
+    });
+
+    it('handles advanced elimination facts and completed disproofs', () => {
+      const kite: Fact = {
+        type: 'TwoStringKite',
+        num: 7,
+        block: {type: 'Blk', id: 2},
+        rows: [{type: 'Row', id: 0}],
+        cols: [{type: 'Col', id: 8}],
+        string_ends: [1, 80],
+        elimination_locs: [73], // R9C2
+      };
+      expect(doesFactEliminate(kite, GameLoc.of(8, 1), 7)).to.be.true;
+      expect(doesFactEliminate(kite, GameLoc.of(8, 1), 5)).to.be.false;
+      expect(doesFactEliminate(kite, GameLoc.of(0, 7), 7)).to.be.false;
+
+      const disproof: Fact = {
+        type: 'Implication',
+        antecedents: [{type: 'SpeculativeAssignment', loc: 6, num: 7}],
+        consequent: {
+          type: 'Conflict',
+          num: 7,
+          unit: {type: 'Row', id: 0},
+          locs: [6, 7],
+        },
+      };
+      expect(doesFactEliminate(disproof, GameLoc.of(0, 6), 7)).to.be.true;
+      expect(doesFactEliminate(disproof, GameLoc.of(0, 7), 7)).to.be.false;
     });
   });
 });

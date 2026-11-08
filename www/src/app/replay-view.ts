@@ -4,6 +4,7 @@ import {Disproof, isDisproof} from '../facts/disproof';
 import type {Fact} from '../facts/Fact';
 import type {Unit} from '../facts/Unit';
 import {
+  doesFactEliminate,
   flattenImplication,
   getTotalAntecedents,
   nub,
@@ -382,7 +383,12 @@ export class ReplayView extends SudokuView {
 
     for (let i = facts.length - 1; i >= 0; i--) {
       const fact = facts[i];
-      const parts = this.renderSingleFactDetails(fact, occupiedLocs);
+      const precedingFacts = facts.slice(0, i);
+      const parts = this.renderSingleFactDetails(
+        fact,
+        occupiedLocs,
+        precedingFacts,
+      );
 
       if (parts.length > 0) {
         const delayMs = this.previewStepIndex >= 0 ? 0 : i * 100;
@@ -397,9 +403,37 @@ export class ReplayView extends SudokuView {
     return groups.reverse();
   }
 
+  private getAssignedOrClueNum(loc: Loc): number | null {
+    return (
+      this.gameWrapper?.game.marks.getClue(loc) || this.getNum(loc) || null
+    );
+  }
+
+  private isCandidate(
+    loc: Loc,
+    num: number,
+    precedingFacts: readonly Fact[] = [],
+  ): boolean {
+    if (this.getAssignedOrClueNum(loc) !== null) {
+      return false;
+    }
+    if (loc.getPeers().some(p => this.getAssignedOrClueNum(p) === num)) {
+      return false;
+    }
+    if (
+      this.appliedDisproofs?.some(
+        d => d.antecedents[0].loc === loc.index && d.antecedents[0].num === num,
+      )
+    ) {
+      return false;
+    }
+    return !precedingFacts.some(f => doesFactEliminate(f, loc, num));
+  }
+
   private renderSingleFactDetails(
     fact: Fact,
     occupiedLocs: Set<number>,
+    precedingFacts: readonly Fact[] = [],
   ): TemplateResult[] {
     const answer: TemplateResult[] = [];
     const {cellCenter} = this;
@@ -745,7 +779,8 @@ export class ReplayView extends SudokuView {
       for (const loc of Loc.ALL) {
         if (
           unitContains(fact.block, loc) &&
-          (unitContains(fact.row, loc) || unitContains(fact.col, loc))
+          (unitContains(fact.row, loc) || unitContains(fact.col, loc)) &&
+          this.isCandidate(loc, fact.num, precedingFacts)
         ) {
           if (!occupiedLocs.has(loc.index)) {
             occupiedLocs.add(loc.index);
@@ -841,20 +876,27 @@ export class ReplayView extends SudokuView {
         if (roofInUnit) {
           const otherUnit = fact.base_units.find(u => u !== unit);
           if (otherUnit) {
-            const sharedBase = Loc.ALL.find(l => {
-              if (!unitContains(unit, l) || l.index === roofInUnit.index)
-                return false;
-              return Loc.ALL.some(ol => {
-                if (
-                  !unitContains(otherUnit, ol) ||
-                  fact.roof_locs.includes(ol.index)
-                )
+            const sharedBase =
+              Loc.ALL.find(
+                l =>
+                  unitContains(unit, l) &&
+                  l.index !== roofInUnit.index &&
+                  this.isCandidate(l, fact.num, precedingFacts),
+              ) ??
+              Loc.ALL.find(l => {
+                if (!unitContains(unit, l) || l.index === roofInUnit.index)
                   return false;
-                return unit.type === 'Col' ?
-                    ol.row === l.row
-                  : ol.col === l.col;
+                return Loc.ALL.some(ol => {
+                  if (
+                    !unitContains(otherUnit, ol) ||
+                    fact.roof_locs.includes(ol.index)
+                  )
+                    return false;
+                  return unit.type === 'Col' ?
+                      ol.row === l.row
+                    : ol.col === l.col;
+                });
               });
-            });
 
             if (sharedBase) {
               const [rx, ry] = cellCenter(roofInUnit);
@@ -926,10 +968,9 @@ export class ReplayView extends SudokuView {
           l => unitContains(fact.block, l) && unitContains(row, l),
         );
         const corner =
-          fact.cols.length > 1 ?
-            (blockRowCells.find(l => fact.cols.some(c => unitContains(c, l))) ??
-            blockRowCells[0])
-          : blockRowCells[0];
+          blockRowCells.find(l =>
+            this.isCandidate(l, fact.num, precedingFacts),
+          ) ?? blockRowCells[0];
         if (rowEnd && corner) {
           const [cx, cy] = cellCenter(corner);
           const [ex, ey] = cellCenter(rowEnd);
@@ -956,10 +997,9 @@ export class ReplayView extends SudokuView {
           l => unitContains(fact.block, l) && unitContains(col, l),
         );
         const corner =
-          fact.rows.length > 1 ?
-            (blockColCells.find(l => fact.rows.some(r => unitContains(r, l))) ??
-            blockColCells[0])
-          : blockColCells[0];
+          blockColCells.find(l =>
+            this.isCandidate(l, fact.num, precedingFacts),
+          ) ?? blockColCells[0];
         if (colEnd && corner) {
           const [cx, cy] = cellCenter(corner);
           const [ex, ey] = cellCenter(colEnd);
