@@ -219,6 +219,11 @@ describe('Fact utils', () => {
       // Eliminates other numbers inside {R1C2, R1C8}
       expect(doesFactEliminate(fact, GameLoc.of(0, 7), 5)).to.be.true;
       expect(doesFactEliminate(fact, GameLoc.of(0, 6), 5)).to.be.false;
+
+      // Also handles undefined cross_unit from serde-wasm-bindgen
+      const wasmFact = {...fact, cross_unit: undefined as unknown as null};
+      expect(doesFactEliminate(wasmFact, GameLoc.of(0, 6), 7)).to.be.true;
+      expect(doesFactEliminate(wasmFact, GameLoc.of(0, 7), 7)).to.be.false;
     });
 
     it('handles advanced elimination facts and completed disproofs', () => {

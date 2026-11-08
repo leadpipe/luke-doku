@@ -114,7 +114,7 @@ export function doesFactEliminate(
         const inOutsideUnit =
           unitContains(fact.unit, loc) && !fact.locs.includes(loc.index);
         const inOutsideCross =
-          fact.cross_unit !== null &&
+          fact.cross_unit != null &&
           unitContains(fact.cross_unit, loc) &&
           !unitContains(fact.unit, loc);
         return inOutsideUnit || inOutsideCross;
