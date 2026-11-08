@@ -130,19 +130,19 @@ impl Collector {
       if self.check_timeout() {
         break;
       }
-      crate::deduce::advanced::find_fish(self);
-      if self.check_timeout() {
-        break;
-      }
-      crate::deduce::advanced::find_empty_rectangles(self);
-      if self.check_timeout() {
-        break;
-      }
       crate::deduce::advanced::find_skyscrapers(self);
       if self.check_timeout() {
         break;
       }
       crate::deduce::advanced::find_two_string_kites(self);
+      if self.check_timeout() {
+        break;
+      }
+      crate::deduce::advanced::find_fish(self);
+      if self.check_timeout() {
+        break;
+      }
+      crate::deduce::advanced::find_empty_rectangles(self);
       if self.check_timeout() {
         break;
       }
