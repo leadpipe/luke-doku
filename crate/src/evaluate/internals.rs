@@ -131,8 +131,13 @@ impl Fact {
         antecedents,
         consequent,
       } => {
+        let max_antecedent_complexity = antecedents
+          .iter()
+          .map(Fact::complexity)
+          .max()
+          .unwrap_or(Complexity::Moderate);
         if self.nums().len() == 1 {
-          return Complexity::Moderate;
+          return max_antecedent_complexity.max(Complexity::Moderate);
         }
         if antecedents.len() == 1
           && matches!(antecedents[0], Fact::Subset { .. })
@@ -140,7 +145,7 @@ impl Fact {
         {
           // A single locked set implies a single assignment, so we can treat it
           // as equivalent to the complexity of the locked set.
-          return antecedents[0].complexity();
+          return max_antecedent_complexity;
         }
         Complexity::Complex
       }
@@ -481,5 +486,41 @@ mod tests {
     assert_eq!(er.nums(), NumSet::singleton(N3));
     assert_eq!(sky.nums(), NumSet::singleton(N3));
     assert_eq!(no_num.nums(), NumSet::new());
+
+    // Single-numeral implications must respect antecedent complexity:
+    // - Unfinned X-Wing (Moderate) implying a same-numeral SingleLoc -> Moderate
+    let x_wing_same_num_imp = Fact::Implication {
+      antecedents: vec![x_wing.clone()],
+      consequent: Box::new(Fact::SingleLoc {
+        num: N4,
+        unit: R1.to_unit(),
+        loc: L11,
+      }),
+    };
+    assert_eq!(x_wing_same_num_imp.nums(), NumSet::singleton(N4));
+    assert_eq!(x_wing_same_num_imp.complexity(), Complexity::Moderate);
+
+    // - Finned X-Wing, Swordfish, Skyscraper, or EmptyRectangle (Complex) implying
+    //   a same-numeral SingleLoc -> Complex (not downgraded to Moderate)
+    let finned_fish_same_num_imp = Fact::Implication {
+      antecedents: vec![finned_x_wing.clone()],
+      consequent: Box::new(Fact::SingleLoc {
+        num: N4,
+        unit: R1.to_unit(),
+        loc: L11,
+      }),
+    };
+    let sky_same_num_imp = Fact::Implication {
+      antecedents: vec![sky.clone()],
+      consequent: Box::new(Fact::SingleLoc {
+        num: N3,
+        unit: R1.to_unit(),
+        loc: L11,
+      }),
+    };
+    assert_eq!(finned_fish_same_num_imp.nums(), NumSet::singleton(N4));
+    assert_eq!(finned_fish_same_num_imp.complexity(), Complexity::Complex);
+    assert_eq!(sky_same_num_imp.nums(), NumSet::singleton(N3));
+    assert_eq!(sky_same_num_imp.complexity(), Complexity::Complex);
   }
 }
